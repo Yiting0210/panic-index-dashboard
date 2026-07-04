@@ -58,7 +58,7 @@ panic-index-dashboard/
 ├── src/
 │   └── app.py              # Main Streamlit application
 ├── data/
-│   └── market_data_5.csv   # 5-year historical data (2021–2026)
+│   └── market_data_clean.csv   # 5-year historical data (2021–2026)
 ├── tests/
 │   └── test_strategy.py    # Unit tests for backtest logic
 ├── requirements.txt
