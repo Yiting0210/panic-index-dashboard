@@ -1,7 +1,4 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from utils import load_data, load_filtered_data
@@ -9,6 +6,10 @@ from utils import (add_sidebar_nav, render_controls, render_threshold_selector,
                    render_horizon_selector, render_realtime_params,
                    render_scipy_params)
 from utils import render_forward_return_histogram, render_forward_return_table
+from utils import (prepare_panic_signal, build_strategy_comparison_table,
+                   build_signal_lines, build_watch_zone_shapes,
+                   add_price_traces, add_panic_signal_trace,
+                   add_peak_markers, apply_peak_chart_layout)
 from utils.peak_detection import detect_peaks_scipy, detect_peaks_realtime
 
 st.set_page_config(layout="wide", page_title="Peak Detection")
@@ -40,16 +41,7 @@ else:
                              df['date_dt'].max().date(), target_col)
 
 # ── Rolling Z-Score (optional) ────────────────────────────────────────────────
-if use_zscore:
-    roll_mean = dff['panic_index'].rolling(252).mean()
-    roll_std  = dff['panic_index'].rolling(252).std()
-    dff['panic_signal'] = (dff['panic_index'] - roll_mean) / roll_std.replace(0, np.nan)
-    signal_label = "Rolling Z-Score (252-day)"
-    signal_col   = "panic_signal"
-else:
-    dff['panic_signal'] = dff['panic_index']
-    signal_label = "Composite Panic Index"
-    signal_col   = "panic_signal"
+dff, signal_label, signal_col = prepare_panic_signal(dff, use_zscore)
 
 # ════════════════════════════════════════════════════════════════════════════
 # PART 1: scipy.find_peaks
@@ -85,52 +77,24 @@ with st.spinner("Running scipy peak detection..."):
     )
 
     # Peak signal vertical lines on price chart
-    shapes = []
-    for d in scipy_peaks['date_dt']:
-        shapes.append(dict(
-            type="line", x0=d, x1=d, y0=0, y1=1,
-            xref="x", yref="y domain",
-            line=dict(color="rgba(147,51,234,0.3)", width=1.5),
-        ))
+    shapes = build_signal_lines(scipy_peaks['date_dt'], "rgba(147,51,234,0.3)")
     fig1.update_layout(shapes=shapes)
 
     # Price + MA lines
-    fig1.add_trace(go.Scatter(x=dff['date_dt'], y=dff[target_col],
-                              name="Price", line=dict(color='black', width=2)), row=1, col=1)
-    fig1.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma50'],
-                              name="MA50", line=dict(color='orange', dash='dot')), row=1, col=1)
-    fig1.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma200'],
-                              name="MA200", line=dict(color='blue', dash='dot', width=1.5)), row=1, col=1)
+    add_price_traces(fig1, dff, target_col)
 
     # Panic signal area
-    fig1.add_trace(go.Scatter(
-        x=dff['date_dt'], y=dff['panic_signal'],
-        name=signal_label,
-        line=dict(color='#aaaaaa', width=1),
-        fill='tozeroy', fillcolor='rgba(170,170,170,0.1)'
-    ), row=2, col=1)
+    add_panic_signal_trace(fig1, dff, signal_label)
 
     # Peak markers on signal chart
-    fig1.add_trace(go.Scatter(
-        x=scipy_peaks['date_dt'], y=scipy_peaks['panic_signal'],
-        mode='markers', name="scipy Peak",
-        marker=dict(color='#9333EA', size=10, symbol='triangle-down')
-    ), row=2, col=1)
+    add_peak_markers(fig1, scipy_peaks, "scipy Peak", '#9333EA')
 
     # Threshold reference line
     fig1.add_hline(y=buy_threshold, line_color="red", line_dash="dash",
                    annotation_text=f"Threshold Strategy Buy Zone ({buy_threshold})",
                    row=2, col=1)
 
-    fig1.update_layout(
-        height=700, hovermode="x unified", template="plotly_white",
-        legend=dict(orientation="h", y=1.02, x=1, xanchor="right"),
-        margin=dict(t=80, b=40, l=60, r=40)
-    )
-    fig1.update_xaxes(tickformat="%b %Y", nticks=15, tickangle=45,
-                      hoverformat="%b %d, %Y")
-    fig1.update_yaxes(title_text="Price", row=1, col=1)
-    fig1.update_yaxes(title_text=signal_label, row=2, col=1)
+    apply_peak_chart_layout(fig1, signal_label)
     st.plotly_chart(fig1, use_container_width=True, key="scipy_chart")
 
     st.divider()
@@ -189,64 +153,27 @@ with st.spinner("Running real-time peak detection..."):
     )
 
     # RealTime signal vertical lines
-    shapes2 = []
-    for d in rt_peaks['date_dt']:
-        shapes2.append(dict(
-            type="line", x0=d, x1=d, y0=0, y1=1,
-            xref="x", yref="y domain",
-            line=dict(color="rgba(249,115,22,0.3)", width=1.5),
-        ))
+    shapes2 = build_signal_lines(rt_peaks['date_dt'], "rgba(249,115,22,0.3)")
 
     # Watch zone highlight (entry_threshold and above)
-    watch_zone_dates = dff[dff['panic_signal'] >= entry_threshold]['date_dt']
-    for d in watch_zone_dates:
-        shapes2.append(dict(
-            type="rect",
-            x0=d, x1=d,
-            y0=entry_threshold, y1=dff['panic_signal'].max(),
-            xref="x2", yref="y2",
-            fillcolor="rgba(249,115,22,0.05)",
-            line_width=0,
-        ))
+    shapes2 += build_watch_zone_shapes(dff, entry_threshold)
 
     fig2.update_layout(shapes=shapes2)
 
     # Price + MA
-    fig2.add_trace(go.Scatter(x=dff['date_dt'], y=dff[target_col],
-                              name="Price", line=dict(color='black', width=2)), row=1, col=1)
-    fig2.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma50'],
-                              name="MA50", line=dict(color='orange', dash='dot')), row=1, col=1)
-    fig2.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma200'],
-                              name="MA200", line=dict(color='blue', dash='dot', width=1.5)), row=1, col=1)
+    add_price_traces(fig2, dff, target_col)
 
     # Panic signal area
-    fig2.add_trace(go.Scatter(
-        x=dff['date_dt'], y=dff['panic_signal'],
-        name=signal_label,
-        line=dict(color='#aaaaaa', width=1),
-        fill='tozeroy', fillcolor='rgba(170,170,170,0.1)'
-    ), row=2, col=1)
+    add_panic_signal_trace(fig2, dff, signal_label)
 
     # Entry threshold line
     fig2.add_hline(y=entry_threshold, line_color="orange", line_dash="dash",
                    annotation_text=f"Watch Zone ({entry_threshold})", row=2, col=1)
 
     # RealTime signal markers
-    fig2.add_trace(go.Scatter(
-        x=rt_peaks['date_dt'], y=rt_peaks['panic_signal'],
-        mode='markers', name="RealTime Signal",
-        marker=dict(color='#F97316', size=10, symbol='triangle-down')
-    ), row=2, col=1)
+    add_peak_markers(fig2, rt_peaks, "RealTime Signal", '#F97316')
 
-    fig2.update_layout(
-        height=700, hovermode="x unified", template="plotly_white",
-        legend=dict(orientation="h", y=1.02, x=1, xanchor="right"),
-        margin=dict(t=80, b=40, l=60, r=40)
-    )
-    fig2.update_xaxes(tickformat="%b %Y", nticks=15, tickangle=45,
-                      hoverformat="%b %d, %Y")
-    fig2.update_yaxes(title_text="Price", row=1, col=1)
-    fig2.update_yaxes(title_text=signal_label, row=2, col=1)
+    apply_peak_chart_layout(fig2, signal_label)
     st.plotly_chart(fig2, use_container_width=True, key="realtime_chart")
 
     st.divider()
@@ -271,31 +198,11 @@ placeholder2.empty()
 st.divider()
 st.subheader("📊 Strategy Comparison — Threshold vs scipy vs RealTime")
 
-threshold_mask = dff['panic_index'] > buy_threshold
+df_comparison = build_strategy_comparison_table(
+    dff, target_col, buy_threshold, scipy_mask, rt_mask
+)
 
-comparison_data = []
-for mask, label, horizons_list in [
-    (threshold_mask, f"Threshold (>{buy_threshold})",  [1, 5, 21, 63]),
-    (scipy_mask,     "scipy Peaks",      [1, 5, 21, 63]),
-    (rt_mask,        "RealTime Peaks",   [1, 5, 21, 63]),
-]:
-    for h in horizons_list:
-        fwd = (dff[target_col].shift(-h) / dff[target_col] - 1) * 100
-        returns = fwd[mask].dropna()
-        if not returns.empty:
-            horizon_label = {1: '1 Day', 5: '1 Week', 21: '1 Month', 63: '3 Months'}[h]
-            comparison_data.append({
-                "Strategy":  label,
-                "Horizon":   horizon_label,
-                "Signals":   len(returns),
-                "Win Rate":  f"{(returns > 0).mean():.1%}",
-                "Avg Ret":   f"{returns.mean():.2f}%",
-                "Max":       f"{returns.max():.2f}%",
-                "Min":       f"{returns.min():.2f}%",
-            })
-
-if comparison_data:
-    df_comparison = pd.DataFrame(comparison_data)
+if not df_comparison.empty:
     st.dataframe(df_comparison, use_container_width=True, hide_index=True)
     st.caption(
         "Direct comparison of signal quality across three detection methods. "

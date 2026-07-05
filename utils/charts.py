@@ -5,6 +5,71 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+
+def build_signal_lines(signal_dates, color):
+    shapes = []
+    for d in signal_dates:
+        shapes.append(dict(
+            type="line", x0=d, x1=d, y0=0, y1=1,
+            xref="x", yref="y domain",
+            line=dict(color=color, width=1.5),
+        ))
+    return shapes
+
+
+def build_watch_zone_shapes(dff, entry_threshold):
+    shapes = []
+    watch_zone_dates = dff[dff['panic_signal'] >= entry_threshold]['date_dt']
+    for d in watch_zone_dates:
+        shapes.append(dict(
+            type="rect",
+            x0=d, x1=d,
+            y0=entry_threshold, y1=dff['panic_signal'].max(),
+            xref="x2", yref="y2",
+            fillcolor="rgba(249,115,22,0.05)",
+            line_width=0,
+        ))
+    return shapes
+
+
+def add_price_traces(fig, dff, target_col):
+    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff[target_col],
+                             name="Price", line=dict(color='black', width=2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma50'],
+                             name="MA50", line=dict(color='orange', dash='dot')), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma200'],
+                             name="MA200", line=dict(color='blue', dash='dot', width=1.5)), row=1, col=1)
+
+
+def add_panic_signal_trace(fig, dff, signal_label):
+    fig.add_trace(go.Scatter(
+        x=dff['date_dt'], y=dff['panic_signal'],
+        name=signal_label,
+        line=dict(color='#aaaaaa', width=1),
+        fill='tozeroy', fillcolor='rgba(170,170,170,0.1)'
+    ), row=2, col=1)
+
+
+def add_peak_markers(fig, peaks, marker_name, marker_color):
+    fig.add_trace(go.Scatter(
+        x=peaks['date_dt'], y=peaks['panic_signal'],
+        mode='markers', name=marker_name,
+        marker=dict(color=marker_color, size=10, symbol='triangle-down')
+    ), row=2, col=1)
+
+
+def apply_peak_chart_layout(fig, signal_label):
+    fig.update_layout(
+        height=700, hovermode="x unified", template="plotly_white",
+        legend=dict(orientation="h", y=1.02, x=1, xanchor="right"),
+        margin=dict(t=80, b=40, l=60, r=40)
+    )
+    fig.update_xaxes(tickformat="%b %Y", nticks=15, tickangle=45,
+                     hoverformat="%b %d, %Y")
+    fig.update_yaxes(title_text="Price", row=1, col=1)
+    fig.update_yaxes(title_text=signal_label, row=2, col=1)
+
+
 def render_scatter_plot(dff, target_col, selected_label):
     """Sentiment vs MA50 Deviation scatter plot."""
     vix_min = float(dff['vix'].min())
