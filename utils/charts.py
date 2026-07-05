@@ -146,28 +146,12 @@ def render_price_signal_map(dff, target_col, selected_label, buy_threshold, sell
     )
 
     # Buy/sell signal vertical lines
-    shapes = []
-    for d in buy_dates:
-        shapes.append(dict(
-            type="line", x0=d, x1=d, y0=0, y1=1,
-            xref="x", yref="y domain",
-            line=dict(color="rgba(239,85,59,0.3)", width=1.5),
-        ))
-    for d in sell_dates:
-        shapes.append(dict(
-            type="line", x0=d, x1=d, y0=0, y1=1,
-            xref="x", yref="y domain",
-            line=dict(color="rgba(0,204,150,0.3)", width=1.5),
-        ))
+    shapes = build_signal_lines(buy_dates, "rgba(239,85,59,0.3)")
+    shapes += build_signal_lines(sell_dates, "rgba(0,204,150,0.3)")
     fig.update_layout(shapes=shapes)
 
     # Row 1: Price + MA lines
-    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff[target_col], name="Price",
-                             line=dict(color='black', width=2)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma50'], name="MA50",
-                             line=dict(color='orange', dash='dot')), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dff['date_dt'], y=dff['ma200'], name="MA200",
-                             line=dict(color='blue', dash='dot', width=1.5)), row=1, col=1)
+    add_price_traces(fig, dff, target_col)
 
     # Row 2: Panic Index area
     fig.add_trace(go.Scatter(
