@@ -19,12 +19,18 @@ def load_data():
     df[price_cols] = df[price_cols].interpolate(method='linear')
 
     def score_to_rating(score):
-        if pd.isna(score): return None
-        if score < 25:     return "extreme fear"
-        elif score < 45:   return "fear"
-        elif score < 55:   return "neutral"
-        elif score < 75:   return "greed"
-        else:              return "extreme greed"
+        if pd.isna(score):
+            return None
+        if score < 25:
+            return "extreme fear"
+        elif score < 45:
+            return "fear"
+        elif score < 55:
+            return "neutral"
+        elif score < 75:
+            return "greed"
+        else:
+            return "extreme greed"
 
     df['fear_greed_rating'] = df.apply(
         lambda row: score_to_rating(row['fear_greed_index'])

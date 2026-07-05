@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import streamlit as st
 
 RISK_FREE_RATE = 0.04 / 252
