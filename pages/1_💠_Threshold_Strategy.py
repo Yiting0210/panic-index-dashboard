@@ -1,15 +1,14 @@
 import streamlit as st
-import pandas as pd
 
 from utils import load_data, load_filtered_data
-from utils import run_backtest, render_forward_return_histogram
+from utils import run_backtest
 from utils import max_drawdown, sharpe_ratio, render_kpi_row
 
 from utils import (add_sidebar_nav, render_controls,
                    render_position_sizing, render_horizon_selector,
                    render_threshold_selector)
 from utils import (render_price_signal_map, render_scatter_plot,
-                   render_backtest_chart, render_kpi_row,
+                   render_backtest_chart,
                    render_forward_return_histogram, render_forward_return_table)
 
 # ── Page config ───────────────────────────────────────────────────────────────

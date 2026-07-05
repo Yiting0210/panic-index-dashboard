@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from src.app import run_backtest, max_drawdown, sharpe_ratio, BUY_THRESHOLD, SELL_THRESHOLD
+from utils import run_backtest, max_drawdown, sharpe_ratio
 
 def make_dummy_data():
     """Create minimal test DataFrame."""
@@ -42,7 +42,7 @@ def test_max_drawdown_negative():
     assert dd < 0
 
 def test_sharpe_ratio_positive_for_uptrend():
-    returns = pd.Series([0.01] * 252)  # 1% daily gain
+    returns = pd.Series([0.01, 0.011] * 126)
     sr = sharpe_ratio(returns)
     assert sr > 0
 

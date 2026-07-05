@@ -1,8 +1,3 @@
-import pandas as pd
-import numpy as np
-
-
-
 def run_backtest(dff, target_col, pos_initial=50, add_amount=20,
                  reduce_amount=20, pos_max=100, pos_min=0, buy_threshold=64, sell_threshold=15):
     bt = dff[['date_dt', target_col, 'panic_index']].dropna().copy().reset_index(drop=True)
