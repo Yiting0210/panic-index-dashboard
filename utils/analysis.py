@@ -1,5 +1,32 @@
 import pandas as pd
 
+from .metrics import max_drawdown, sharpe_ratio
+
+
+def build_backtest_verdict(bt):
+    strat_return = bt['cumulative_strategy'].iloc[-1] - 100
+    bnh_return = bt['cumulative_buyhold'].iloc[-1] - 100
+    strat_dd = max_drawdown(bt['cumulative_strategy'])
+    bnh_dd = max_drawdown(bt['cumulative_buyhold'])
+
+    strat_wins = sum([
+        strat_return > bnh_return,
+        sharpe_ratio(bt['strategy_return']) > sharpe_ratio(bt['daily_return']),
+        strat_dd > bnh_dd,
+    ])
+
+    if strat_wins == 3:
+        return "The strategy outperforms Buy & Hold on all three metrics."
+    if strat_wins == 2:
+        return "The strategy outperforms Buy & Hold on two of three metrics."
+    if strat_dd > bnh_dd:
+        return (
+            f"Buy & Hold outperforms on absolute return and Sharpe ratio. "
+            f"However, the strategy reduces maximum drawdown significantly "
+            f"({strat_dd:.1f}% vs {bnh_dd:.1f}%), making it more suitable for risk-averse investors."
+        )
+    return "Buy & Hold outperforms the strategy on all metrics in this period."
+
 
 def build_strategy_comparison_table(dff, target_col, buy_threshold,
                                     scipy_mask, rt_mask):

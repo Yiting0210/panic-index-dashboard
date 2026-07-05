@@ -16,5 +16,5 @@ from .charts import (build_signal_lines, build_watch_zone_shapes,
                      render_price_signal_map,render_forward_return_histogram,
                      render_forward_return_table)
 from .peak_detection import detect_peaks_scipy, detect_peaks_realtime
-from .signals import prepare_panic_signal
-from .analysis import build_strategy_comparison_table
+from .signals import prepare_panic_signal, build_threshold_masks
+from .analysis import build_backtest_verdict, build_strategy_comparison_table
