@@ -1,0 +1,4 @@
+[client]
+showSidebarNavigation = false
+[theme]
+primaryColor = "#4A90E2"  #multiselect （Tag）

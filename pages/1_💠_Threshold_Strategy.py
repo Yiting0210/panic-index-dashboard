@@ -244,13 +244,4 @@ with st.expander("📝 Project Write-up", expanded=False):
   (TradingView, Bloomberg Terminal layout).
 - Efficient Market Hypothesis. https://en.wikipedia.org/wiki/Efficient-market_hypothesis
 - Buy the Panic. https://www.investopedia.com/terms/p/panicbuying.asp
----
-
-### Development Commentary
-- **Total time**: ~5 person-days
-- **Most time-consuming**: Data pipeline — fetching, cleaning, and aligning
-  Fear & Greed history from two different sources (MacroMicro CSV + CNN API)
-  with yfinance price data across a 5-year period. Chart interaction logic
-  (synchronized date filtering, buy/sell signal rendering, real-time backtest
-  updates) also required significant iteration.
-    """)
+---    """)
