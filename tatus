@@ -1,0 +1,227 @@
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pages/1_💠_Threshold_Strategy.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pages/2_🏔️_Peak_Detection.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'utils/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'utils/sidebar.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 9937c7d..884d402 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -10,19 +10,25 @@[m [mRepository: `Yiting0210/panic-index-dashboard`[m
+ [m
+ ## Overview[m
+ [m
+[31m-An interactive financial dashboard that combines VIX and CNN Fear & Greed Index into a single **Composite Panic Index** to identify buy/sell opportunities in tech and semiconductor ETFs. The dashboard covers a full market cycle from May 2021 to April 2026, including the 2022 bear market, 2023-2024 AI bull run, and 2025 tariff shock.[m
+[32m+[m[32mAn interactive Streamlit dashboard built around a **Composite Panic Index**, combining VIX and CNN Fear & Greed data to study market stress, sentiment extremes, and forward returns across major indices and semiconductor ETFs.[m
+ [m
+[31m-**Key Finding**: The Panic Index is asymmetric: buy signals (extreme panic) are statistically validated with 64-74% win rates across 1-week to 3-month horizons, while sell signals (extreme greed) are less reliable in sustained bull markets.[m
+[32m+[m[32mThe project has two main pages:[m
+[32m+[m
+[32m+[m[32m- **Threshold Strategy**: the main deployable strategy page. It uses Panic Index thresholds as a regime-based accumulation and risk-management rule, scaling exposure during panic-zone periods and de-risking during greed regimes.[m
+[32m+[m[32m- **Peak Detection & Signal Validation**: a research and validation page. It compares historical Panic Index peaks and causal panic-reversal signals against subsequent forward returns without presenting them as equivalent live trading strategies.[m
+[32m+[m
+[32m+[m[32m**Key Finding**: The Panic Index shows an asymmetric historical pattern: panic regimes have tended to precede stronger medium-term forward returns than greed regimes, while greed has been less reliable as a short or exit signal during sustained bull markets.[m
+ [m
+ ---[m
+ [m
+ ## Features[m
+ [m
+[31m-- **Price Signal Map**: Buy/sell signals overlaid on price chart with MA50 & MA200[m
+[31m-- **Sentiment vs. MA50 Deviation**: Scatter plot revealing structural relationship between sentiment and price level[m
+[31m-- **Interactive Backtest**: Position sizing strategy vs Buy & Hold with real-time parameter adjustment[m
+[31m-- **Forward Return Analysis**: Statistical validation of signal effectiveness across 1-week, 1-month, 3-month horizons[m
+[31m-- **Interactive Controls**: Date range filter, index selector, and position sizing sliders; all charts update simultaneously[m
+[32m+[m[32m- **Threshold Strategy**: regime-based allocation using Panic Index buy-zone and sell-zone thresholds[m
+[32m+[m[32m- **Interactive Backtest**: position sizing strategy vs Buy & Hold with adjustable allocation parameters[m
+[32m+[m[32m- **Forward Return Analysis**: historical return distributions and statistical summaries after signal dates[m
+[32m+[m[32m- **scipy.find_peaks Historical Validation**: hindsight labels used to test whether Panic Index peaks historically aligned with favorable forward returns[m
+[32m+[m[32m- **RealTimePeakDetector Causal Signal Analysis**: a past/current-data-only panic-reversal confirmation signal for tactical research[m
+[32m+[m[32m- **Interactive Controls**: date range filter, index selector, detection parameters, and analysis horizons[m
+ [m
+ ---[m
+ [m
+[36m@@ -41,6 +47,16 @@[m [mpanic_index = vix_norm x 0.5 + fg_fear x 0.5[m
+ [m
+ ---[m
+ [m
+[32m+[m[32m## Signal Design[m
+[32m+[m
+[32m+[m[32mThe dashboard separates the Panic Index signal from the different ways it can be used or studied:[m
+[32m+[m
+[32m+[m[32m- **Threshold Strategy**: the primary deployable rule. It treats Panic Index extremes as market regimes, not isolated one-day forecasts. Panic-zone days are accumulation / exposure days; greed-zone days are de-risking days.[m
+[32m+[m[32m- **scipy.find_peaks**: a hindsight historical validation label. It uses the full historical series to identify local maxima after the fact, so it should not be interpreted as a live trading signal.[m
+[32m+[m[32m- **RealTimePeakDetector**: a causal panic-reversal confirmation signal. It only uses past/current data, waiting for panic to spike and then retreat before flagging a signal.[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+ ## Tech Stack[m
+ [m
+ | Layer | Technology |[m
+[36m@@ -57,11 +73,20 @@[m [mpanic_index = vix_norm x 0.5 + fg_fear x 0.5[m
+ [m
+ ```text[m
+ panic-index-dashboard/[m
+[31m-├── Home.py                  # Streamlit Cloud entry point and home page[m
+[31m-├── pages/                   # Multipage Streamlit views[m
+[31m-├── utils/                   # Shared data loading, charts, metrics, and controls[m
+[31m-├── data/                    # Static market sentiment and price data[m
+[31m-├── requirements.txt         # Python dependencies for Streamlit Cloud/local setup[m
+[32m+[m[32m├── Home.py                               # Streamlit Cloud entry point and home page[m
+[32m+[m[32m├── pages/[m
+[32m+[m[32m│   ├── 1_💠_Threshold_Strategy.py        # Main regime-based strategy page[m
+[32m+[m[32m│   └── 2_🏔️_Peak_Detection.py           # Peak detection and signal validation page[m
+[32m+[m[32m├── utils/[m
+[32m+[m[32m│   ├── data_loader.py                    # Static data loading and filtering[m
+[32m+[m[32m│   ├── charts.py                         # Plotly chart builders and render helpers[m
+[32m+[m[32m│   ├── signals.py                        # Signal preparation and masks[m
+[32m+[m[32m│   ├── peak_detection.py                 # scipy and causal peak detection logic[m
+[32m+[m[32m│   ├── analysis.py                       # Backtest verdicts and comparison tables[m
+[32m+[m[32m│   └── sidebar.py                        # Streamlit sidebar controls[m
+[32m+[m[32m├── data/                                 # Static market sentiment and price data[m
+[32m+[m[32m├── requirements.txt                      # Runtime dependencies for Streamlit[m
+[32m+[m[32m├── requirements-dev.txt                  # Development and CI dependencies[m
+ └── README.md[m
+ ```[m
+ [m
+[36m@@ -92,13 +117,14 @@[m [mFor Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st[m
+ ## Key Results (Full Period: May 2021 - Apr 2026)[m
+ [m
+ **Price Signal Map:**[m
+[31m-- Buy signals (Panic Index > 64) cluster around major market bottoms: 2022 bear market, 2025 tariff shock.[m
+[31m-- Sell signals (Panic Index < 15) appear during sustained greed periods in 2023-2024 bull market.[m
+[32m+[m[32m- Threshold buy-zone observations (Panic Index > 64) cluster around major stress regimes such as the 2022 bear market and 2025 tariff shock.[m
+[32m+[m[32m- These are panic-regime accumulation days, not independent single-day trade recommendations.[m
+[32m+[m[32m- Sell-zone observations (Panic Index < 15) appear during sustained greed periods in the 2023-2024 bull market.[m
+ [m
+ **Forward Return Analysis (full 5-year period):**[m
+[31m-- Extreme panic signals: win rates **64-74%** across 1-week to 3-month horizons[m
+[31m-- Extreme greed signals: prices continued rising after signals[m
+[31m-- **The Panic Index is asymmetric: buy signals validated, sell signals are not.**[m
+[32m+[m[32m- Extreme panic regimes showed historically favorable forward-return distributions across 1-week to 3-month horizons.[m
+[32m+[m[32m- Extreme greed regimes were less reliable as exit or short signals because prices often continued rising during sustained uptrends.[m
+[32m+[m[32m- **The Panic Index appears asymmetric in this historical sample, but the result should not be interpreted as guaranteed alpha.**[m
+ [m
+ **Backtest vs Buy & Hold:**[m
+ - Strategy reduces maximum drawdown by ~56% (-15% vs -35%)[m
+[36m@@ -108,3 +134,12 @@[m [mFor Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st[m
+ **Correlation Analysis:**[m
+ - Day-ahead predictive correlation near zero, consistent with Efficient Market Hypothesis[m
+ - Medium-term regime identification (1-week to 3-month) shows significant signal effectiveness[m
+[32m+[m
+[32m+[m[32m---[m
+[32m+[m
+[32m+[m[32m## Limitations[m
+[32m+[m
+[32m+[m[32m- The dashboard currently uses a static historical dataset for demo and research simplicity.[m
+[32m+[m[32m- `scipy.find_peaks` is hindsight-only and should not be treated as a deployable trading signal.[m
+[32m+[m[32m- RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.[m
+[32m+[m[32m- Full-sample VIX normalization is suitable for historical dashboard analysis, but live deployment should use fixed, rolling, or expanding calibration.[m
+[1mdiff --git "a/pages/1_\360\237\222\240_Threshold_Strategy.py" "b/pages/1_\360\237\222\240_Threshold_Strategy.py"[m
+[1mindex 97bac07..a8a459e 100644[m
+[1m--- "a/pages/1_\360\237\222\240_Threshold_Strategy.py"[m
+[1m+++ "b/pages/1_\360\237\222\240_Threshold_Strategy.py"[m
+[36m@@ -76,6 +76,11 @@[m [mwith st.spinner("Rendering charts..."):[m
+ [m
+     # Chart 1: Price Signal Map[m
+     st.subheader("📈 Price Signal Map & Composite Panic Index")[m
+[32m+[m[32m    st.caption([m
+[32m+[m[32m        "Panic Index above the buy threshold marks a panic regime / buy zone. "[m
+[32m+[m[32m        "Consecutive panic-zone days are intentional exposure days for gradual "[m
+[32m+[m[32m        "accumulation, not independent single-day bottom forecasts."[m
+[32m+[m[32m    )[m
+     fig_main = render_price_signal_map([m
+         dff, target_col, selected_label, buy_threshold, sell_threshold[m
+     )[m
+[36m@@ -96,8 +101,8 @@[m [mwith st.spinner("Rendering charts..."):[m
+     st.subheader("⚖️ Strategy vs Buy & Hold — Backtest")[m
+     st.caption([m
+         f"Position sizing: {int(pos_initial)}% initial · "[m
+[31m-        f"+{int(add_amount)}% on buy signal (max {int(pos_max)}%) · "[m
+[31m-        f"-{int(reduce_amount)}% on sell signal (min {int(pos_min)}%)"[m
+[32m+[m[32m        f"+{int(add_amount)}% during panic-zone days (max {int(pos_max)}%) · "[m
+[32m+[m[32m        f"-{int(reduce_amount)}% during greed-zone days (min {int(pos_min)}%)"[m
+     )[m
+     fig_bt = render_backtest_chart(bt)[m
+     st.plotly_chart(fig_bt, width="stretch", key="backtest_chart")[m
+[36m@@ -114,19 +119,22 @@[m [mwith st.spinner("Rendering charts..."):[m
+ [m
+     col_chart, col_table = st.columns([2, 1])[m
+     with col_chart:[m
+[31m-        st.caption("Probability Distribution of Returns After Panic Signals")[m
+[32m+[m[32m        st.caption([m
+[32m+[m[32m            "Probability Distribution of Returns After Panic-Zone Exposure Days"[m
+[32m+[m[32m        )[m
+         fig_hist = render_forward_return_histogram(dff, panic_mask, target_col, horizons)[m
+         st.plotly_chart(fig_hist, width="stretch", key="hist_panic")[m
+     with col_table:[m
+         st.caption("**Statistical Edge Summary**")[m
+[31m-        st.markdown("🔴 Extreme Panic (Buy)")[m
+[32m+[m[32m        st.markdown("🔴 Panic Regime / Buy Zone")[m
+         render_forward_return_table(dff, panic_mask, target_col, horizons)[m
+[31m-        st.markdown("🟢 Extreme Greed (Sell)")[m
+[32m+[m[32m        st.markdown("🟢 Greed / De-risking Zone")[m
+         render_forward_return_table(dff, greed_mask, target_col, horizons)[m
+ [m
+     st.caption([m
+[31m-        "Win Rate > 50% and Avg Ret > 0 validates 'buy the panic'. "[m
+[31m-        "Greed signals: Avg Ret < 0 validates 'sell the greed'."[m
+[32m+[m[32m        "Win Rate > 50% and Avg Ret > 0 supports accumulating during "[m
+[32m+[m[32m        "the panic regime. Greed-zone rows describe de-risking exposure "[m
+[32m+[m[32m        "days, not a promise of an immediate top."[m
+     )[m
+ [m
+ placeholder.empty()[m
+[36m@@ -135,8 +143,9 @@[m [mwith st.container(border=True):[m
+     st.subheader("💡 Strategic Insights")[m
+     st.markdown(f"""[m
+ ### Price Signal Map & Composite Panic Index[m
+[31m-- Buy signals (Panic Index > **{buy_threshold}**) cluster around major market bottoms: 2022 bear market, 2025 tariff shock.[m
+[31m-- Sell signals (Panic Index < **{sell_threshold}**) appear during sustained greed periods in 2023–2024 bull market.[m
+[32m+[m[32m- Buy-zone days (Panic Index > **{buy_threshold}**) define a panic regime for gradual accumulation; the strategy is not trying to identify one exact bottom.[m
+[32m+[m[32m- Consecutive panic-zone days are intentional because position size scales in during sustained stress; interpret them as exposure days, not independent single-day forecasts.[m
+[32m+[m[32m- Sell-zone days (Panic Index < **{sell_threshold}**) define a greed / de-risking regime and appear during sustained greed periods in the 2023–2024 bull market.[m
+ [m
+ ### Scatter Plot (Sentiment vs. MA50 Deviation)[m
+ - Strong positive correlation between Fear & Greed and price deviation from MA50.[m
+[36m@@ -182,6 +191,9 @@[m [mwith st.expander("📝 Project Write-up", expanded=False):[m
+ - **Composite Panic Index**: Normalized VIX (50%) + Inverted Fear & Greed (50%),[m
+   scaled to 0–100. Buy threshold (>{buy_threshold}) = 95th percentile;[m
+   Sell threshold (<{sell_threshold}) = 5th percentile of full 5-year history.[m
+[32m+[m[32m  The buy threshold defines a panic regime / buy zone, while the sell threshold[m
+[32m+[m[32m  defines a greed / de-risking regime. Consecutive panic-zone observations are[m
+[32m+[m[32m  expected and feed gradual position sizing rather than one-off bottom calls.[m
+   Thresholds are fixed — consistent with real-world quant strategy development[m
+   where thresholds are calibrated on historical data and held constant during deployment.[m
+ [m
+[1mdiff --git "a/pages/2_\360\237\217\224\357\270\217_Peak_Detection.py" "b/pages/2_\360\237\217\224\357\270\217_Peak_Detection.py"[m
+[1mindex c7df400..61e6346 100644[m
+[1m--- "a/pages/2_\360\237\217\224\357\270\217_Peak_Detection.py"[m
+[1m+++ "b/pages/2_\360\237\217\224\357\270\217_Peak_Detection.py"[m
+[36m@@ -2,7 +2,7 @@[m [mimport streamlit as st[m
+ from plotly.subplots import make_subplots[m
+ [m
+ from utils import load_data, load_filtered_data[m
+[31m-from utils import (add_sidebar_nav, render_controls, render_threshold_selector,[m
+[32m+[m[32mfrom utils import (add_sidebar_nav, render_controls, render_peak_benchmark_selector,[m
+                    render_horizon_selector, render_realtime_params,[m
+                    render_scipy_params)[m
+ from utils import render_forward_return_histogram, render_forward_return_table[m
+[36m@@ -12,21 +12,23 @@[m [mfrom utils import (prepare_panic_signal, build_strategy_comparison_table,[m
+                    add_peak_markers, apply_peak_chart_layout)[m
+ from utils.peak_detection import detect_peaks_scipy, detect_peaks_realtime[m
+ [m
+[31m-st.set_page_config(layout="wide", page_title="Peak Detection")[m
+[32m+[m[32mst.set_page_config(layout="wide", page_title="Peak Detection & Signal Validation")[m
+ [m
+ # ── Load data ─────────────────────────────────────────────────────────────────[m
+ df = load_data()[m
+ [m
+ # ── Header ────────────────────────────────────────────────────────────────────[m
+[31m-st.title("⚡ Peak Detection Strategy")[m
+[32m+[m[32mst.title("⚡ Peak Detection & Signal Validation")[m
+ st.markdown([m
+[31m-    "Two approaches to detect Panic Index peaks without fixed thresholds: "[m
+[31m-    "**scipy.find_peaks** (historical) and **RealTimePeakDetector** (causal, no lookahead bias)."[m
+[32m+[m[32m    "This page validates and explores Panic Index signals without replacing "[m
+[32m+[m[32m    "the main Threshold Strategy. **scipy.find_peaks** is used for hindsight "[m
+[32m+[m[32m    "historical validation, while **RealTimePe
