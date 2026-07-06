@@ -76,6 +76,11 @@ with st.spinner("Rendering charts..."):
 
     # Chart 1: Price Signal Map
     st.subheader("📈 Price Signal Map & Composite Panic Index")
+    st.caption(
+        "Panic Index above the buy threshold marks a panic regime / buy zone. "
+        "Consecutive panic-zone days are intentional exposure days for gradual "
+        "accumulation, not independent single-day bottom forecasts."
+    )
     fig_main = render_price_signal_map(
         dff, target_col, selected_label, buy_threshold, sell_threshold
     )
@@ -96,8 +101,8 @@ with st.spinner("Rendering charts..."):
     st.subheader("⚖️ Strategy vs Buy & Hold — Backtest")
     st.caption(
         f"Position sizing: {int(pos_initial)}% initial · "
-        f"+{int(add_amount)}% on buy signal (max {int(pos_max)}%) · "
-        f"-{int(reduce_amount)}% on sell signal (min {int(pos_min)}%)"
+        f"+{int(add_amount)}% during panic-zone days (max {int(pos_max)}%) · "
+        f"-{int(reduce_amount)}% during greed-zone days (min {int(pos_min)}%)"
     )
     fig_bt = render_backtest_chart(bt)
     st.plotly_chart(fig_bt, width="stretch", key="backtest_chart")
@@ -114,19 +119,22 @@ with st.spinner("Rendering charts..."):
 
     col_chart, col_table = st.columns([2, 1])
     with col_chart:
-        st.caption("Probability Distribution of Returns After Panic Signals")
+        st.caption(
+            "Probability Distribution of Returns After Panic-Zone Exposure Days"
+        )
         fig_hist = render_forward_return_histogram(dff, panic_mask, target_col, horizons)
         st.plotly_chart(fig_hist, width="stretch", key="hist_panic")
     with col_table:
         st.caption("**Statistical Edge Summary**")
-        st.markdown("🔴 Extreme Panic (Buy)")
+        st.markdown("🔴 Panic Regime / Buy Zone")
         render_forward_return_table(dff, panic_mask, target_col, horizons)
-        st.markdown("🟢 Extreme Greed (Sell)")
+        st.markdown("🟢 Greed / De-risking Zone")
         render_forward_return_table(dff, greed_mask, target_col, horizons)
 
     st.caption(
-        "Win Rate > 50% and Avg Ret > 0 validates 'buy the panic'. "
-        "Greed signals: Avg Ret < 0 validates 'sell the greed'."
+        "Win Rate > 50% and Avg Ret > 0 supports accumulating during "
+        "the panic regime. Greed-zone rows describe de-risking exposure "
+        "days, not a promise of an immediate top."
     )
 
 placeholder.empty()
@@ -135,8 +143,9 @@ with st.container(border=True):
     st.subheader("💡 Strategic Insights")
     st.markdown(f"""
 ### Price Signal Map & Composite Panic Index
-- Buy signals (Panic Index > **{buy_threshold}**) cluster around major market bottoms: 2022 bear market, 2025 tariff shock.
-- Sell signals (Panic Index < **{sell_threshold}**) appear during sustained greed periods in 2023–2024 bull market.
+- Buy-zone days (Panic Index > **{buy_threshold}**) define a panic regime for gradual accumulation; the strategy is not trying to identify one exact bottom.
+- Consecutive panic-zone days are intentional because position size scales in during sustained stress; interpret them as exposure days, not independent single-day forecasts.
+- Sell-zone days (Panic Index < **{sell_threshold}**) define a greed / de-risking regime and appear during sustained greed periods in the 2023–2024 bull market.
 
 ### Scatter Plot (Sentiment vs. MA50 Deviation)
 - Strong positive correlation between Fear & Greed and price deviation from MA50.
@@ -182,6 +191,9 @@ with st.expander("📝 Project Write-up", expanded=False):
 - **Composite Panic Index**: Normalized VIX (50%) + Inverted Fear & Greed (50%),
   scaled to 0–100. Buy threshold (>{buy_threshold}) = 95th percentile;
   Sell threshold (<{sell_threshold}) = 5th percentile of full 5-year history.
+  The buy threshold defines a panic regime / buy zone, while the sell threshold
+  defines a greed / de-risking regime. Consecutive panic-zone observations are
+  expected and feed gradual position sizing rather than one-off bottom calls.
   Thresholds are fixed — consistent with real-world quant strategy development
   where thresholds are calibrated on historical data and held constant during deployment.
 

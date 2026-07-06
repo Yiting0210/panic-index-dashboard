@@ -55,6 +55,22 @@ def render_threshold_selector():
     )
     return buy_threshold, sell_threshold
 
+
+def render_peak_benchmark_selector():
+    """Render the Threshold Strategy benchmark reference for Peak Detection."""
+    st.sidebar.markdown("---")
+    render_sidebar_header("Benchmark Reference", "📌")
+    buy_threshold = st.sidebar.slider(
+        "Threshold Strategy panic-zone reference",
+        min_value=50, max_value=90, value=64, step=1,
+        help=(
+            "Reference only for Threshold Strategy comparison. "
+            "This does not control scipy or RealTime peak detection."
+        )
+    )
+    return buy_threshold
+
+
 def render_position_sizing():
     """Render position sizing sliders, return params."""
     st.sidebar.markdown("---")
@@ -100,22 +116,31 @@ def render_realtime_params():
     st.sidebar.markdown("---")
     render_sidebar_header("Part 2: RealTime Parameters", "⚡")
     use_zscore = st.sidebar.checkbox(
-        "Use Rolling Z-Score (252-day)", value=False,
-        help="Normalize Panic Index using rolling Z-Score before detection"
+        "Advanced: Use Rolling Z-Score (252-day)", value=False,
+        help=(
+            "Use relative panic intensity versus the trailing 252-day history "
+            "instead of the raw 0-100 Panic Index."
+        )
     )
     if use_zscore:
         entry_threshold = st.sidebar.slider(
             "Entry Threshold (Z-Score)", 1.0, 4.0, 2.0, 0.1,
-            help="Z-Score level that activates the watch zone"
+            help=(
+                "Activates the watch zone when panic is unusually high "
+                "relative to the trailing 252-day regime."
+            )
         )
     else:
         entry_threshold = st.sidebar.slider(
             "Entry Threshold", 60, 95, 80, 1,
-            help="Panic Index level that activates the watch zone"
+            help=(
+                "Activates the panic watch zone using the raw 0-100 "
+                "Panic Index."
+            )
         )
     fall_back_pct = st.sidebar.slider(
         "Fallback % to trigger", 1, 20, 5, 1,
-        help="% drop from local max that confirms the peak"
+        help="Triggers after the signal retreats from its local maximum."
     ) / 100
     return entry_threshold, fall_back_pct, use_zscore
 

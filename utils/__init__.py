@@ -7,7 +7,8 @@ from .backtest import run_backtest, run_backtest_with_signals
 
 from .sidebar import (add_sidebar_nav, render_sidebar_header,
                       render_controls, render_position_sizing, render_horizon_selector,
-                      render_threshold_selector,render_realtime_params,render_scipy_params)
+                      render_threshold_selector, render_peak_benchmark_selector,
+                      render_realtime_params, render_scipy_params)
 
 from .charts import (build_signal_lines, build_watch_zone_shapes,
                      add_price_traces, add_panic_signal_trace,
@@ -43,6 +44,7 @@ __all__ = [
     "render_forward_return_table",
     "render_horizon_selector",
     "render_kpi_row",
+    "render_peak_benchmark_selector",
     "render_position_sizing",
     "render_price_signal_map",
     "render_realtime_params",

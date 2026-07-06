@@ -10,19 +10,25 @@ Repository: `Yiting0210/panic-index-dashboard`
 
 ## Overview
 
-An interactive financial dashboard that combines VIX and CNN Fear & Greed Index into a single **Composite Panic Index** to identify buy/sell opportunities in tech and semiconductor ETFs. The dashboard covers a full market cycle from May 2021 to April 2026, including the 2022 bear market, 2023-2024 AI bull run, and 2025 tariff shock.
+An interactive Streamlit dashboard built around a **Composite Panic Index**, combining VIX and CNN Fear & Greed data to study market stress, sentiment extremes, and forward returns across major indices and semiconductor ETFs.
 
-**Key Finding**: The Panic Index is asymmetric: buy signals (extreme panic) are statistically validated with 64-74% win rates across 1-week to 3-month horizons, while sell signals (extreme greed) are less reliable in sustained bull markets.
+The project has two main pages:
+
+- **Threshold Strategy**: the main deployable strategy page. It uses Panic Index thresholds as a regime-based accumulation and risk-management rule, scaling exposure during panic-zone periods and de-risking during greed regimes.
+- **Peak Detection & Signal Validation**: a research and validation page. It compares historical Panic Index peaks and causal panic-reversal signals against subsequent forward returns without presenting them as equivalent live trading strategies.
+
+**Key Finding**: The Panic Index shows an asymmetric historical pattern: panic regimes have tended to precede stronger medium-term forward returns than greed regimes, while greed has been less reliable as a short or exit signal during sustained bull markets.
 
 ---
 
 ## Features
 
-- **Price Signal Map**: Buy/sell signals overlaid on price chart with MA50 & MA200
-- **Sentiment vs. MA50 Deviation**: Scatter plot revealing structural relationship between sentiment and price level
-- **Interactive Backtest**: Position sizing strategy vs Buy & Hold with real-time parameter adjustment
-- **Forward Return Analysis**: Statistical validation of signal effectiveness across 1-week, 1-month, 3-month horizons
-- **Interactive Controls**: Date range filter, index selector, and position sizing sliders; all charts update simultaneously
+- **Threshold Strategy**: regime-based allocation using Panic Index buy-zone and sell-zone thresholds
+- **Interactive Backtest**: position sizing strategy vs Buy & Hold with adjustable allocation parameters
+- **Forward Return Analysis**: historical return distributions and statistical summaries after signal dates
+- **scipy.find_peaks Historical Validation**: hindsight labels used to test whether Panic Index peaks historically aligned with favorable forward returns
+- **RealTimePeakDetector Causal Signal Analysis**: a past/current-data-only panic-reversal confirmation signal for tactical research
+- **Interactive Controls**: date range filter, index selector, detection parameters, and analysis horizons
 
 ---
 
@@ -38,6 +44,16 @@ panic_index = vix_norm x 0.5 + fg_fear x 0.5
 |--------|-----------|-------|
 | Buy Zone | Panic Index > 64 | 95th percentile of 5-year history |
 | Sell Zone | Panic Index < 15 | 5th percentile of 5-year history |
+
+---
+
+## Signal Design
+
+The dashboard separates the Panic Index signal from the different ways it can be used or studied:
+
+- **Threshold Strategy**: the primary deployable rule. It treats Panic Index extremes as market regimes, not isolated one-day forecasts. Panic-zone days are accumulation / exposure days; greed-zone days are de-risking days.
+- **scipy.find_peaks**: a hindsight historical validation label. It uses the full historical series to identify local maxima after the fact, so it should not be interpreted as a live trading signal.
+- **RealTimePeakDetector**: a causal panic-reversal confirmation signal. It only uses past/current data, waiting for panic to spike and then retreat before flagging a signal.
 
 ---
 
@@ -57,11 +73,20 @@ panic_index = vix_norm x 0.5 + fg_fear x 0.5
 
 ```text
 panic-index-dashboard/
-├── Home.py                  # Streamlit Cloud entry point and home page
-├── pages/                   # Multipage Streamlit views
-├── utils/                   # Shared data loading, charts, metrics, and controls
-├── data/                    # Static market sentiment and price data
-├── requirements.txt         # Python dependencies for Streamlit Cloud/local setup
+├── Home.py                               # Streamlit Cloud entry point and home page
+├── pages/
+│   ├── 1_💠_Threshold_Strategy.py        # Main regime-based strategy page
+│   └── 2_🏔️_Peak_Detection.py           # Peak detection and signal validation page
+├── utils/
+│   ├── data_loader.py                    # Static data loading and filtering
+│   ├── charts.py                         # Plotly chart builders and render helpers
+│   ├── signals.py                        # Signal preparation and masks
+│   ├── peak_detection.py                 # scipy and causal peak detection logic
+│   ├── analysis.py                       # Backtest verdicts and comparison tables
+│   └── sidebar.py                        # Streamlit sidebar controls
+├── data/                                 # Static market sentiment and price data
+├── requirements.txt                      # Runtime dependencies for Streamlit
+├── requirements-dev.txt                  # Development and CI dependencies
 └── README.md
 ```
 
@@ -92,13 +117,14 @@ For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st
 ## Key Results (Full Period: May 2021 - Apr 2026)
 
 **Price Signal Map:**
-- Buy signals (Panic Index > 64) cluster around major market bottoms: 2022 bear market, 2025 tariff shock.
-- Sell signals (Panic Index < 15) appear during sustained greed periods in 2023-2024 bull market.
+- Threshold buy-zone observations (Panic Index > 64) cluster around major stress regimes such as the 2022 bear market and 2025 tariff shock.
+- These are panic-regime accumulation days, not independent single-day trade recommendations.
+- Sell-zone observations (Panic Index < 15) appear during sustained greed periods in the 2023-2024 bull market.
 
 **Forward Return Analysis (full 5-year period):**
-- Extreme panic signals: win rates **64-74%** across 1-week to 3-month horizons
-- Extreme greed signals: prices continued rising after signals
-- **The Panic Index is asymmetric: buy signals validated, sell signals are not.**
+- Extreme panic regimes showed historically favorable forward-return distributions across 1-week to 3-month horizons.
+- Extreme greed regimes were less reliable as exit or short signals because prices often continued rising during sustained uptrends.
+- **The Panic Index appears asymmetric in this historical sample, but the result should not be interpreted as guaranteed alpha.**
 
 **Backtest vs Buy & Hold:**
 - Strategy reduces maximum drawdown by ~56% (-15% vs -35%)
@@ -108,3 +134,12 @@ For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st
 **Correlation Analysis:**
 - Day-ahead predictive correlation near zero, consistent with Efficient Market Hypothesis
 - Medium-term regime identification (1-week to 3-month) shows significant signal effectiveness
+
+---
+
+## Limitations
+
+- The dashboard currently uses a static historical dataset for demo and research simplicity.
+- `scipy.find_peaks` is hindsight-only and should not be treated as a deployable trading signal.
+- RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.
+- Full-sample VIX normalization is suitable for historical dashboard analysis, but live deployment should use fixed, rolling, or expanding calibration.
