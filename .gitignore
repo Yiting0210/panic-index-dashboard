@@ -2,8 +2,9 @@
 __pycache__/
 *.pyc
 
-# 忽略 Streamlit 本地配置
-.streamlit/
+# 忽略 Streamlit 本地配置，但保留项目级配置
+.streamlit/*
+!.streamlit/config.toml
 
 # 忽略虚拟环境
 venv/
@@ -16,8 +17,8 @@ venv/
 # 1. 先忽略 data 文件夹下的所有内容
 data/*
 
-# 2. 唯独不要忽略 market_data_5.csv
-!data/market_data_5.csv
+# 2. 唯独不要忽略 market_data.csv
+!data/market_data.csv
 
 # 忽略其他特定文件（可选）
-data/Untitled-1.html
+data/raw_json.html
