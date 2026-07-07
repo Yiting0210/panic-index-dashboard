@@ -36,6 +36,39 @@ def test_position_never_below_min():
     bt = run_backtest(dff, 'qqq_close', pos_min=20)
     assert bt['position'].min() >= 0.20 - 1e-9
 
+def test_backtest_uses_custom_thresholds():
+    dff = pd.DataFrame({
+        'date_dt': pd.date_range('2022-01-01', periods=4, freq='B'),
+        'qqq_close': [100, 101, 102, 103],
+        'panic_index': [50, 65, 10, 50],
+    })
+
+    bt_default = run_backtest(
+        dff,
+        'qqq_close',
+        pos_initial=50,
+        add_amount=20,
+        reduce_amount=20,
+    )
+    bt_custom = run_backtest(
+        dff,
+        'qqq_close',
+        pos_initial=50,
+        add_amount=20,
+        reduce_amount=20,
+        buy_threshold=70,
+        sell_threshold=5,
+    )
+
+    np.testing.assert_allclose(
+        bt_default['position'].to_numpy(),
+        [0.5, 0.7, 0.5, 0.5],
+    )
+    np.testing.assert_allclose(
+        bt_custom['position'].to_numpy(),
+        [0.5, 0.5, 0.5, 0.5],
+    )
+
 def test_max_drawdown_negative():
     series = pd.Series([100, 110, 90, 95, 105])
     dd = max_drawdown(series)

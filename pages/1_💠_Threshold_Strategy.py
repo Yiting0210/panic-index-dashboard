@@ -41,7 +41,17 @@ else:
                              df['date_dt'].max().date(), target_col)
 
 # ── Backtest ──────────────────────────────────────────────────────────────────
-bt = run_backtest(dff, target_col, pos_initial, add_amount, reduce_amount, pos_max, pos_min)
+bt = run_backtest(
+    dff,
+    target_col,
+    pos_initial,
+    add_amount,
+    reduce_amount,
+    pos_max,
+    pos_min,
+    buy_threshold,
+    sell_threshold,
+)
 
 # ── Verdict ───────────────────────────────────────────────────────────────────
 strat_return = bt['cumulative_strategy'].iloc[-1] - 100
@@ -56,17 +66,17 @@ strat_wins = sum([
 ])
 
 if strat_wins == 3:
-    verdict = "The strategy outperforms Buy & Hold on all three metrics."
+    verdict = "In this sample, the strategy outperforms Buy & Hold on all three metrics."
 elif strat_wins == 2:
-    verdict = "The strategy outperforms Buy & Hold on two of three metrics."
+    verdict = "In this sample, the strategy outperforms Buy & Hold on two of three metrics."
 elif strat_dd > bnh_dd:
     verdict = (
         f"Buy & Hold outperforms on absolute return and Sharpe ratio. "
-        f"However, the strategy reduces maximum drawdown significantly "
+        f"However, the strategy shows a smaller maximum drawdown in this sample "
         f"({strat_dd:.1f}% vs {bnh_dd:.1f}%), making it more suitable for risk-averse investors."
     )
 else:
-    verdict = "Buy & Hold outperforms the strategy on all metrics in this period."
+    verdict = "Buy & Hold outperforms the strategy on all metrics in this sample."
 
 # ── Charts ────────────────────────────────────────────────────────────────────
 placeholder = st.empty()
@@ -91,7 +101,7 @@ with st.spinner("Rendering charts..."):
     # Chart 2: Scatter Plot
     st.subheader("🎯 Sentiment vs. MA50 Deviation")
     st.caption("Each dot = one trading day · Color & size = VIX · "
-               "Bottom-left = panic bottom (best historical entry points)")
+               "Bottom-left = higher-stress observations below trend")
     fig_sc = render_scatter_plot(dff, target_col, selected_label)
     st.plotly_chart(fig_sc, width="stretch", key="scatter_chart")
 
@@ -148,10 +158,10 @@ with st.container(border=True):
 - Sell-zone days (Panic Index < **{sell_threshold}**) define a greed / de-risking regime and appear during sustained greed periods in the 2023–2024 bull market.
 
 ### Scatter Plot (Sentiment vs. MA50 Deviation)
-- Strong positive correlation between Fear & Greed and price deviation from MA50.
-- Extreme panic days (bottom-left, red/large dots) cluster well below MA50, confirming historically oversold conditions.
-- While sentiment has near-zero predictive power for next-day absolute price changes (consistent with the [Efficient Market Hypothesis](https://en.wikipedia.org/wiki/Efficient-market_hypothesis)) — it effectively identifies medium-term regime shifts.
-- **Conclusion**: The Panic Index is designed as a Regime Indicator, not a high-frequency timing tool. Its value lies in identifying high-probability buying windows during multi-week market stress.
+- Fear & Greed has been historically associated with price deviation from MA50 in this sample.
+- Higher-stress observations (bottom-left, red/large dots) often appear below MA50, consistent with historically oversold regimes.
+- While sentiment has near-zero next-day association with absolute price changes (consistent with the [Efficient Market Hypothesis](https://en.wikipedia.org/wiki/Efficient-market_hypothesis)), it may still be useful for descriptive regime identification.
+- **Conclusion**: The Panic Index is designed as a regime indicator, not a high-frequency timing tool. Its value here is descriptive evidence for studying market stress windows, not guaranteed alpha.
 
 ### Backtest ({date_range[0]} – {date_range[1]})
 
@@ -164,11 +174,11 @@ with st.container(border=True):
 {verdict}
 
 ### Forward Return Analysis
-- **The "Asymmetric Panic Edge"**: Extreme panic signals exhibit a significant **positive right-skew (Fat-tail)** in forward returns. While 1-day returns are nearly symmetric (55% win rate), the signal's predictive power peaks at the **1-month horizon** with a **74.1% win rate**, confirming a robust mean-reversion effect following market capitulation.
-- **Greed Dissipation & Momentum Inertia**: Unlike panic, extreme greed signals show a **"Platykurtic" (flatter) distribution** with returns hovering near zero. In sustained uptrends, greed can persist longer than expected, making it a reliable **de-risking indicator** rather than a definitive short signal.
-- **Risk-Reward Profile**: The **P/L Ratio peaks at 2.14** for 3-month panic windows, suggesting that while volatility increases over time, the magnitude of the "rebound alpha" significantly outweighs the downside risk.
-- **Statistical Fidelity**:
-    - *Distribution Analysis*: KDE (Kernel Density Estimation) plots reveal that panic-induced bottoms are often "V-shaped" with higher kurtosis, while greed tops are "rounded" and less predictable.
+- **Asymmetric Historical Pattern**: Extreme panic regimes are historically associated with more favorable forward-return distributions in this sample. The 1-month horizon shows a higher observed win rate than shorter horizons, but this should not be interpreted as guaranteed alpha or a live trading claim.
+- **Greed Dissipation & Momentum Inertia**: Unlike panic, extreme greed regimes show flatter forward-return distributions with returns often hovering near zero. In sustained uptrends, greed can persist longer than expected, making it more useful as a de-risking context than a definitive short signal.
+- **Risk-Reward Profile**: The P/L ratio is higher for some longer panic windows in this sample, suggesting that rebound magnitude has historically outweighed downside in selected periods. This is descriptive evidence, not proof of persistent alpha.
+- **Methodological Fidelity**:
+    - *Distribution Analysis*: KDE (Kernel Density Estimation) plots help describe the shape of historical return distributions after panic and greed regimes.
     - *Note*: Overlapping samples during sustained stress may introduce autocorrelation; win rates should be interpreted as historical probabilities within the specific 2021-2026 regime.
 """)
 
@@ -185,8 +195,8 @@ with st.expander("📝 Project Write-up", expanded=False):
     between sentiment and price level, removing long-term trend bias via MA50 deviation.
   - **Chart 3 (Backtest)**: Quantifies *whether acting on signals generates returns*,
     comparing the strategy against passive Buy & Hold.
-  - **Chart 4 (Forward Return Analysis)**: Statistically validates signal effectiveness
-    across multiple time horizons, providing evidence beyond visual pattern recognition.
+  - **Chart 4 (Forward Return Analysis)**: Summarizes descriptive forward-return
+    behavior across multiple time horizons, providing evidence beyond visual pattern recognition.
 
 - **Composite Panic Index**: Normalized VIX (50%) + Inverted Fear & Greed (50%),
   scaled to 0–100. Buy threshold (>{buy_threshold}) = 95th percentile;
@@ -210,9 +220,9 @@ with st.expander("📝 Project Write-up", expanded=False):
   between sentiment and relative price level. MA50 chosen as the medium-term
   benchmark widely used by institutional investors.
 
-- **Forward Return Analysis**: Validates signal effectiveness statistically
-  across 1-day, 1-week, 1-month, and 3-month horizons, providing evidence beyond
-  visual pattern recognition. Users can select horizons interactively via the sidebar.
+- **Forward Return Analysis**: Summarizes historical forward-return behavior
+  across 1-day, 1-week, 1-month, and 3-month horizons, providing descriptive
+  evidence beyond visual pattern recognition. Users can select horizons interactively via the sidebar.
 
 - **Shared x-axis (Chart 1 + 2)**: Synchronized hover and zoom lets users trace
   any Panic Index spike directly to its corresponding price movement.
