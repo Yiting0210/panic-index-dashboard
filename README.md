@@ -4,7 +4,7 @@ Repository: `Yiting0210/panic-index-dashboard`
 
 > **Exploring Market Asymmetry**: Can a Composite Panic Index (VIX + CNN Fear & Greed) identify tactical entry and exit opportunities across major indices and the Semiconductor sector (2021-2026)?
 
-**Live Demo**: [https://panic-index-dashboard-gvjixdtgeazuqzzm3kqqv4.streamlit.app](#)
+**Live Demo**: https://panic-index-dashboard-rpbcjhdyxbvfcbk39h6gbw.streamlit.app/
 
 ---
 
@@ -14,7 +14,7 @@ An interactive Streamlit dashboard built around a **Composite Panic Index**, com
 
 The project has two main pages:
 
-- **Threshold Strategy**: the main deployable strategy page. It uses Panic Index thresholds as a regime-based accumulation and risk-management rule, scaling exposure during panic-zone periods and de-risking during greed regimes.
+- **Threshold Strategy**: the primary causal, backtestable allocation framework. It uses Panic Index thresholds as a regime-based accumulation and risk-management rule, scaling exposure during panic-zone periods and de-risking during greed regimes.
 - **Peak Detection & Signal Validation**: a research and validation page. It compares historical Panic Index peaks and causal panic-reversal signals against subsequent forward returns without presenting them as equivalent live trading strategies.
 
 **Key Finding**: The Panic Index shows an asymmetric historical pattern: panic regimes have tended to precede stronger medium-term forward returns than greed regimes, while greed has been less reliable as a short or exit signal during sustained bull markets.
@@ -29,6 +29,48 @@ The project has two main pages:
 - **scipy.find_peaks Historical Validation**: hindsight labels used to test whether Panic Index peaks historically aligned with favorable forward returns
 - **RealTimePeakDetector Causal Signal Analysis**: a past/current-data-only panic-reversal confirmation signal for tactical research
 - **Interactive Controls**: date range filter, index selector, detection parameters, and analysis horizons
+
+---
+
+## Product Case Study
+
+### Target Users
+
+- **ETF investors** who want a structured way to study extreme sentiment regimes without relying on a single indicator.
+- **Market research analysts** comparing sentiment conditions with subsequent market behavior.
+- **Risk-aware portfolio builders** evaluating accumulation rules, exposure changes, and drawdown tradeoffs.
+- **Quantitative researchers** comparing hindsight validation methods with causal signal-generation logic.
+
+### User Problem
+
+Market sentiment data is fragmented and easy to overinterpret. VIX captures expected volatility, while CNN Fear & Greed represents a broader sentiment regime; neither indicator alone provides a complete decision framework.
+
+The product problem is to separate regime identification from short-term prediction, causal/backtestable rules from hindsight validation, and historical relationships from guaranteed trading performance.
+
+### Product Solution
+
+The dashboard turns VIX and CNN Fear & Greed data into a Composite Panic Index and presents it through two focused workflows:
+
+- **Threshold Strategy**: a causal, backtestable allocation research framework based on Panic Index regimes.
+- **Peak Detection & Signal Validation**: a research workflow for historical validation and causal panic-reversal signal analysis.
+
+### Key Workflows
+
+1. Explore the relationship between sentiment, volatility, and price deviation from trend.
+2. Identify panic and greed regimes using interpretable thresholds.
+3. Evaluate forward returns following extreme sentiment observations.
+4. Backtest allocation rules against Buy & Hold.
+5. Compare hindsight peak labels with causal confirmation signals.
+6. Review methodological limitations before interpreting results.
+
+### Success Metrics
+
+- Forward-return distributions after panic and greed regimes.
+- Maximum drawdown relative to Buy & Hold.
+- Signal frequency and stability across market periods.
+- Consistency across QQQ, SMH, SPX, and DJI.
+- Interpretability of signal logic.
+- Clear separation between causal rules and hindsight validation.
 
 ---
 
@@ -51,7 +93,7 @@ panic_index = vix_norm x 0.5 + fg_fear x 0.5
 
 The dashboard separates the Panic Index signal from the different ways it can be used or studied:
 
-- **Threshold Strategy**: the primary deployable rule. It treats Panic Index extremes as market regimes, not isolated one-day forecasts. Panic-zone days are accumulation / exposure days; greed-zone days are de-risking days.
+- **Threshold Strategy**: the primary causal, backtestable allocation framework. It treats Panic Index extremes as market regimes, not isolated one-day forecasts. Panic-zone days are accumulation / exposure days; greed-zone days are de-risking days.
 - **scipy.find_peaks**: a hindsight historical validation label. It uses the full historical series to identify local maxima after the fact, so it should not be interpreted as a live trading signal.
 - **RealTimePeakDetector**: a causal panic-reversal confirmation signal. It only uses past/current data, waiting for panic to spike and then retreat before flagging a signal.
 
@@ -133,7 +175,7 @@ For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st
 
 **Correlation Analysis:**
 - Day-ahead predictive correlation near zero, consistent with Efficient Market Hypothesis
-- Medium-term regime identification (1-week to 3-month) shows significant signal effectiveness
+- Medium-term regime analysis (1-week to 3-month) shows more informative historical relationships than day-ahead prediction
 
 ---
 

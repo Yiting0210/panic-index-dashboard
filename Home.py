@@ -42,19 +42,30 @@ st.set_page_config(layout="wide", page_title="Market Sentiment Dashboard")
 # ── Sidebar: Navigator ───────────────────────────────────────────────────────────────────
 add_sidebar_nav()
 
-st.title("Market Sentiment & Panic Index Dashboard")
+st.title("Market Sentiment & Panic Index Research Dashboard")
 st.markdown("""
-Exploring Market Asymmetry: Can a Composite Panic Index (VIX + CNN Fear & Greed)
-Identify Tactical Entry and Exit Opportunities Across Major Indices and the
-Semiconductor Sector (2021–2026)?
+A market research dashboard for studying sentiment stress, volatility, and
+price behavior across major indices and the semiconductor sector.
 """)
-st.subheader("🔍 Research Motivation")
+st.subheader("🔍 What This Dashboard Does")
 st.markdown("""
-Before building the Panic Index, we first verified the core assumption:
-**does market sentiment correlate with price deviation from trend across all major indices?**
+This dashboard turns fragmented sentiment and volatility data into a structured
+workflow for studying market stress regimes and subsequent returns.
 
-The scatter plots below show Fear & Greed Index vs. price deviation from MA50
-for all four indices. Color and size indicate VIX level.
+The **Composite Panic Index** combines VIX and CNN Fear & Greed data to help
+users:
+
+- identify panic and greed regimes,
+- evaluate forward returns after extreme sentiment periods,
+- test allocation rules against Buy & Hold,
+- distinguish causal signals from hindsight validation labels.
+
+Before using the strategy pages, the home view checks the core assumption:
+**Does market sentiment have a meaningful relationship with price deviation
+from trend across different equity markets?**
+
+The scatter plots below compare Fear & Greed Index with price deviation from
+MA50 across QQQ, SMH, SPX, and DJI. Color and marker size represent VIX levels.
 """)
 
 
@@ -93,33 +104,38 @@ for i, (col_name, label) in enumerate(indices):
 placeholder.empty()
 
 st.markdown("""
-**Observation**: All four indices show a consistent positive correlation —
-extreme fear (bottom-left, red dots) clusters well below MA50, while extreme
-greed (top-right, green dots) clusters above. This pattern holds across QQQ,
-SMH, SPX, and DJI, motivating the construction of a composite sentiment-based
-trading signal.
-
+**Observation**: Visual inspection suggests a recurring relationship between
+sentiment conditions and price position relative to MA50 across the selected
+markets. Extreme fear observations tend to appear more frequently below trend,
+while greed observations appear more frequently above trend. This is exploratory
+evidence and should be evaluated together with the strategy, forward-return,
+and validation analyses.
 """)
 
 st.divider()
 
 st.markdown("""
-### 💡Two Approaches to Signal Detection
+### 💡 How to Use the Product
 
-The scatter plots confirm that extreme sentiment (low Fear & Greed + high VIX)
-consistently corresponds to price dips below MA50. This raises the key question:
+The app has two complementary research workflows:
 
-> **How do we systematically identify these extreme sentiment moments as trading signals?**
-
-We compare two methods:
-
-| | 💠 Threshold Strategy | ⚡ Peak Detection |
+| | 💠 Threshold Strategy | ⚡ Peak Detection & Signal Validation |
 |---|---|---|
-| **Method** | Fixed threshold (Panic > 64) | `scipy.find_peaks` |
-| **Signal Type** | Absolute level | Relative local peak |
-| **Advantage** | Simple, transparent, data-driven threshold | Adaptive, no fixed cutoff needed |
-| **Limitation** | May miss peaks below threshold | Sensitive to parameter tuning |
-| **Best for** | Identifying extreme panic regimes | Catching every significant spike |
+| **Role** | Primary allocation research workflow | Research validation workflow |
+| **Purpose** | Regime-based accumulation and risk management | Validate historical peaks and study causal confirmation signals |
+| **Signal logic** | Panic Index buy/sell zones | `scipy.find_peaks` labels + `RealTimePeakDetector` signals |
+| **Interpretation** | Panic-zone days are exposure days, not single-day forecasts | scipy is hindsight-only; RealTime uses past/current data |
+| **Best for** | Portfolio allocation rules and drawdown-aware backtests | Signal QA, research review, and tactical signal exploration |
 
-👈 Select a strategy from the sidebar to explore.
+Use **Threshold Strategy** first when evaluating the primary allocation logic.
+Use **Peak Detection & Signal Validation** to understand whether Panic Index
+extremes historically aligned with forward returns and whether causal
+panic-reversal signals add useful research context.
+
+Interpret results safely: forward returns are historical observations, not
+guarantees; scipy labels are not deployable signals; RealTime analysis uses the
+underlying index/ETF as a directional proxy rather than a full options-pricing
+backtest.
+
+👈 Select a workflow from the sidebar to explore.
 """)
