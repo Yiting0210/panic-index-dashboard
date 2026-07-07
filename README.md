@@ -99,6 +99,18 @@ The dashboard separates the Panic Index signal from the different ways it can be
 
 ---
 
+## Methodology Design Choices
+
+Several methodology choices are intentional tradeoffs for a historical research dashboard:
+
+- **Full-sample VIX normalization**: VIX is normalized using the full historical sample to place the entire 2021-2026 period on one comparable 0-100 scale. This is useful for retrospective analysis and visual comparability, but it is not strict live signal construction.
+- **Interpolation for dashboard continuity**: Missing price and VIX values around weekends or market holidays are linearly interpolated to keep the static dataset and visualizations continuous. A stricter analytics pipeline could separate display-smoothed data from trading-day-only analytical data.
+- **Overlapping observations**: Consecutive panic-zone days are expected because the Threshold Strategy models gradual accumulation during sustained stress regimes. Forward-return summaries should be interpreted as regime-conditioned observations, not independent trade-level experiments.
+- **Threshold Strategy interpretation**: Thresholds define panic and greed regimes for accumulation / de-risking research. They are not designed to predict exact market bottoms or tops.
+- **Future live-deployment calibration**: For strict live deployment, the Panic Index should use fixed, rolling, or expanding VIX normalization and explicit trading-day execution assumptions.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -181,7 +193,8 @@ For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st
 
 ## Limitations
 
-- The dashboard currently uses a static historical dataset for demo and research simplicity.
-- `scipy.find_peaks` is hindsight-only and should not be treated as a deployable trading signal.
+- The dashboard intentionally uses a static historical dataset for Streamlit Cloud simplicity and reproducible research review.
+- `scipy.find_peaks` is a hindsight-only validation label and should not be treated as a deployable trading signal.
 - RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.
-- Full-sample VIX normalization is suitable for historical dashboard analysis, but live deployment should use fixed, rolling, or expanding calibration.
+- Full-sample VIX normalization and interpolated display data are suitable for retrospective dashboard analysis; a stricter live or production research pipeline should use trading-day-only analytics plus fixed, rolling, or expanding calibration.
+- Forward-return summaries can include overlapping observations during sustained regimes, so results should be interpreted as descriptive historical evidence rather than independent trade experiments.
