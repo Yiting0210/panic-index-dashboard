@@ -244,4 +244,4 @@ with st.expander("📝 Project Write-up", expanded=False):
   (TradingView, Bloomberg Terminal layout).
 - Efficient Market Hypothesis. https://en.wikipedia.org/wiki/Efficient-market_hypothesis
 - Buy the Panic. https://www.investopedia.com/terms/p/panicbuying.asp
----    """)
+---  """)
