@@ -3,6 +3,14 @@ import pandas as pd
 from .metrics import max_drawdown, sharpe_ratio
 
 
+def _correlation_or_na(paired, x_col, y_col, method):
+    if len(paired) < 2:
+        return float('nan')
+    if paired[x_col].nunique() < 2 or paired[y_col].nunique() < 2:
+        return float('nan')
+    return paired[x_col].corr(paired[y_col], method=method)
+
+
 def build_backtest_verdict(bt):
     strat_return = bt['cumulative_strategy'].iloc[-1] - 100
     bnh_return = bt['cumulative_buyhold'].iloc[-1] - 100
@@ -54,3 +62,38 @@ def build_strategy_comparison_table(dff, target_col, buy_threshold,
                 })
 
     return pd.DataFrame(comparison_data)
+
+
+def build_correlation_evidence_summary(
+    market_data,
+    markets,
+    x_col='fear_greed_index',
+    y_col='price_dev_pct',
+):
+    """Summarize descriptive correlation between sentiment and price deviation.
+
+    Compares Fear & Greed Index with price deviation from MA50 for each market.
+    The output is descriptive evidence only; correlation does not imply
+    causation or future predictive performance.
+    """
+    rows = []
+
+    for market_key, market_label in markets:
+        dff = market_data[market_key]
+        paired = dff[[x_col, y_col]].dropna()
+        n_obs = len(paired)
+
+        pearson = _correlation_or_na(paired, x_col, y_col, 'pearson')
+        spearman = _correlation_or_na(paired, x_col, y_col, 'spearman')
+
+        rows.append({
+            "Market": market_label,
+            "Pearson r": pearson,
+            "Spearman ρ": spearman,
+            "N": n_obs,
+        })
+
+    summary = pd.DataFrame(rows)
+    summary["Pearson r"] = summary["Pearson r"].round(3)
+    summary["Spearman ρ"] = summary["Spearman ρ"].round(3)
+    return summary

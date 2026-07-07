@@ -2,6 +2,15 @@
 import streamlit as st
 from utils import add_sidebar_nav
 from utils import load_data, render_scatter_plot
+from utils.analysis import build_correlation_evidence_summary
+
+
+INDEX_MARKETS = [
+    ('qqq_close', 'Nasdaq 100 (QQQ)'),
+    ('smh_close', 'Semiconductors (SMH)'),
+    ('spx_close', 'S&P 500 (SPX)'),
+    ('dji_close', 'Dow Jones (DJI)'),
+]
 
 # ── 缓存计算 ──────────────────────────────────────────────────────────────────
 @st.cache_data
@@ -20,13 +29,7 @@ def prepare_scatter_data():
 def prepare_all_figures():
     data = prepare_scatter_data()
     figures = {}
-    index_list = [
-        ('qqq_close', 'Nasdaq 100 (QQQ)'),
-        ('smh_close', 'Semiconductors (SMH)'),
-        ('spx_close', 'S&P 500 (SPX)'),
-        ('dji_close', 'Dow Jones (DJI)'),
-    ]
-    for col_name, label in index_list:
+    for col_name, label in INDEX_MARKETS:
         fig = render_scatter_plot(data[col_name], col_name, label)
         fig.update_layout(
             height=300,
@@ -79,17 +82,10 @@ with st.spinner("Loading charts..."):
     all_figures = prepare_all_figures()
 
 
-col1, col2 = st.columns(2)
-
-indices = [
-    ('qqq_close', 'Nasdaq 100 (QQQ)'),
-    ('smh_close', 'Semiconductors (SMH)'),
-    ('spx_close', 'S&P 500 (SPX)'),
-    ('dji_close', 'Dow Jones (DJI)'),
-]
+scatter_data = prepare_scatter_data()
 
 col1, col2 = st.columns(2)
-for i, (col_name, label) in enumerate(indices):
+for i, (col_name, label) in enumerate(INDEX_MARKETS):
     if i % 2 == 0:
         with col1:
             st.plotly_chart(all_figures[col_name],
@@ -111,6 +107,29 @@ while greed observations appear more frequently above trend. This is exploratory
 evidence and should be evaluated together with the strategy, forward-return,
 and validation analyses.
 """)
+
+st.markdown("### 📊 Evidence Summary")
+st.markdown("""
+To complement the visual scatter plots, the table below summarizes descriptive
+linear and rank correlations between Fear & Greed Index and price deviation
+from MA50.
+""")
+
+evidence_summary = build_correlation_evidence_summary(
+    scatter_data,
+    INDEX_MARKETS,
+)
+st.dataframe(evidence_summary, use_container_width=True, hide_index=True)
+
+st.caption(
+    "Pearson r summarizes linear association; Spearman ρ summarizes monotonic "
+    "rank association. Differences between them may reflect nonlinearity, "
+    "outliers, or regime-dependent behavior. These statistics describe "
+    "contemporaneous association between sentiment and price position relative "
+    "to MA50; they do not establish causality or future predictive performance. "
+    "Forward-return analysis and strategy backtests are separate questions "
+    "handled in the strategy pages."
+)
 
 st.divider()
 
