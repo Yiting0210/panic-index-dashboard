@@ -1,8 +1,12 @@
 import streamlit as st
+import pandas as pd
 
 from utils import load_data, load_filtered_data
 from utils import run_backtest
-from utils import max_drawdown, sharpe_ratio, render_kpi_row
+from utils import build_performance_metrics, render_kpi_row
+from utils import build_threshold_research_summary
+from utils import build_strategy_diagnostics
+from utils import build_exposure_tradeoff_attribution
 
 from utils import (add_sidebar_nav, render_controls,
                    render_position_sizing, render_horizon_selector,
@@ -25,6 +29,12 @@ st.markdown(
     "Identify Tactical Entry and Exit Opportunities Across Major Indices and the "
     "Semiconductor Sector (2021–2026)?"
 )
+st.caption(
+    "The page focuses on the asymmetric research question: panic-side signals "
+    "are studied primarily as accumulation candidates, while greed-side signals "
+    "are treated as exploratory risk-warning / de-risking candidates rather "
+    "than equally reliable immediate exit signals."
+)
 
 # ── Sidebar (must come before filtering) ─────────────────────────────────────
 add_sidebar_nav()
@@ -33,12 +43,17 @@ selected_label, target_col, date_range = render_controls(df)
 pos_initial, add_amount, reduce_amount, pos_max, pos_min = render_position_sizing()
 horizons = render_horizon_selector()
 
-# ── Filter data ───────────────────────────────────────────────────────────────
+min_date = df['date_dt'].min().date()
+max_date = df['date_dt'].max().date()
 if len(date_range) == 2:
-    dff = load_filtered_data(date_range[0], date_range[1], target_col)
+    start_date, end_date = date_range
+elif len(date_range) == 1:
+    start_date, end_date = date_range[0], max_date
 else:
-    dff = load_filtered_data(df['date_dt'].min().date(),
-                             df['date_dt'].max().date(), target_col)
+    start_date, end_date = min_date, max_date
+
+# ── Filter data ───────────────────────────────────────────────────────────────
+dff = load_filtered_data(start_date, end_date, target_col)
 
 # ── Backtest ──────────────────────────────────────────────────────────────────
 bt = run_backtest(
@@ -52,16 +67,19 @@ bt = run_backtest(
     buy_threshold,
     sell_threshold,
 )
+diagnostics = build_strategy_diagnostics(bt)
+attribution = build_exposure_tradeoff_attribution(bt)
+performance_metrics = build_performance_metrics(bt)
 
 # ── Verdict ───────────────────────────────────────────────────────────────────
-strat_return = bt['cumulative_strategy'].iloc[-1] - 100
-bnh_return   = bt['cumulative_buyhold'].iloc[-1] - 100
-strat_dd     = max_drawdown(bt['cumulative_strategy'])
-bnh_dd       = max_drawdown(bt['cumulative_buyhold'])
+strat_return = performance_metrics['strategy_return']
+bnh_return = performance_metrics['buyhold_return']
+strat_dd = performance_metrics['strategy_max_drawdown']
+bnh_dd = performance_metrics['buyhold_max_drawdown']
 
 strat_wins = sum([
     strat_return > bnh_return,
-    sharpe_ratio(bt['strategy_return']) > sharpe_ratio(bt['daily_return']),
+    performance_metrics['strategy_sharpe'] > performance_metrics['buyhold_sharpe'],
     strat_dd > bnh_dd,
 ])
 
@@ -78,6 +96,92 @@ elif strat_dd > bnh_dd:
 else:
     verdict = "Buy & Hold outperforms the strategy on all metrics in this sample."
 
+with st.container(border=True):
+    st.subheader("🔎 Research Summary")
+    st.markdown(
+        build_threshold_research_summary(
+            dff,
+            bt,
+            target_col,
+            selected_label,
+            buy_threshold,
+            sell_threshold,
+            diagnostics,
+            attribution,
+        )
+    )
+    st.caption(
+        "Deterministic interpretation of historical dashboard outputs; "
+        "not investment advice or a live trading recommendation."
+    )
+
+with st.container(border=True):
+    st.subheader("🔬 Strategy Diagnostics")
+    st.caption(
+        "Exposure diagnostics test the trade-off created by greed-side "
+        "risk-warning / de-risking rules. Lower exposure is not automatically "
+        "bad; it can cushion declines but may create prolonged underexposure "
+        "during sustained uptrends."
+    )
+    col_exp, col_below = st.columns(2)
+    col_exp.metric(
+        "Average Exposure",
+        f"{diagnostics['average_exposure'] * 100:.1f}%",
+        help="Mean portfolio exposure over the selected backtest period.",
+    )
+    col_below.metric(
+        "Time Below Full Exposure",
+        f"{diagnostics['time_below_full_exposure'] * 100:.1f}%",
+        help="Share of observations where strategy exposure was below 100%.",
+    )
+    st.markdown("**Exposure Trade-off Attribution**")
+
+    episode_start = attribution['largest_episode_start']
+    episode_end = attribution['largest_episode_end']
+    if episode_start is None or episode_end is None:
+        episode_value = "N/A"
+        episode_interpretation = "No underexposed episode in selected period"
+    else:
+        episode_value = (
+            f"{episode_start:%Y-%m-%d} to {episode_end:%Y-%m-%d}, "
+            f"{attribution['largest_episode_upside_drag']:.1f} pp"
+        )
+        episode_interpretation = (
+            "Largest continuous low-exposure interval by upside drag"
+        )
+
+    st.dataframe(
+        pd.DataFrame([
+            {
+                "Attribution Item": "Underexposed Upside Drag",
+                "Value": f"{attribution['upside_drag']:.1f} pp",
+                "Interpretation": "Positive market return not fully captured",
+            },
+            {
+                "Attribution Item": "Underexposed Downside Cushion",
+                "Value": f"{attribution['downside_cushion']:.1f} pp",
+                "Interpretation": "Negative market return avoided",
+            },
+            {
+                "Attribution Item": "Net Arithmetic Trade-off",
+                "Value": f"{attribution['net_exposure_tradeoff']:.1f} pp",
+                "Interpretation": "Upside drag minus downside cushion",
+            },
+            {
+                "Attribution Item": "Largest Underexposed Upside Episode",
+                "Value": episode_value,
+                "Interpretation": episode_interpretation,
+            },
+        ]),
+        width="stretch",
+        hide_index=True,
+    )
+    st.caption(
+        "Arithmetic attribution over dashboard observation periods. Uses "
+        "lagged effective exposure to match backtest timing and does not "
+        "exactly reconcile to compounded total-return differences."
+    )
+
 # ── Charts ────────────────────────────────────────────────────────────────────
 placeholder = st.empty()
 placeholder.info("⏳ Loading charts for the first time, please wait...")
@@ -89,7 +193,9 @@ with st.spinner("Rendering charts..."):
     st.caption(
         "Panic Index above the buy threshold marks a panic regime / buy zone. "
         "Consecutive panic-zone days are intentional exposure days for gradual "
-        "accumulation, not independent single-day bottom forecasts."
+        "accumulation, not independent single-day bottom forecasts. Greed-side "
+        "thresholds are evaluated as risk-warning / de-risking candidates, not "
+        "as symmetric sell signals."
     )
     fig_main = render_price_signal_map(
         dff, target_col, selected_label, buy_threshold, sell_threshold
@@ -112,18 +218,29 @@ with st.spinner("Rendering charts..."):
     st.caption(
         f"Position sizing: {int(pos_initial)}% initial · "
         f"+{int(add_amount)}% during panic-zone days (max {int(pos_max)}%) · "
-        f"-{int(reduce_amount)}% during greed-zone days (min {int(pos_min)}%)"
+        f"-{int(reduce_amount)}% during greed / risk-warning days "
+        f"(min {int(pos_min)}%)"
     )
     fig_bt = render_backtest_chart(bt)
     st.plotly_chart(fig_bt, width="stretch", key="backtest_chart")
 
     st.divider()
-    render_kpi_row(bt, max_drawdown, sharpe_ratio)
+    st.subheader("Backtest Performance")
+    render_kpi_row(bt, performance_metrics)
+    st.caption(
+        "Sharpe uses arithmetic period returns, excludes missing returns, "
+        "assumes a 0% annual risk-free rate, and annualizes using the observed "
+        "backtest rows per elapsed calendar year. Calmar uses annualized "
+        "return over the selected date span divided by absolute maximum "
+        "drawdown."
+    )
 
     st.divider()
 
     # Chart 4: Forward Return Analysis
-    st.subheader("📊 Forward Return Analysis — Buy the Panic, Sell the Greed?")
+    st.subheader(
+        "📊 Forward Return Analysis — Panic Accumulation vs Greed Risk Warning"
+    )
     panic_mask = dff['panic_index'] > buy_threshold
     greed_mask = dff['panic_index'] < sell_threshold
 
@@ -138,13 +255,14 @@ with st.spinner("Rendering charts..."):
         st.caption("**Statistical Edge Summary**")
         st.markdown("🔴 Panic Regime / Buy Zone")
         render_forward_return_table(dff, panic_mask, target_col, horizons)
-        st.markdown("🟢 Greed / De-risking Zone")
+        st.markdown("🟢 Greed / Risk-Warning Zone")
         render_forward_return_table(dff, greed_mask, target_col, horizons)
 
     st.caption(
         "Win Rate > 50% and Avg Ret > 0 supports accumulating during "
-        "the panic regime. Greed-zone rows describe de-risking exposure "
-        "days, not a promise of an immediate top."
+        "the panic regime. Greed-zone rows describe exploratory risk-warning "
+        "/ de-risking exposure days, not a promise of an immediate top or a "
+        "symmetric sell rule."
     )
 
 placeholder.empty()
@@ -155,7 +273,7 @@ with st.container(border=True):
 ### Price Signal Map & Composite Panic Index
 - Buy-zone days (Panic Index > **{buy_threshold}**) define a panic regime for gradual accumulation; the strategy is not trying to identify one exact bottom.
 - Consecutive panic-zone days are intentional because position size scales in during sustained stress; interpret them as exposure days, not independent single-day forecasts.
-- Sell-zone days (Panic Index < **{sell_threshold}**) define a greed / de-risking regime and appear during sustained greed periods in the 2023–2024 bull market.
+- Greed / risk-warning days (Panic Index < **{sell_threshold}**) are exploratory de-risking candidates. In this sample, greed can persist during bull markets, so it should not be interpreted as an equally reliable immediate exit signal.
 
 ### Scatter Plot (Sentiment vs. MA50 Deviation)
 - Fear & Greed has been historically associated with price deviation from MA50 in this sample.
@@ -163,19 +281,20 @@ with st.container(border=True):
 - While sentiment has near-zero next-day association with absolute price changes (consistent with the [Efficient Market Hypothesis](https://en.wikipedia.org/wiki/Efficient-market_hypothesis)), it may still be useful for descriptive regime identification.
 - **Conclusion**: The Panic Index is designed as a regime indicator, not a high-frequency timing tool. Its value here is descriptive evidence for studying market stress windows, not guaranteed alpha.
 
-### Backtest ({date_range[0]} – {date_range[1]})
+### Backtest ({start_date} – {end_date})
 
 | Metric | Strategy | Buy & Hold |
 |--------|----------|------------|
-| Total Return | {bt['cumulative_strategy'].iloc[-1]-100:.1f}% | {bt['cumulative_buyhold'].iloc[-1]-100:.1f}% |
-| Max Drawdown | {max_drawdown(bt['cumulative_strategy']):.1f}% | {max_drawdown(bt['cumulative_buyhold']):.1f}% |
-| Sharpe Ratio | {sharpe_ratio(bt['strategy_return']):.3f} | {sharpe_ratio(bt['daily_return']):.3f} |
+| Total Return | {performance_metrics['strategy_return']:.1f}% | {performance_metrics['buyhold_return']:.1f}% |
+| Max Drawdown | {performance_metrics['strategy_max_drawdown']:.1f}% | {performance_metrics['buyhold_max_drawdown']:.1f}% |
+| Sharpe Ratio | {performance_metrics['strategy_sharpe']:.3f} | {performance_metrics['buyhold_sharpe']:.3f} |
+| Calmar Ratio | {performance_metrics['strategy_calmar']:.3f} | {performance_metrics['buyhold_calmar']:.3f} |
 
 {verdict}
 
 ### Forward Return Analysis
 - **Asymmetric Historical Pattern**: Extreme panic regimes are historically associated with more favorable forward-return distributions in this sample. The 1-month horizon shows a higher observed win rate than shorter horizons, but this should not be interpreted as guaranteed alpha or a live trading claim.
-- **Greed Dissipation & Momentum Inertia**: Unlike panic, extreme greed regimes show flatter forward-return distributions with returns often hovering near zero. In sustained uptrends, greed can persist longer than expected, making it more useful as a de-risking context than a definitive short signal.
+- **Greed Persistence & Momentum Inertia**: Unlike panic, extreme greed regimes can persist during sustained uptrends. In this sample, greed appears less reliable as an immediate exit signal and is better framed as a risk-awareness context or exploratory de-risking candidate.
 - **Risk-Reward Profile**: The P/L ratio is higher for some longer panic windows in this sample, suggesting that rebound magnitude has historically outweighed downside in selected periods. This is descriptive evidence, not proof of persistent alpha.
 - **Methodological Fidelity**:
     - *Distribution Analysis*: KDE (Kernel Density Estimation) plots help describe the shape of historical return distributions after panic and greed regimes.
@@ -188,8 +307,8 @@ with st.expander("📝 Project Write-up", expanded=False):
 
 ### Design Decisions
 - **Four-chart layout**: Each chart serves a distinct analytical purpose:
-  - **Chart 1 (Price Signal Map & Composite Panic Index)**: Shows *where* buy/sell signals appear on the
-    price chart, allowing users to visually validate signal timing against
+  - **Chart 1 (Price Signal Map & Composite Panic Index)**: Shows *where* panic and greed threshold regimes appear on the
+    price chart, allowing users to visually validate regime timing against
     historical price movements.
   - **Chart 2 (Sentiment vs. MA50 Deviation)**: Reveals the *structural relationship*
     between sentiment and price level, removing long-term trend bias via MA50 deviation.
@@ -200,10 +319,11 @@ with st.expander("📝 Project Write-up", expanded=False):
 
 - **Composite Panic Index**: Normalized VIX (50%) + Inverted Fear & Greed (50%),
   scaled to 0–100. Buy threshold (>{buy_threshold}) = 95th percentile;
-  Sell threshold (<{sell_threshold}) = 5th percentile of full 5-year history.
+  Greed / risk-warning threshold (<{sell_threshold}) = 5th percentile of full 5-year history.
   The buy threshold defines a panic regime / buy zone, while the sell threshold
-  defines a greed / de-risking regime. Consecutive panic-zone observations are
-  expected and feed gradual position sizing rather than one-off bottom calls.
+  defines an exploratory greed / risk-warning regime. Consecutive panic-zone observations are
+  expected and feed gradual position sizing rather than one-off bottom calls;
+  greed-side de-risking is evaluated as a less symmetric, more tentative rule.
   Thresholds are fixed — consistent with real-world quant strategy development
   where thresholds are calibrated on historical data and held constant during deployment.
 
