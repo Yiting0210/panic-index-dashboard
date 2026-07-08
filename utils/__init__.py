@@ -1,6 +1,7 @@
 from .data_loader import load_data, load_filtered_data
 from .metrics import RISK_FREE_RATE
-from .metrics import max_drawdown, sharpe_ratio, render_kpi_row
+from .metrics import (build_performance_metrics, max_drawdown, sharpe_ratio,
+                      render_kpi_row)
 from .backtest import run_backtest, run_backtest_with_signals
 
 
@@ -18,7 +19,10 @@ from .charts import (build_signal_lines, build_watch_zone_shapes,
                      render_forward_return_table)
 from .peak_detection import detect_peaks_scipy, detect_peaks_realtime
 from .signals import prepare_panic_signal, build_threshold_masks
-from .analysis import build_backtest_verdict, build_strategy_comparison_table
+from .analysis import (build_backtest_verdict, build_strategy_comparison_table,
+                       build_strategy_diagnostics,
+                       build_exposure_tradeoff_attribution)
+from .narrative import build_threshold_research_summary
 
 __all__ = [
     "RISK_FREE_RATE",
@@ -28,8 +32,12 @@ __all__ = [
     "add_sidebar_nav",
     "apply_peak_chart_layout",
     "build_backtest_verdict",
+    "build_exposure_tradeoff_attribution",
+    "build_performance_metrics",
     "build_signal_lines",
     "build_strategy_comparison_table",
+    "build_strategy_diagnostics",
+    "build_threshold_research_summary",
     "build_threshold_masks",
     "build_watch_zone_shapes",
     "detect_peaks_realtime",
