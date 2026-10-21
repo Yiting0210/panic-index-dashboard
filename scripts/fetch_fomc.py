@@ -6,13 +6,14 @@ meeting, so indexing them by meeting date would leak information into any
 as-of query that falls between the meeting and the release.
 
 Usage:
-    python scripts/fetch_fomc.py --start-year 2021 --end-year 2026
+    python scripts/fetch_fomc.py --start-year 2021            # full rebuild
+    python scripts/fetch_fomc.py --incremental                # new documents only
 """
 import argparse
 import json
 import re
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
@@ -113,47 +114,80 @@ def build_title(entry, heading=""):
     return f"Minutes of the FOMC Meeting ({meeting})"
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start-year", type=int, default=2021)
-    parser.add_argument("--end-year", type=int, default=2026)
-    parser.add_argument("--sleep", type=float, default=0.5,
-                        help="Seconds between requests to federalreserve.gov")
-    args = parser.parse_args()
+def fetch_record(session, entry):
+    response = session.get(entry["url"], timeout=30)
+    response.raise_for_status()
+    # The server sends no charset; the pages are UTF-8.
+    html = response.content.decode("utf-8")
+    return {
+        "doc_id": f"{entry['doc_type']}-{entry['meeting_date']:%Y%m%d}",
+        "doc_type": entry["doc_type"],
+        "title": build_title(entry, page_heading(html)),
+        "meeting_date": entry["meeting_date"].isoformat(),
+        "published_at": entry["published_at"].isoformat(),
+        "url": entry["url"],
+        "text": extract_text(html, entry["doc_type"]),
+    }
 
+
+def load_existing(path=OUTPUT_PATH):
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def write_documents(records, path=OUTPUT_PATH):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    records = sorted(records, key=lambda r: (r["published_at"], r["doc_type"]))
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        for record in records:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def update(start_year, end_year, incremental=False, sleep=0.5):
+    """Fetch documents; with ``incremental`` only URLs not already stored.
+
+    Stored documents are never re-downloaded or rewritten in incremental
+    mode, matching the append-only policy for market data. Returns the new
+    records.
+    """
     session = requests.Session()
     session.headers.update(HEADERS)
     calendar = session.get(CALENDAR_URL, timeout=30)
     calendar.raise_for_status()
     entries = [
         e for e in parse_calendar(calendar.text)
-        if args.start_year <= e["meeting_date"].year <= args.end_year
+        if start_year <= e["meeting_date"].year <= end_year
     ]
+    existing = load_existing() if incremental else []
+    known_urls = {r["url"] for r in existing}
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    written = 0
-    with OUTPUT_PATH.open("w", encoding="utf-8") as fh:
-        for entry in entries:
-            response = session.get(entry["url"], timeout=30)
-            response.raise_for_status()
-            # The server sends no charset; the pages are UTF-8.
-            html = response.content.decode("utf-8")
-            text = extract_text(html, entry["doc_type"])
-            doc_id = f"{entry['doc_type']}-{entry['meeting_date']:%Y%m%d}"
-            record = {
-                "doc_id": doc_id,
-                "doc_type": entry["doc_type"],
-                "title": build_title(entry, page_heading(html)),
-                "meeting_date": entry["meeting_date"].isoformat(),
-                "published_at": entry["published_at"].isoformat(),
-                "url": entry["url"],
-                "text": text,
-            }
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-            written += 1
-            print(f"{doc_id:<22} published {record['published_at']}  {len(text):>6} chars")
-            time.sleep(args.sleep)
-    print(f"Wrote {written} documents to {OUTPUT_PATH}")
+    new_records = []
+    for entry in entries:
+        if entry["url"] in known_urls:
+            continue
+        record = fetch_record(session, entry)
+        new_records.append(record)
+        print(f"{record['doc_id']:<22} published {record['published_at']}  "
+              f"{len(record['text']):>6} chars")
+        time.sleep(sleep)
+    if new_records or not incremental:
+        write_documents(existing + new_records)
+    print(f"{len(new_records)} new documents; {len(existing) + len(new_records)} total in {OUTPUT_PATH}")
+    return new_records
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--start-year", type=int, default=2021)
+    parser.add_argument("--end-year", type=int, default=date.today().year)
+    parser.add_argument("--incremental", action="store_true",
+                        help="Only download documents not already in documents.jsonl")
+    parser.add_argument("--sleep", type=float, default=0.5,
+                        help="Seconds between requests to federalreserve.gov")
+    args = parser.parse_args()
+    update(args.start_year, args.end_year, args.incremental, args.sleep)
 
 
 if __name__ == "__main__":

@@ -73,14 +73,27 @@ def compute_panic_index(df):
     return df
 
 
-@st.cache_data
-def load_data():
+def data_version(csv_path=CSV_PATH):
+    """Modification time of the CSV, used as a cache key.
+
+    The daily update rewrites the CSV in place; keying caches on its mtime
+    makes a running app pick up new rows without a restart.
+    """
+    return os.stat(csv_path).st_mtime_ns
+
+
+@st.cache_data(max_entries=2)
+def _load_data(version):
     return compute_panic_index(read_market_data())
 
-@st.cache_data
-def load_filtered_data(start_date, end_date, target_col):
-    """Load and filter data with MA calculations cached per combination."""
-    df = load_data()
+
+def load_data():
+    return _load_data(data_version())
+
+
+@st.cache_data(max_entries=64)
+def _load_filtered_data(start_date, end_date, target_col, version):
+    df = _load_data(version)
     dff = df[
         (df['date_dt'].dt.date >= start_date) &
         (df['date_dt'].dt.date <= end_date)
@@ -89,3 +102,8 @@ def load_filtered_data(start_date, end_date, target_col):
     dff['ma200'] = dff[target_col].rolling(window=200).mean()
     dff['price_dev_pct'] = (dff[target_col] - dff['ma50']) / dff['ma50'] * 100
     return dff
+
+
+def load_filtered_data(start_date, end_date, target_col):
+    """Load and filter data with MA calculations cached per combination."""
+    return _load_filtered_data(start_date, end_date, target_col, data_version())

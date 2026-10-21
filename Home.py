@@ -1,7 +1,7 @@
 
 import streamlit as st
 from utils import add_sidebar_nav
-from utils import load_data, render_scatter_plot
+from utils import data_version, load_data, render_scatter_plot
 from utils.analysis import build_correlation_evidence_summary
 
 
@@ -13,8 +13,8 @@ INDEX_MARKETS = [
 ]
 
 # ── 缓存计算 ──────────────────────────────────────────────────────────────────
-@st.cache_data
-def prepare_scatter_data():
+@st.cache_data(max_entries=2)
+def prepare_scatter_data(version):
     df = load_data()
     indices = ['qqq_close', 'smh_close', 'spx_close', 'dji_close']
     result = {}
@@ -25,9 +25,9 @@ def prepare_scatter_data():
         result[col] = dff
     return result
 
-@st.cache_resource
-def prepare_all_figures():
-    data = prepare_scatter_data()
+@st.cache_resource(max_entries=2)
+def prepare_all_figures(version):
+    data = prepare_scatter_data(version)
     figures = {}
     for col_name, label in INDEX_MARKETS:
         fig = render_scatter_plot(data[col_name], col_name, label)
@@ -79,10 +79,10 @@ placeholder = st.empty()
 placeholder.info("⏳ Loading charts for the first time, please wait...")
 
 with st.spinner("Loading charts..."):
-    all_figures = prepare_all_figures()
+    all_figures = prepare_all_figures(data_version())
 
 
-scatter_data = prepare_scatter_data()
+scatter_data = prepare_scatter_data(data_version())
 
 col1, col2 = st.columns(2)
 for i, (col_name, label) in enumerate(INDEX_MARKETS):

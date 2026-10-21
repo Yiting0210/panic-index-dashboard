@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from rag import FedDocIndex, split_text
+from rag import FedDocIndex, chunk_documents, split_text
 from rag.lexical import BM25, reciprocal_rank_fusion
 from rag.query import month_mentions
 
@@ -132,3 +132,14 @@ def test_month_mentions():
         (2022, 6), (2024, 9)
     ]
     assert month_mentions("What did the Fed say about May?") == []
+
+
+def test_incremental_add_matches_full_build():
+    early, late = DOCS[:3], DOCS[3:]
+    incremental = FedDocIndex.build(early, HashEmbedder())
+    assert incremental.add_documents(DOCS) == len(list(chunk_documents(late)))
+    assert incremental.add_documents(DOCS) == 0  # already indexed
+    full = FedDocIndex.build(DOCS, HashEmbedder())
+    for mode in ("dense", "bm25", "hybrid"):
+        query = ("balance sheet runoff caps in March 2023", date(2023, 12, 31))
+        assert incremental.search(*query, mode=mode) == full.search(*query, mode=mode)

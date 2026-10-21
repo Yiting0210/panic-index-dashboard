@@ -9,7 +9,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 # utils imports Streamlit; keep its runtime warnings out of MCP stdio output.
 logging.getLogger("streamlit").setLevel(logging.ERROR)
 
-from utils.data_loader import CSV_PATH, compute_panic_index, read_market_data  # noqa: E402
+from utils.data_loader import (CSV_PATH, compute_panic_index,  # noqa: E402
+                               data_version, read_market_data)
 
 
 class ToolInputError(ToolError, ValueError):
@@ -59,12 +60,15 @@ class MarketStore:
 
 
 _store = None
+_store_version = None
 
 
 def get_store():
-    global _store
-    if _store is None:
+    """Shared store, rebuilt when the daily update rewrites the CSV."""
+    global _store, _store_version
+    if _store is None or (_store.csv_path == CSV_PATH and _store_version != data_version()):
         _store = MarketStore()
+        _store_version = data_version()
     return _store
 
 

@@ -55,6 +55,7 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 93 statements and minutes, filtered by public release date.
 - **Research Assistant**: Claude tool-use client with citations, cost and latency logging, a daily budget, and a rule-based fallback.
 - **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
+- **Daily Data Updates**: scheduled, append-only ingestion of prices, Fear & Greed, and FOMC documents with data-quality checks.
 
 ---
 
@@ -300,6 +301,29 @@ python -m evals.agent_eval --mode replay   # no API key needed
 
 ---
 
+## Daily Data Updates
+
+A scheduled GitHub Actions workflow (`.github/workflows/daily-update.yml`) refreshes the data every weekday at 22:30 UTC, after the New York close:
+
+1. `scripts/update_market_data.py` fetches Yahoo Finance closes (QQQ, SMH, S&P 500, Dow, VIX) and the CNN Fear & Greed history from the last complete row onward.
+2. `scripts/fetch_fomc.py --incremental` downloads FOMC statements and minutes that are not stored yet, and the FAISS index embeds only those new documents.
+3. The full test suite runs against the updated data. If anything fails, nothing is committed.
+4. The bot commits the new rows to `main`, and Streamlit Community Cloud redeploys from that commit.
+
+Run the same refresh locally with `python scripts/daily_update.py` (or `python scripts/update_market_data.py --dry-run` to preview).
+
+The update follows the same point-in-time rules as the tools:
+
+- **Append-only.** New trading days are appended and empty cells are filled; a stored value is never overwritten. CNN revises its own history (for example, 2026-03-20 was stored as 15.63 in April and later served as 8.40), so revisions are logged in the job summary rather than applied.
+- **Closed sessions only.** Rows are written only for sessions that closed before 16:30 New York time. CNN's newest history points keep moving with the live reading after the close, so the latest session takes CNN's `previous_close` field instead.
+- **Chain-linked adjusted prices.** Yahoo re-bases dividend-adjusted ETF closes after every ex-dividend date. New closes are rescaled to match the last stored trading day, so returns across the seam are correct without rewriting history.
+- **Quality checks.** Duplicate dates or ids, Fear & Greed outside 0-100, VIX outside 5-150, non-positive prices, daily moves above 20% (4x for VIX), and chain-link factors beyond ±5% each abort the whole batch.
+- **No restart needed.** Streamlit caches, the MCP tools' market store, and the FOMC index are keyed on file modification times, so a running process picks up new data.
+
+The dashboard's full-sample VIX normalization means a new VIX high or low shifts every historical dashboard Panic Index value (and what the 64 / 15 thresholds mean). The MCP tools recompute per `as_of` and are not affected.
+
+---
+
 ## Methodology Design Choices
 
 Several methodology choices are intentional tradeoffs for a historical research dashboard:
@@ -319,7 +343,7 @@ Several methodology choices are intentional tradeoffs for a historical research 
 |-------|------------|
 | Frontend | Streamlit |
 | Visualization | Plotly |
-| Data | Static CSV/Excel-style data files |
+| Data | CSV files refreshed daily by GitHub Actions |
 | Language | Python 3.12 |
 | Agent interface | MCP Python SDK (`MCPServer`), Anthropic Python SDK |
 | Retrieval | fastembed (`BAAI/bge-small-en-v1.5`), FAISS, BM25, reciprocal rank fusion |
@@ -342,7 +366,8 @@ panic-index-dashboard/
 |-- rag/                            # Chunking, embeddings, FAISS + BM25 hybrid index
 |-- assistant/                      # Claude agent loop, response cache, usage ledger
 |-- evals/                          # Eval datasets, metrics, retrieval and agent evals
-|-- scripts/                        # FOMC corpus fetcher and index builder
+|-- ingest/                         # Daily market data sources and append-only merge
+|-- scripts/                        # Daily update, FOMC fetcher, and index builder
 |-- utils/
 |   |-- data_loader.py              # Static data loading, filtering, interpolation, Panic Index
 |   |-- backtest.py                 # Threshold strategy backtest logic
@@ -402,11 +427,11 @@ On Windows with an Anaconda-based Python, `onnxruntime` 1.21 or later can crash 
 
 ## Data Sources
 
-For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style static data from the `data/` directory at runtime.
+The dashboard reads CSV data from the `data/` directory at runtime; the daily workflow appends new sessions (see Daily Data Updates).
 
 - **Fear & Greed Index (2021-2022)**: [MacroMicro](https://sc.macromicro.me/charts/50108/cnn-fear-and-greed)
 - **Fear & Greed Index (2023-2026)**: CNN internal endpoint (`production.dataviz.cnn.io`)
-- **Price data**: Yahoo Finance via `yfinance`: QQQ, SMH, SPX, DJI, VIX
+- **Price data**: Yahoo Finance (historical file via `yfinance` adjusted closes; daily updates via the chart API): QQQ, SMH, SPX, DJI, VIX
 - **Missing values**: Market holidays handled via linear interpolation in the dashboard; the MCP tools forward-fill instead (see Point-in-time design)
 - **FOMC statements and minutes (2021-2026)**: [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm), public U.S. government documents, fetched with their release dates by `scripts/fetch_fomc.py`
 
@@ -426,7 +451,7 @@ These findings are descriptive historical evidence and should not be interpreted
 
 ## Limitations
 
-- The dashboard intentionally uses a static historical dataset for Streamlit Cloud simplicity and reproducible research review.
+- Daily updates depend on CNN's unofficial Fear & Greed endpoint, which can change or block automated requests; when it fails, the job stops without writing.
 - The Research Summary is deterministic and based on dashboard outputs; it does not provide investment advice.
 - Exposure attribution is arithmetic and does not exactly reconcile with compounded return differences.
 - Attribution uses lagged effective exposure consistent with the backtest timing convention.

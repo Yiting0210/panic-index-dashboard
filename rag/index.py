@@ -73,6 +73,30 @@ class FedDocIndex:
         index.add(vectors)
         return cls(chunks, index, embedder, embedder.model_name)
 
+    def add_documents(self, documents):
+        """Embed and append documents not already indexed; returns chunks added.
+
+        Existing vectors and chunk positions are left as they are, so the
+        result matches a full rebuild over the same documents.
+        """
+        known = {c["doc_id"] for c in self.chunks}
+        new_chunks = list(chunk_documents(d for d in documents if d["doc_id"] not in known))
+        if not new_chunks:
+            return 0
+        vectors = _normalize(self.embedder.embed_documents([embedding_text(c) for c in new_chunks]))
+        self.index.add(vectors)
+        self.chunks.extend(new_chunks)
+        self._published = np.concatenate([
+            self._published,
+            [date.fromisoformat(c["published_at"]).toordinal() for c in new_chunks],
+        ])
+        self._doc_types = np.concatenate([self._doc_types, [c["doc_type"] for c in new_chunks]])
+        self._meeting_months = np.concatenate(
+            [self._meeting_months, [c["meeting_date"][:7] for c in new_chunks]]
+        )
+        self._bm25 = None
+        return len(new_chunks)
+
     def save(self, directory=INDEX_DIR):
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
@@ -162,21 +186,39 @@ class FedDocIndex:
         return hits, len(ids)
 
 _index = None
+_index_version = None
+
+
+def _manifest_version(directory=INDEX_DIR):
+    return (Path(directory) / "manifest.json").stat().st_mtime_ns
 
 
 def get_index():
-    global _index
-    if _index is None:
+    """Shared index, reloaded when an incremental update rewrites it."""
+    global _index, _index_version
+    if _index is None or (_index_version is not None and _index_version != _manifest_version()):
         _index = FedDocIndex.load()
+        _index_version = _manifest_version()
     return _index
 
 
 def set_index(index):
-    global _index
+    """Inject an index (tests); it is kept until set_index is called again."""
+    global _index, _index_version
     _index = index
+    _index_version = None
 
 
 def build_default_index(documents_path=DOCUMENTS_PATH, out_dir=INDEX_DIR, model_name=DEFAULT_MODEL):
     index = FedDocIndex.build(load_documents(documents_path), FastEmbedEmbedder(model_name))
     index.save(out_dir)
     return index
+
+
+def update_default_index(documents_path=DOCUMENTS_PATH, out_dir=INDEX_DIR):
+    """Append documents missing from the saved index; returns (index, chunks added)."""
+    index = FedDocIndex.load(out_dir)
+    added = index.add_documents(load_documents(documents_path))
+    if added:
+        index.save(out_dir)
+    return index, added
