@@ -51,6 +51,10 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **scipy.find_peaks Historical Validation**: hindsight labels used to evaluate whether Panic Index peaks historically aligned with favorable forward returns.
 - **RealTimePeakDetector Causal Signal Analysis**: past/current-data-only panic-reversal confirmation signal for tactical research.
 - **Interactive Controls**: market selector, date range, thresholds, position sizing, horizons, and peak-detection parameters.
+- **MCP Research Server**: regime, backtest, forward-return, peak-detection, and FOMC-search tools for any MCP client, each pinned to an `as_of` date.
+- **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 93 statements and minutes, filtered by public release date.
+- **Research Assistant**: Claude tool-use client with citations, cost and latency logging, a daily budget, and a rule-based fallback.
+- **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
 
 ---
 
@@ -200,6 +204,102 @@ It does not call an LLM API and does not provide investment advice. The goal is 
 
 ---
 
+## Research MCP Server & Point-in-Time Assistant
+
+The research workflows are also exposed as an **MCP (Model Context Protocol) server**, so any MCP client (Claude Code, Claude Desktop, Cursor) can run cited, point-in-time market-regime research. The Streamlit **Research Assistant** page is one more client of the same server.
+
+```text
+utils/  (backtest, metrics, analysis, signals, peak_detection, narrative)
+   |
+   v
+tools/  <- one tool layer: every function takes as_of and returns a pydantic model
+   |
+   +--> mcp_server.py                    MCP server (stdio or Streamable HTTP)
+           ^
+           +-- assistant/                Claude tool-use loop over an in-process MCP client,
+                  ^                      response cache, usage ledger, budget, fallback
+                  +-- pages/3_🤖_Research_Assistant.py
+
+rag/    <- 93 FOMC statements + minutes (2021-2026) -> 2,623 chunks,
+           FAISS dense + BM25 hybrid search, filtered by release date
+evals/  <- retrieval, agent, and point-in-time evaluations (pytest + CI)
+```
+
+### Tools
+
+| Tool | What it returns |
+|---|---|
+| `get_regime(market, as_of)` | Latest Panic Index, VIX, Fear & Greed, regime, and percentile within the history available at `as_of` |
+| `run_backtest(market, as_of, ...)` | Threshold strategy vs Buy & Hold: return, max drawdown, Sharpe, Calmar, average exposure, upside drag / downside cushion |
+| `get_forward_returns(market, as_of, signal, horizons)` | Forward-return stats after panic or greed days, counting only windows that end on or before `as_of` |
+| `detect_peaks(market, as_of, method)` | Causal `realtime` reversal signals, or hindsight `scipy` labels flagged `hindsight: true` |
+| `search_fed_docs(query, as_of, k)` | FOMC passages released on or before `as_of`, with doc ids and source URLs for citation |
+
+Every result carries `as_of` and `data_through` (the latest observation actually used), and every tool publishes JSON input and output schemas.
+
+### Connecting from Claude Code
+
+The repository includes `.mcp.json`, so Claude Code offers the server when opened in this folder. It launches `${PANIC_INDEX_PYTHON:-python}`; if your default `python` does not have the project dependencies, point the variable at the right interpreter before starting Claude Code:
+
+```bash
+export PANIC_INDEX_PYTHON="$PWD/.venv/bin/python"   # Windows: .venv\Scripts\python.exe
+```
+
+The server imports pandas, SciPy, and Streamlit at startup. On a slow machine, raise Claude Code's MCP startup timeout with `MCP_TIMEOUT=90000` (milliseconds).
+
+Then ask, for example: *"As of 2022-06-17, what did the Fed just decide and is SPX in a panic regime? Cite the statement."*
+
+### Point-in-time design
+
+Look-ahead leakage is the most common failure in financial agents (much of the recent release history of the TradingAgents project fixes leakage bugs), so the tool layer enforces the cutoff itself instead of trusting the model:
+
+- **Truncate before deriving.** The dashboard normalizes VIX with the full-sample min/max, and the sample maximum falls on 2025-04-08, so every dashboard Panic Index value before that date uses future information. The tools drop rows after `as_of` first, then recompute the normalization.
+- **Causal gap filling.** The dashboard linearly interpolates missing prices, which borrows the next observed price. The tools forward-fill instead.
+- **Release dates, not meeting dates.** FOMC minutes become public about three weeks after the meeting. Each document is indexed by `published_at`, so an as-of query on the meeting day cannot see that meeting's minutes.
+- **Filter inside the search.** Retrieval passes the eligible ids to FAISS as an `IDSelector` (and restricts BM25 to the same ids) instead of over-fetching and dropping late documents afterwards, which can silently return fewer than `k` results.
+- **Agent guardrail.** The assistant clamps any `as_of` the model passes to the session cutoff and records that the clamp happened.
+
+`tests/test_point_in_time.py` checks this with a perturbation test: every row after `as_of` is replaced with extreme values (VIX 250, prices x10), and each tool's output must be identical to the unperturbed run.
+
+### Cost and observability
+
+- Every Messages API call is logged to `logs/llm_usage.jsonl` with input, output, and cache tokens, latency, and USD cost.
+- Identical requests are served from a content-addressed response cache (`.cache/llm/`) at $0.
+- A daily budget (`PANIC_LLM_DAILY_BUDGET_USD`, default $1.00) blocks new calls once it is reached.
+- The stable prefix (tool definitions and system prompt) is prompt-cached across agent steps.
+- On a missing key, an API error, a refusal, or an exhausted budget, the page falls back to the deterministic rule-based Research Summary.
+
+The default model is `claude-opus-5-5` (override with `PANIC_LLM_MODEL`, e.g. `claude-sonnet-5-5`, and effort with `PANIC_LLM_EFFORT`). Requests opt in to server-side refusal fallbacks. The final answer uses structured output with a JSON schema of `answer`, `citations`, and `caveats`.
+
+### Evaluation
+
+| Layer | Metric | How | Result |
+|---|---|---|---|
+| Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
+| Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs | implemented, not yet run against the API |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | implemented, not yet run against the API |
+
+Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
+
+| Configuration | recall@5 | MRR | Leakage |
+|---|---|---|---|
+| Dense (bge-small-en-v1.5 + FAISS) | 0.700 | 0.542 | 0 |
+| BM25 | 0.700 | 0.600 | 0 |
+| Hybrid (RRF of dense + BM25) | 0.700 | 0.549 | 0 |
+| **Hybrid + meeting-month ranking** | **0.933** | **0.799** | **0** |
+
+Most misses in the first three rows were questions that name a month ("September 2024"), where a short policy statement was outranked by long minutes. When a query names a month, the final configuration adds a third ranked list restricted to that meeting month. That feature was designed after inspecting misses on the same 30 questions and there is no held-out split, so treat the final row as optimistic.
+
+CI runs the unit, leakage, and retrieval tests on every push. The agent eval replays recorded responses from `evals/recordings/` without an API key, and a manually triggered workflow (`workflow_dispatch` with `live_agent_eval`) runs it against the real API with the `ANTHROPIC_API_KEY` repository secret:
+
+```bash
+python -m evals.agent_eval --mode record   # real API; writes evals/recordings/
+python -m evals.agent_eval --mode replay   # no API key needed
+```
+
+---
+
 ## Methodology Design Choices
 
 Several methodology choices are intentional tradeoffs for a historical research dashboard:
@@ -221,6 +321,9 @@ Several methodology choices are intentional tradeoffs for a historical research 
 | Visualization | Plotly |
 | Data | Static CSV/Excel-style data files |
 | Language | Python 3.12 |
+| Agent interface | MCP Python SDK (`MCPServer`), Anthropic Python SDK |
+| Retrieval | fastembed (`BAAI/bge-small-en-v1.5`), FAISS, BM25, reciprocal rank fusion |
+| Testing / CI | pytest, GitHub Actions |
 | Deployment | Streamlit Community Cloud |
 
 ---
@@ -233,6 +336,13 @@ panic-index-dashboard/
 |-- pages/
 |   |-- 1_💠_Threshold_Strategy.py   # Threshold strategy, diagnostics, attribution, backtest UI
 |   |-- 2_🏔️_Peak_Detection.py      # Peak detection and signal validation page
+|   |-- 3_🤖_Research_Assistant.py   # Chat client for the MCP tools
+|-- mcp_server.py                   # MCP server (stdio / Streamable HTTP)
+|-- tools/                          # Point-in-time tool layer and result schemas
+|-- rag/                            # Chunking, embeddings, FAISS + BM25 hybrid index
+|-- assistant/                      # Claude agent loop, response cache, usage ledger
+|-- evals/                          # Eval datasets, metrics, retrieval and agent evals
+|-- scripts/                        # FOMC corpus fetcher and index builder
 |-- utils/
 |   |-- data_loader.py              # Static data loading, filtering, interpolation, Panic Index
 |   |-- backtest.py                 # Threshold strategy backtest logic
@@ -243,10 +353,11 @@ panic-index-dashboard/
 |   |-- signals.py                  # Panic signal preparation and threshold masks
 |   |-- peak_detection.py           # scipy hindsight labels and causal RealTime detector
 |   |-- sidebar.py                  # Streamlit sidebar controls and navigation
-|-- tests/                          # Lightweight pytest coverage for analytics and signals
+|-- tests/                          # Analytics, point-in-time, RAG, MCP, and agent tests
 |-- assets/                         # README screenshots
-|-- data/                           # Static market sentiment and price data
-|-- requirements.txt                # Runtime dependencies for Streamlit
+|-- data/                           # Static market data; data/fomc/ holds the corpus and index
+|-- .mcp.json                       # MCP server config picked up by Claude Code
+|-- requirements.txt                # Runtime dependencies
 |-- requirements-dev.txt            # Development and CI dependencies
 |-- .streamlit/config.toml          # Streamlit Cloud/sidebar configuration
 |-- README.md
@@ -270,6 +381,23 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
+MCP server and assistant:
+
+```bash
+python mcp_server.py                      # stdio, for MCP clients
+python mcp_server.py --http --port 8765   # Streamable HTTP
+export ANTHROPIC_API_KEY=...              # only the assistant page and the agent eval need a key
+```
+
+The FOMC corpus and index are committed. To rebuild them:
+
+```bash
+python scripts/fetch_fomc.py --start-year 2021 --end-year 2026
+python scripts/build_fomc_index.py
+```
+
+On Windows with an Anaconda-based Python, `onnxruntime` 1.21 or later can crash on import because of the older MSVC runtime bundled with Anaconda; `pip install "onnxruntime<1.21"` works around it.
+
 ---
 
 ## Data Sources
@@ -279,7 +407,8 @@ For Streamlit Cloud simplicity, the dashboard currently reads CSV/Excel-style st
 - **Fear & Greed Index (2021-2022)**: [MacroMicro](https://sc.macromicro.me/charts/50108/cnn-fear-and-greed)
 - **Fear & Greed Index (2023-2026)**: CNN internal endpoint (`production.dataviz.cnn.io`)
 - **Price data**: Yahoo Finance via `yfinance`: QQQ, SMH, SPX, DJI, VIX
-- **Missing values**: Market holidays handled via linear interpolation
+- **Missing values**: Market holidays handled via linear interpolation in the dashboard; the MCP tools forward-fill instead (see Point-in-time design)
+- **FOMC statements and minutes (2021-2026)**: [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm), public U.S. government documents, fetched with their release dates by `scripts/fetch_fomc.py`
 
 ---
 
@@ -307,3 +436,6 @@ These findings are descriptive historical evidence and should not be interpreted
 - Greed-side de-risking remains a strategy design choice under evaluation, not a proven optimal exit rule.
 - `scipy.find_peaks` is a hindsight-only validation label and should not be treated as a deployable trading signal.
 - RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.
+- The MCP tools guarantee that nothing after `as_of` is read, but a backtest ending at `as_of` still normalizes VIX over its whole window, and the default thresholds (64 / 15) were calibrated on the full sample.
+- The retrieval and agent eval sets are small (30 and 12 questions) and were written for this project; the date-aware retrieval feature was tuned on the same retrieval set.
+- The assistant tells the model not to use its own knowledge, but the model's training data can still include events after `as_of`; the agent eval checks answers for future dates and late citations.

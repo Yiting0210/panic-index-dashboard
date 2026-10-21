@@ -1,0 +1,128 @@
+# Retrieval evaluation set for search_fed_docs.
+#
+# Each question names the document(s) that answer it. as_of is set shortly
+# after the answering document's release, so the label is also only valid if
+# the retriever respects the as-of cutoff (minutes are dated by release day).
+# Labels were checked against the document text by phrase search
+# (e.g. "$60 billion ... $35 billion", "mild recession", "Hammack").
+questions:
+  - id: r01
+    question: Did the FOMC raise the federal funds rate in March 2022, and to what target range?
+    as_of: 2022-03-18
+    relevant: [statement-20220316]
+  - id: r02
+    question: Who dissented at the March 2022 FOMC meeting and what size of increase was preferred instead?
+    as_of: 2022-03-20
+    relevant: [statement-20220316]
+  - id: r03
+    question: When did the Committee say it would begin reducing its holdings of Treasury securities and agency mortgage-backed securities?
+    as_of: 2022-05-06
+    relevant: [statement-20220504]
+  - id: r04
+    question: How far did the FOMC raise rates in June 2022 and who voted against the action?
+    as_of: 2022-06-17
+    relevant: [statement-20220615]
+  - id: r05
+    question: How did the FOMC describe the U.S. banking system after the bank failures in March 2023?
+    as_of: 2023-03-24
+    relevant: [statement-20230322]
+  - id: r06
+    question: Did the Committee hold the target range steady at its June 2023 meeting?
+    as_of: 2023-06-16
+    relevant: [statement-20230614]
+  - id: r07
+    question: How large was the Fed's first rate cut in September 2024?
+    as_of: 2024-09-20
+    relevant: [statement-20240918]
+  - id: r08
+    question: Which governor dissented against the half-point cut in September 2024, and what alternative was preferred?
+    as_of: 2024-09-22
+    relevant: [statement-20240918]
+  - id: r09
+    question: Why did Beth Hammack vote against the December 2024 rate decision?
+    as_of: 2024-12-20
+    relevant: [statement-20241218]
+  - id: r10
+    question: When did the FOMC slow balance sheet runoff by lowering the Treasury redemption cap from $60 billion to $25 billion?
+    as_of: 2024-05-03
+    relevant: [statement-20240501]
+  - id: r11
+    question: What change to the monthly Treasury redemption cap did the Committee announce in March 2025?
+    as_of: 2025-03-21
+    relevant: [statement-20250319]
+  - id: r12
+    question: Who dissented at the July 2025 FOMC meeting and what policy did they prefer?
+    as_of: 2025-08-01
+    relevant: [statement-20250730]
+  - id: r13
+    question: What did Stephen Miran prefer when he dissented at the September 2025 meeting?
+    as_of: 2025-09-19
+    relevant: [statement-20250917]
+  - id: r14
+    question: When will the Committee conclude the reduction of its aggregate securities holdings?
+    as_of: 2025-10-31
+    relevant: [statement-20251029]
+  - id: r15
+    question: What updates did the FOMC approve to its Statement on Longer-Run Goals and Monetary Policy Strategy in 2025?
+    as_of: 2025-08-25
+    relevant: [statement-20250822]
+  - id: r16
+    question: Did the FOMC change rates in January 2026, and who dissented?
+    as_of: 2026-01-30
+    relevant: [statement-20260128]
+  - id: r17
+    question: What did the FOMC decide at its September 2026 meeting?
+    as_of: 2026-09-18
+    relevant: [statement-20260916]
+  - id: r18
+    question: Which officials dissented in favor of a rate increase in July 2026?
+    as_of: 2026-07-31
+    relevant: [statement-20260729]
+  - id: r19
+    question: By how much did the Fed begin tapering its monthly Treasury and MBS purchases in November 2021?
+    as_of: 2021-11-05
+    relevant: [statement-20211103]
+  - id: r20
+    question: How much did the Committee accelerate the reduction in net asset purchases in December 2021?
+    as_of: 2021-12-17
+    relevant: [statement-20211215]
+  - id: r21
+    question: What did the FOMC decide about the federal funds rate in March 2026?
+    as_of: 2026-03-20
+    relevant: [statement-20260318]
+  - id: r22
+    question: What monthly runoff caps for Treasury securities and agency MBS did participants say would likely be appropriate in the March 2022 discussion?
+    as_of: 2022-04-10
+    relevant: [minutes-20220316]
+  - id: r23
+    question: What did the staff project for the U.S. economy after the banking-sector developments of March 2023?
+    as_of: 2023-04-20
+    relevant: [minutes-20230322]
+  - id: r24
+    question: How was the Committee briefed on Silicon Valley Bank, Signature Bank, and Credit Suisse?
+    as_of: 2023-04-25
+    relevant: [minutes-20230322]
+  - id: r25
+    question: When did the Fed staff stop forecasting a mild recession for 2023?
+    as_of: 2023-08-20
+    relevant: [minutes-20230726]
+  - id: r26
+    question: What considerations did participants discuss for slowing the pace of balance sheet reduction in early 2024?
+    as_of: 2024-04-15
+    relevant: [minutes-20240320]
+  - id: r27
+    question: When did participants expect net asset purchases to end after the December 2021 decision to speed up tapering?
+    as_of: 2022-01-10
+    relevant: [minutes-20211215]
+  - id: r28
+    question: What did the minutes say about the risk that the Treasury could be unable to meet its obligations if the debt limit was not raised in 2023?
+    as_of: 2023-05-30
+    relevant: [minutes-20230503]
+  - id: r29
+    question: How did the federal government shutdown limit the labor market information available to the Committee in late 2025?
+    as_of: 2025-11-25
+    relevant: [minutes-20251029]
+  - id: r30
+    question: How much did the staff expect the government shutdown to reduce fourth-quarter 2025 real GDP growth?
+    as_of: 2026-01-05
+    relevant: [minutes-20251210]

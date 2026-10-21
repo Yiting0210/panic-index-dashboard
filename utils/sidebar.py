@@ -14,6 +14,7 @@ def add_sidebar_nav():
     st.sidebar.page_link("Home.py", label="Home", icon="🏠")
     st.sidebar.page_link("pages/1_💠_Threshold_Strategy.py", label="Threshold Strategy", icon="💠")
     st.sidebar.page_link("pages/2_🏔️_Peak_Detection.py", label="Peak Detection", icon="🏔️")
+    st.sidebar.page_link("pages/3_🤖_Research_Assistant.py", label="Research Assistant", icon="🤖")
 
 
 def render_controls(df):

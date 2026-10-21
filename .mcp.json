@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "panic-index-research": {
+      "command": "${PANIC_INDEX_PYTHON:-python}",
+      "args": ["mcp_server.py"]
+    }
+  }
+}
