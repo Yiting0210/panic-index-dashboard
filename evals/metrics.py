@@ -8,6 +8,11 @@ MONTH_YEAR_RE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|October|"
     r"November|December)\s+(?:\d{1,2},\s+)?(\d{4})\b"
 )
+# Prose dates such as "April 9", "Apr 11, 2025", or "September 18th".
+PROSE_DATE_RE = re.compile(
+    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+"
+    r"\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b"
+)
 MONTHS = {m: i for i, m in enumerate(
     "January February March April May June July August September October "
     "November December".split(), start=1)}
@@ -49,8 +54,13 @@ def leaked_hits(hits, as_of):
 
 
 def extract_numbers(text):
-    """Numbers stated in free text, ignoring 4-digit years and ISO dates."""
-    text = ISO_DATE_RE.sub(" ", text)
+    """Numbers stated in free text, ignoring years and dates.
+
+    Dates are checked separately (future_dates); stripping them here keeps a
+    day of the month from counting as an unsupported number when the tool
+    reported the same day in ISO form.
+    """
+    text = PROSE_DATE_RE.sub(" ", ISO_DATE_RE.sub(" ", text))
     values = []
     for match in NUMBER_RE.findall(text):
         value = float(match.replace(",", ""))

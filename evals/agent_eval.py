@@ -31,6 +31,8 @@ def load_questions(path=DATASET):
     for q in questions:
         if isinstance(q["as_of"], str):
             q["as_of"] = date.fromisoformat(q["as_of"])
+        if q.get("expect_unanswerable") and not q.get("forbidden_phrases"):
+            raise ValueError(f"{q['id']}: trap questions need forbidden_phrases")
     return questions
 
 
@@ -71,7 +73,12 @@ def score_result(question, result):
         if call.result and str(call.result.get("data_through", "")) > as_of.isoformat()
     ]
     leaked_citations = [d for d in cited if d in docs and docs[d] > as_of]
-    leaked = bool(leaked_dates or leaked_tool_data or leaked_citations)
+    # Trap questions ask about information released after as_of; stating it
+    # (e.g. from the model's own memory) is a leak even without a citation.
+    answer_lower = result.answer.lower()
+    leaked_phrases = [p for p in question.get("forbidden_phrases", [])
+                      if p.lower() in answer_lower]
+    leaked = bool(leaked_dates or leaked_tool_data or leaked_citations or leaked_phrases)
 
     tool_selection = expected <= called
     success = (
@@ -93,6 +100,7 @@ def score_result(question, result):
         "unsupported_numbers": unsupported,
         "leaked": leaked,
         "leaked_dates": [d.isoformat() for d in leaked_dates],
+        "leaked_phrases": leaked_phrases,
         "as_of_clamped_calls": sum(c.as_of_clamped for c in result.tool_calls),
         "steps": result.steps,
         "latency_ms": result.latency_ms,

@@ -184,3 +184,49 @@ def test_ledger_budget_and_pricing(tmp_path):
 def test_request_hash_is_order_independent():
     assert request_hash({"a": 1, "b": [1, 2]}) == request_hash({"b": [1, 2], "a": 1})
     assert request_hash({"a": 1}) != request_hash({"a": 2})
+
+
+def test_unlisted_model_is_priced_conservatively_without_crashing(tmp_path):
+    from assistant.ledger import FALLBACK_RATES
+
+    ledger = UsageLedger(tmp_path / "usage.jsonl")
+
+    class Usage:
+        input_tokens = 1_000_000
+        output_tokens = 0
+        cache_read_input_tokens = 0
+        cache_creation_input_tokens = 0
+
+    record = ledger.record(Usage, "claude-some-future-model", 1.0, "abc")
+    assert record.cost_usd == pytest.approx(FALLBACK_RATES["input"])
+    assert record.priced_as == "unlisted-model-max-rate"
+
+
+def test_response_from_fallback_model_is_recorded(make_agent):
+    served_by_fallback = final_response("Answered after a fallback.")
+    served_by_fallback["model"] = "claude-opus-4-8"
+    agent, _ = make_agent([served_by_fallback])
+    result = agent.run("anything", date(2023, 12, 29))
+    assert result.fallback_reason is None
+    assert result.model == "claude-opus-4-8"
+    assert result.cost_usd == pytest.approx(cost_usd("claude-opus-4-8", 1000, 200))
+
+
+def test_budget_counts_records_from_other_processes_incrementally(tmp_path):
+    path = tmp_path / "usage.jsonl"
+    reader = UsageLedger(path, daily_budget_usd=1.0)
+    writer = UsageLedger(path, daily_budget_usd=1.0)
+
+    class Usage:
+        input_tokens = 100_000
+        output_tokens = 0
+        cache_read_input_tokens = 0
+        cache_creation_input_tokens = 0
+
+    assert reader.spent_today() == 0
+    writer.record(Usage, "claude-opus-5-5", 1.0, "a")
+    assert reader.spent_today() == pytest.approx(0.4)
+    writer.record(Usage, "claude-opus-5-5", 1.0, "b")
+    assert reader.spent_today() == pytest.approx(0.8)
+    path.write_text("")  # rotated log
+    assert reader.spent_today() == 0

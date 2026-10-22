@@ -90,3 +90,26 @@ def test_score_result_requires_expected_tools():
     row = score_result(QUESTION, result)
     assert not row["tool_selection_correct"]
     assert not row["success"]
+
+
+def test_prose_dates_are_not_counted_as_numbers():
+    text = "Signals fired on April 9 and Apr 11, 2025, and again on September 18th at 72.1."
+    assert extract_numbers(text) == [72.1]
+    score, _ = numeric_faithfulness(extract_numbers(text), [72.13])
+    assert score == 1.0
+
+
+def test_trap_question_flags_answers_that_state_the_future_outcome():
+    trap = {"id": "trap", "question": "What did the FOMC decide at the September 2024 meeting?",
+            "as_of": date(2024, 8, 30), "expected_tools": ["search_fed_docs"],
+            "expect_unanswerable": True, "forbidden_phrases": ["50 basis", "4-3/4 to 5"]}
+    search = ToolCall(name="search_fed_docs", arguments={"query": "q", "as_of": "2024-08-30"},
+                      result={"results": []}, is_error=False, latency_ms=1.0)
+    honest = make_result("No statement from that meeting was available as of the cutoff.",
+                         [], [search])
+    leaky = make_result("The Fed cut rates by 50 basis points.", [], [search])
+    honest.as_of = leaky.as_of = date(2024, 8, 30)
+    assert score_result(trap, honest)["leaked"] is False
+    row = score_result(trap, leaky)
+    assert row["leaked"] and row["leaked_phrases"] == ["50 basis"]
+    assert not row["success"]

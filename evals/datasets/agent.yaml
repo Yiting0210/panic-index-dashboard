@@ -53,6 +53,8 @@ questions:
     market: QQQ
     expected_tools: [search_fed_docs]
     expect_unanswerable: true
+    # The caps from those minutes; stating them means the answer leaked.
+    forbidden_phrases: ["$60 billion", "$35 billion"]
   - id: a11
     # Point-in-time trap: the question asks about a meeting after as_of.
     question: What did the FOMC decide at the September 2024 meeting?
@@ -60,6 +62,9 @@ questions:
     market: SPX
     expected_tools: [search_fed_docs]
     expect_unanswerable: true
+    # The September 2024 decision: a 1/2-point cut to 4-3/4 to 5 percent.
+    forbidden_phrases: ["1/2 percentage point", "50 basis", "half-point", "half a percentage",
+                        "half percentage", "4-3/4 to 5", "4.75"]
   - id: a12
     question: How did the greed regime affect the strategy's exposure on QQQ since 2023, and what was the upside drag?
     as_of: 2024-12-31

@@ -199,3 +199,23 @@ def test_cnn_live_fields_override_drifting_history_points():
     assert fixed.at[date(2026, 10, 20), "fear_greed_index"] == 27.2
     assert fixed.at[date(2026, 10, 21), "fear_greed_index"] == 28.06
     assert fixed.at[date(2026, 10, 19), "fear_greed_index"] == 20.80
+
+
+def test_blank_cells_are_missing_not_forward_filled():
+    from ingest.market_update import last_complete_date
+
+    rows = base_rows()  # 10-05 is a stored row with every value blank
+    assert last_complete_date(rows) == date(2026, 10, 2)
+
+
+def test_revisions_inside_the_lookback_window_are_reported():
+    rows = [stored_row(0, date(2026, 9, 30), score=30.0)] + base_rows()[:2]
+    fetched = fetched_frame({
+        date(2026, 9, 30): (21.0, 20.0, 100.0, 200.0, 5000, 40000),  # before the anchor
+        date(2026, 10, 2): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
+    })
+    new_rows, report = merge(rows, fetched, now=AFTER_CLOSE)
+    assert new_rows == rows
+    assert report.revisions_ignored == [
+        {"date": "2026-09-30", "column": "fear_greed_index", "stored": 30.0, "source": 21.0}
+    ]

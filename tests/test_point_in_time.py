@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from tools import (MarketStore, detect_peaks, get_forward_returns, get_regime,
                    run_backtest, set_store)
-from tools.market import get_store
 from utils.data_loader import CSV_PATH, compute_panic_index, read_market_data
 
 AS_OF_DATES = [date(2022, 3, 18), date(2022, 10, 13), date(2023, 12, 29), date(2025, 4, 9)]
@@ -25,11 +24,10 @@ MARKET_TOOLS = [
 
 @pytest.fixture
 def real_store():
-    previous = get_store()
     store = MarketStore(CSV_PATH)
     set_store(store)
     yield store
-    set_store(previous)
+    set_store(None)
 
 
 @pytest.fixture
@@ -113,3 +111,12 @@ def test_forward_fill_never_borrows_future_prices(tmp_path):
 def test_as_of_before_data_start_is_a_clear_tool_error(real_store):
     with pytest.raises(ValueError, match="before the first available observation"):
         get_regime("QQQ", date(2015, 1, 1))
+
+
+def test_injected_store_is_pinned_until_reset(real_store):
+    from tools.market import get_store
+
+    assert get_store() is real_store
+    assert get_store() is real_store  # not swapped for a fresh default store
+    set_store(None)
+    assert get_store() is not real_store

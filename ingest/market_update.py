@@ -131,7 +131,9 @@ def _numeric(rows):
     frame = pd.DataFrame(rows)
     frame.index = [_row_date(r) for r in rows]
     for column in PRICE_COLUMNS + ["vix", "fear_greed_index"]:
-        frame[column] = pd.to_numeric(frame[column].replace("", None), errors="coerce")
+        # Blank cells become NaN; never Series.replace("", None), which
+        # forward-fills on pandas < 3.
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
     return frame.sort_index()
 
 
@@ -186,7 +188,7 @@ def merge(rows, fetched, now=None):
     report.link_factors = link_factors(existing, fetched, anchor)
     for column, factor in report.link_factors.items():
         fetched[column] = fetched[column] * factor
-    fetched = fetched[(fetched.index > anchor) & (fetched.index <= settled)]
+    fetched = fetched[fetched.index <= settled]
 
     rows = [dict(r) for r in rows]
     by_date = {}
@@ -196,6 +198,9 @@ def merge(rows, fetched, now=None):
     created_at = format_timestamp(now.astimezone(NEW_YORK).replace(tzinfo=None))
     changed = set()
 
+    # The whole fetched window (anchor included) is compared with stored
+    # values to detect upstream revisions; only dates after the anchor are
+    # filled or appended.
     for day, values in fetched.iterrows():
         # A trading row needs prices; a sentiment-only day (holiday) needs a score.
         has_prices = not values[PRICE_COLUMNS + ["vix"]].isna().any()
@@ -205,14 +210,14 @@ def merge(rows, fetched, now=None):
                 value = values.get(column)
                 if value is None or (isinstance(value, float) and math.isnan(value)):
                     continue
-                if _is_blank(row.get(column)):
+                if _is_blank(row.get(column)) and day > anchor:
                     row[column] = _format_value(column, value)
                     report.filled_cells += 1
                     changed.add(day)
-                else:
+                elif not _is_blank(row.get(column)):
                     _record_revision(report, day, column, row[column], value)
             continue
-        if not has_prices:
+        if day <= anchor or not has_prices:
             continue
         if pd.isna(values.get("fear_greed_index")):
             report.warnings.append(f"{day}: no Fear & Greed score yet; row not appended")

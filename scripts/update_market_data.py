@@ -22,12 +22,13 @@ from ingest.market_update import last_complete_date  # noqa: E402
 CSV_PATH = Path(__file__).resolve().parents[1] / "data" / "market_data_clean.csv"
 
 
-def run(csv_path=CSV_PATH, dry_run=False):
+def run(csv_path=CSV_PATH, dry_run=False, lookback_days=10):
     fieldnames, rows = read_raw(csv_path)
     settled = last_settled_session()
-    # Start a little before the last complete row so the window always
-    # contains a real trading day to chain-link against.
-    start = last_complete_date(rows) - timedelta(days=10)
+    # Start before the last complete row so the window always contains a real
+    # trading day to chain-link against; stored values inside the window are
+    # also checked for upstream revisions.
+    start = last_complete_date(rows) - timedelta(days=lookback_days)
     fetched = fetch_all(start, settled)
     new_rows, report = merge(rows, fetched)
     if report.changed and not dry_run:
@@ -39,10 +40,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", type=Path, default=CSV_PATH)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--lookback-days", type=int, default=10,
+                        help="Days before the last complete row to re-fetch and check for revisions")
     parser.add_argument("--report", type=Path, help="Also write the JSON report here")
     args = parser.parse_args()
 
-    report = run(args.csv, args.dry_run).as_dict()
+    report = run(args.csv, args.dry_run, args.lookback_days).as_dict()
     report["dry_run"] = args.dry_run
     text = json.dumps(report, indent=2)
     print(text)

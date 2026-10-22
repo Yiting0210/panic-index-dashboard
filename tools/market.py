@@ -66,16 +66,20 @@ _store_version = None
 def get_store():
     """Shared store, rebuilt when the daily update rewrites the CSV."""
     global _store, _store_version
-    if _store is None or (_store.csv_path == CSV_PATH and _store_version != data_version()):
+    if _store is None or (_store_version is not None and _store_version != data_version()):
         _store = MarketStore()
         _store_version = data_version()
     return _store
 
 
 def set_store(store):
-    """Swap the global store (used by tests to inject synthetic data)."""
-    global _store
+    """Inject a store (tests); it is kept until set_store is called again.
+
+    Passing None restores the default store that follows the CSV.
+    """
+    global _store, _store_version
     _store = store
+    _store_version = None
 
 
 def to_date(value):
