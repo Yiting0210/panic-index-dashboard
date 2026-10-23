@@ -3,7 +3,8 @@ import os
 import streamlit as st
 
 from utils import add_sidebar_nav, load_data
-from utils.sidebar import EMOJI_FONTS, render_sidebar_header
+from utils.sidebar import EMOJI_FONTS, render_sidebar_header, strategy_settings
+from utils.strategy import DEFAULT_STRATEGY, StrategyParams
 
 st.set_page_config(layout="wide", page_title="Research Assistant")
 
@@ -128,6 +129,13 @@ market = st.sidebar.selectbox(
     "Default market", list(MARKET_LABELS), format_func=MARKET_LABELS.get,
     help="Used for the rule-based fallback summary and as a hint in the question.",
 )
+strategy = StrategyParams(**strategy_settings())
+st.sidebar.markdown("---")
+render_sidebar_header("Strategy Settings", "⚙️")
+st.sidebar.caption(
+    ("Defaults" if strategy == DEFAULT_STRATEGY else "From the Threshold Strategy page")
+    + f": {strategy.describe()}. Change them on the Threshold Strategy page."
+)
 
 if not api_key and owner_key:
     owner_ledger = shared_resources()[2]
@@ -147,7 +155,7 @@ if ask:
     full_question = f"{question.strip()} (Market: {market})"
     agent = build_agent(provider["id"], model, api_key)
     with st.spinner("Calling tools…"):
-        result = agent.run(full_question, as_of, market=market)
+        result = agent.run(full_question, as_of, market=market, strategy=strategy)
     st.session_state["last_result"] = result
 
 result = st.session_state.get("last_result")

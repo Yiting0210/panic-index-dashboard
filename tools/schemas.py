@@ -53,7 +53,18 @@ class BacktestResult(PointInTime):
     time_below_full_exposure_pct: float
     upside_drag_pp: float = Field(description="Arithmetic uncaptured upside from reduced exposure, in percentage points.")
     downside_cushion_pp: float = Field(description="Arithmetic avoided downside from reduced exposure, in percentage points.")
-    final_position_pct: float
+    final_position_pct: float = Field(description=(
+        "Exposure the rule holds after the latest observation (0-100). Path "
+        "dependent: it changes with start_date and initial_position_pct."
+    ))
+    latest_panic_index: float
+    latest_regime: Regime
+    initial_position_pct: float
+    add_pct: float
+    reduce_pct: float
+    max_position_pct: float
+    min_position_pct: float
+    position_rule: str = Field(description="The add/reduce rule this backtest applied.")
     verdict: str
 
 

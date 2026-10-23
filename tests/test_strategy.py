@@ -86,3 +86,34 @@ if __name__ == "__main__":
     test_max_drawdown_negative()
     test_sharpe_ratio_positive_for_uptrend()
     print("All tests passed ✅")
+
+
+def test_default_rule_matches_the_dashboard_defaults():
+    from utils.strategy import DEFAULT_STRATEGY
+
+    dff = pd.DataFrame({
+        'date_dt': pd.date_range('2022-01-01', periods=3, freq='B'),
+        'qqq_close': [100, 101, 102],
+        'panic_index': [70, 10, 50],
+    })
+    positions = run_backtest(dff, 'qqq_close')['position'].tolist()
+    start = DEFAULT_STRATEGY.initial_position_pct
+    assert positions == [
+        (start + DEFAULT_STRATEGY.add_pct) / 100,
+        (start + DEFAULT_STRATEGY.add_pct - DEFAULT_STRATEGY.reduce_pct) / 100,
+        (start + DEFAULT_STRATEGY.add_pct - DEFAULT_STRATEGY.reduce_pct) / 100,
+    ]
+
+
+def test_backtest_tool_reports_the_rule_behind_its_position():
+    import pytest
+    from tools.core import run_backtest as backtest_tool
+    from tools.market import ToolInputError
+
+    result = backtest_tool("QQQ", "2022-10-13", add_pct=30, max_position_pct=80)
+    assert result.final_position_pct <= 80
+    assert (result.add_pct, result.reduce_pct, result.max_position_pct) == (30, 10, 80)
+    assert "add 30% per panic-regime day" in result.position_rule
+    assert result.latest_regime in {"panic", "greed", "neutral"}
+    with pytest.raises(ToolInputError):
+        backtest_tool("QQQ", "2022-10-13", min_position_pct=60, max_position_pct=50)

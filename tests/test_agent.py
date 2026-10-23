@@ -379,3 +379,37 @@ def test_deepseek_pricing_families():
     assert rates_for("deepseek-flash")[1] == "deepseek-flash"
     assert rates_for("deepseek-v4-flash")[1] == "deepseek-flash"
     assert rates_for("deepseek-v5-preview")[1] == "deepseek-v4-pro"
+
+
+def test_dashboard_strategy_settings_reach_tool_calls(make_agent):
+    from utils.strategy import StrategyParams
+
+    strategy = StrategyParams(buy_threshold=60, add_pct=30, reduce_pct=5, max_position_pct=80)
+    agent, client = make_agent([
+        tool_use_response("run_backtest", {"market": "QQQ", "as_of": "2022-10-13"}),
+        tool_use_response("run_backtest", {"market": "QQQ", "as_of": "2022-10-13",
+                                           "add_pct": 10}, tool_id="toolu_2"),
+        final_response("Done."),
+    ])
+    result = agent.run("How many units should I hold?", date(2022, 10, 13), strategy=strategy)
+
+    assert "Strategy settings: panic regime above 60" in client.requests[0]["messages"][0]["content"]
+    first, what_if = result.tool_calls
+    assert first.arguments["buy_threshold"] == 60
+    assert first.result["add_pct"] == 30
+    assert first.result["max_position_pct"] == 80
+    assert first.result["final_position_pct"] <= 80
+    # A value the model passes explicitly is a what-if and is kept.
+    assert what_if.arguments["add_pct"] == 10
+    assert what_if.arguments["reduce_pct"] == 5
+
+
+def test_without_strategy_settings_tool_defaults_apply(make_agent):
+    agent, client = make_agent([
+        tool_use_response("run_backtest", {"market": "QQQ", "as_of": "2022-10-13"}),
+        final_response("Done."),
+    ])
+    result = agent.run("Backtest QQQ", date(2022, 10, 13))
+    assert "Strategy settings" not in client.requests[0]["messages"][0]["content"]
+    assert "add_pct" not in result.tool_calls[0].arguments
+    assert result.tool_calls[0].result["reduce_pct"] == 10

@@ -1,6 +1,8 @@
 # utils/sidebar.py
 import streamlit as st
 
+from .strategy import DEFAULT_STRATEGY, SESSION_KEY
+
 # Colour emoji fonts, listed explicitly because the app font has its own
 # monochrome glyphs for some emoji (e.g. 🤖).
 EMOJI_FONTS = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif"
@@ -50,18 +52,35 @@ def render_controls(df):
     )
     return selected_label, target_col, date_range
 
+def strategy_settings():
+    """Strategy settings chosen on the Threshold Strategy page this session."""
+    return {**DEFAULT_STRATEGY.as_dict(), **st.session_state.get(SESSION_KEY, {})}
+
+
+def _strategy_slider(label, field, min_value, max_value, step, **kwargs):
+    """Slider that keeps its value across pages and shares it with the assistant.
+
+    Streamlit drops a widget's state when another page is shown, so the value
+    is also kept under SESSION_KEY and restored when the widget comes back.
+    """
+    key = f"_strategy_{field}"
+    if key not in st.session_state:
+        st.session_state[key] = type(min_value)(strategy_settings()[field])
+    value = st.sidebar.slider(label, min_value, max_value, step=step, key=key, **kwargs)
+    st.session_state[SESSION_KEY] = {**strategy_settings(), field: value}
+    return value
+
+
 def render_threshold_selector():
     """Render buy/sell threshold sliders."""
     st.sidebar.markdown("---")
     render_sidebar_header("Signal Thresholds", "📶")
-    buy_threshold = st.sidebar.slider(
-        "Buy Zone threshold (Panic Index)",
-        min_value=50, max_value=90, value=64, step=1,
+    buy_threshold = _strategy_slider(
+        "Buy Zone threshold (Panic Index)", "buy_threshold", 50, 90, 1,
         help="Default: 64 (95th percentile of 5-year history)"
     )
-    sell_threshold = st.sidebar.slider(
-        "Sell Zone threshold (Panic Index)",
-        min_value=5, max_value=30, value=15, step=1,
+    sell_threshold = _strategy_slider(
+        "Sell Zone threshold (Panic Index)", "sell_threshold", 5, 30, 1,
         help="Default: 15 (5th percentile of 5-year history)"
     )
     return buy_threshold, sell_threshold
@@ -86,11 +105,11 @@ def render_position_sizing():
     """Render position sizing sliders, return params."""
     st.sidebar.markdown("---")
     render_sidebar_header("Position Sizing", "⚙️")
-    pos_initial   = st.sidebar.slider("Initial position (%)", 0, 100, 50, 10)
-    add_amount    = st.sidebar.slider("Add on buy signal (%)", 0, 50, 20, 5)
-    reduce_amount = st.sidebar.slider("Reduce on sell signal (%)", 0, 50, 10, 5)
-    pos_max       = st.sidebar.slider("Max position (%)", 50, 100, 100, 10)
-    pos_min       = st.sidebar.slider("Min position (%)", 0, 50, 0, 10)
+    pos_initial   = _strategy_slider("Initial position (%)", "initial_position_pct", 0, 100, 10)
+    add_amount    = _strategy_slider("Add on buy signal (%)", "add_pct", 0, 50, 5)
+    reduce_amount = _strategy_slider("Reduce on sell signal (%)", "reduce_pct", 0, 50, 5)
+    pos_max       = _strategy_slider("Max position (%)", "max_position_pct", 50, 100, 10)
+    pos_min       = _strategy_slider("Min position (%)", "min_position_pct", 0, 50, 10)
     return pos_initial, add_amount, reduce_amount, pos_max, pos_min
 
 

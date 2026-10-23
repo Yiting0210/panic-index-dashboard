@@ -26,6 +26,7 @@ from mcp import Client
 
 from tools import rule_based_summary
 from tools.market import to_date
+from utils.strategy import StrategyParams
 
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
@@ -61,6 +62,14 @@ date:
 - If the tools cannot answer the question, say so instead of guessing.
 - This is historical research, not investment advice; say so briefly when
   the user asks what to buy or sell.
+- For a position-size question, call run_backtest and report its
+  final_position_pct as the framework's current exposure (scale it to the
+  user's maximum, e.g. 70% of 10 units is 7 units). Describe adding and
+  reducing only with the backtest's position_rule. Do not invent your own
+  sizing, scaling levels, or a mapping from percentile to position, and say
+  that final_position_pct depends on the backtest start date.
+- If the backtest shows Buy & Hold beating the strategy, say so next to the
+  position figure instead of only in the caveats.
 
 When you have what you need, reply with the JSON object the response format
 requires: a concise answer (at most about 200 words), the citations you used,
@@ -126,6 +135,7 @@ class AgentResult:
     latency_ms: float = 0.0
     cached_responses: int = 0
     fallback_reason: Optional[str] = None
+    strategy: Optional[StrategyParams] = None
 
     @property
     def used_fallback(self):
@@ -167,6 +177,37 @@ def _extract_json(text):
     return data if isinstance(data, dict) else None
 
 
+# Tool parameters filled from the dashboard's strategy settings when the
+# model leaves them out; StrategyParams fields share the tool parameter names.
+STRATEGY_ARGUMENTS = {
+    "run_backtest": ("buy_threshold", "sell_threshold", "initial_position_pct", "add_pct",
+                     "reduce_pct", "max_position_pct", "min_position_pct"),
+    "get_regime": ("buy_threshold", "sell_threshold"),
+}
+
+
+def _apply_strategy(name, arguments, strategy):
+    """Default a tool call's strategy parameters to the session's settings.
+
+    Values the model passes explicitly (e.g. for a what-if) are kept.
+    """
+    if strategy is None:
+        return arguments
+    settings = strategy.as_dict()
+    filled = {field: settings[field] for field in STRATEGY_ARGUMENTS.get(name, ())}
+    if name == "get_forward_returns":
+        signal = arguments.get("signal", "panic")
+        filled["threshold"] = strategy.buy_threshold if signal == "panic" else strategy.sell_threshold
+    return {**filled, **arguments}
+
+
+def _first_message(question, as_of, strategy):
+    content = f"as_of: {as_of.isoformat()}\n\n"
+    if strategy is not None:
+        content += f"Strategy settings: {strategy.describe()}.\n\n"
+    return {"role": "user", "content": content + f"Question: {question}"}
+
+
 def _clamp_as_of(arguments, as_of):
     requested = arguments.get("as_of")
     try:
@@ -205,18 +246,29 @@ class ResearchAgent:
             self._client = anthropic.Anthropic()
         return self._client
 
-    def run(self, question, as_of, market=None):
-        return asyncio.run(self.arun(question, as_of, market=market))
+    def run(self, question, as_of, market=None, strategy=None):
+        return asyncio.run(self.arun(question, as_of, market=market, strategy=strategy))
 
-    async def arun(self, question, as_of, market=None):
+    async def arun(self, question, as_of, market=None, strategy=None):
+        """Answer ``question`` as of ``as_of``.
+
+        ``strategy`` (StrategyParams) carries the dashboard's threshold and
+        position-sizing settings; tool calls that omit them use these values.
+        """
         as_of = to_date(as_of)
         started = time.perf_counter()
-        result = AgentResult(question=question, as_of=as_of, answer="", model=self.model)
+        result = AgentResult(question=question, as_of=as_of, answer="", model=self.model,
+                             strategy=strategy)
         try:
             await self._loop(question, as_of, result)
         except (*API_ERRORS, BudgetExceeded, RuntimeError, ValueError) as exc:
             result.fallback_reason = f"{type(exc).__name__}: {exc}"
-            result.answer = rule_based_summary(market or self.fallback_market, as_of)
+            thresholds = {} if strategy is None else {
+                "buy_threshold": strategy.buy_threshold,
+                "sell_threshold": strategy.sell_threshold,
+            }
+            result.answer = rule_based_summary(market or self.fallback_market, as_of,
+                                               **thresholds)
             result.citations = []
             result.caveats = (
                 "LLM path unavailable; showing the deterministic rule-based "
@@ -299,10 +351,7 @@ class ResearchAgent:
         listed = await mcp.list_tools()
         tools = sorted((_mcp_tool_to_anthropic(t) for t in listed.tools),
                        key=lambda t: t["name"])
-        messages = [{
-            "role": "user",
-            "content": f"as_of: {as_of.isoformat()}\n\nQuestion: {question}",
-        }]
+        messages = [_first_message(question, as_of, result.strategy)]
         for _ in range(self.max_steps):
             response = self._create(self._request_params(tools, messages), result)
             result.steps += 1
@@ -333,7 +382,8 @@ class ResearchAgent:
 
     async def _execute_tool(self, mcp, name, arguments, as_of, result):
         """Run one MCP tool call with the as-of clamp; returns (text, is_error)."""
-        arguments, clamped = _clamp_as_of(dict(arguments or {}), as_of)
+        arguments = _apply_strategy(name, dict(arguments or {}), result.strategy)
+        arguments, clamped = _clamp_as_of(arguments, as_of)
         started = time.perf_counter()
         tool_result = await mcp.call_tool(name, arguments)
         payload = _tool_payload(tool_result)
@@ -444,10 +494,7 @@ class DeepSeekAgent(ResearchAgent):
              for t in listed.tools),
             key=lambda t: t["function"]["name"],
         )
-        messages = [{
-            "role": "user",
-            "content": f"as_of: {as_of.isoformat()}\n\nQuestion: {question}",
-        }]
+        messages = [_first_message(question, as_of, result.strategy)]
         for _ in range(self.max_steps):
             message = self._next_message(self._request_params(tools, messages), result)
             calls = message.get("tool_calls") or []

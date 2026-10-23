@@ -17,6 +17,7 @@ from utils.backtest import run_backtest as _run_backtest
 from utils.metrics import build_performance_metrics
 from utils.narrative import build_threshold_research_summary
 from utils.peak_detection import detect_peaks_realtime, detect_peaks_scipy
+from utils.strategy import DEFAULT_STRATEGY, StrategyParams
 
 from .market import MARKETS, ToolInputError, get_store, to_date
 from .schemas import (BacktestResult, FedDocSearchResult, ForwardReturnsResult,
@@ -40,8 +41,9 @@ SellThreshold = Annotated[float, Field(
     ge=0, le=100, description="Panic Index level below which the market is in the greed regime."
 )]
 
-DEFAULT_BUY_THRESHOLD = 64.0
-DEFAULT_SELL_THRESHOLD = 15.0
+DEFAULT_BUY_THRESHOLD = DEFAULT_STRATEGY.buy_threshold
+DEFAULT_SELL_THRESHOLD = DEFAULT_STRATEGY.sell_threshold
+PositionPct = Annotated[float, Field(ge=0, le=100)]
 
 
 def _num(value, digits=4):
@@ -119,26 +121,41 @@ def run_backtest(
     start_date: StartDate = None,
     buy_threshold: BuyThreshold = DEFAULT_BUY_THRESHOLD,
     sell_threshold: SellThreshold = DEFAULT_SELL_THRESHOLD,
-    initial_position_pct: Annotated[float, Field(ge=0, le=100)] = 50,
-    add_pct: Annotated[float, Field(ge=0, le=100, description="Exposure added per panic-regime day.")] = 20,
-    reduce_pct: Annotated[float, Field(ge=0, le=100, description="Exposure removed per greed-regime day.")] = 10,
+    initial_position_pct: PositionPct = DEFAULT_STRATEGY.initial_position_pct,
+    add_pct: Annotated[float, Field(ge=0, le=100, description="Exposure added per panic-regime day.")] = DEFAULT_STRATEGY.add_pct,
+    reduce_pct: Annotated[float, Field(ge=0, le=100, description="Exposure removed per greed-regime day.")] = DEFAULT_STRATEGY.reduce_pct,
+    max_position_pct: PositionPct = DEFAULT_STRATEGY.max_position_pct,
+    min_position_pct: PositionPct = DEFAULT_STRATEGY.min_position_pct,
 ) -> BacktestResult:
     """Backtest the Panic Index threshold strategy against Buy & Hold.
 
-    Exposure rises on panic-regime days and falls on greed-regime days, with
-    positions applied from the next observation. Reports return, max drawdown,
-    Sharpe, Calmar, average exposure, and the upside-drag / downside-cushion
-    attribution of reduced exposure. The backtest ends at as_of.
+    Exposure rises by add_pct on each panic-regime day and falls by
+    reduce_pct on each greed-regime day, within min/max_position_pct, applied
+    from the next observation. Reports return, max drawdown, Sharpe, Calmar,
+    average exposure, the upside-drag / downside-cushion attribution of
+    reduced exposure, and final_position_pct: the exposure the rule holds
+    now. Use final_position_pct and position_rule for any position-size
+    question. The backtest ends at as_of.
     """
+    if min_position_pct > max_position_pct:
+        raise ToolInputError("min_position_pct cannot exceed max_position_pct.")
     df, target_col, as_of = _frame(market, as_of, start_date)
     if len(df) < 3:
         raise ToolInputError("Need at least 3 observations to run a backtest.")
+    params = StrategyParams(
+        buy_threshold=buy_threshold, sell_threshold=sell_threshold,
+        initial_position_pct=initial_position_pct, add_pct=add_pct,
+        reduce_pct=reduce_pct, max_position_pct=max_position_pct,
+        min_position_pct=min_position_pct,
+    )
     bt = _run_backtest(
         df, target_col,
         pos_initial=initial_position_pct, add_amount=add_pct,
-        reduce_amount=reduce_pct, buy_threshold=buy_threshold,
+        reduce_amount=reduce_pct, pos_max=max_position_pct,
+        pos_min=min_position_pct, buy_threshold=buy_threshold,
         sell_threshold=sell_threshold,
     )
+    latest_panic = bt['panic_index'].iloc[-1]
     metrics = build_performance_metrics(bt)
     diagnostics = build_strategy_diagnostics(bt)
     attribution = build_exposure_tradeoff_attribution(bt)
@@ -148,8 +165,6 @@ def run_backtest(
         data_through=bt['date_dt'].iloc[-1].date(),
         start_date=bt['date_dt'].iloc[0].date(),
         observations=len(bt),
-        buy_threshold=buy_threshold,
-        sell_threshold=sell_threshold,
         strategy_return_pct=_num(metrics['strategy_return'], 2),
         buyhold_return_pct=_num(metrics['buyhold_return'], 2),
         strategy_max_drawdown_pct=_num(metrics['strategy_max_drawdown'], 2),
@@ -163,6 +178,10 @@ def run_backtest(
         upside_drag_pp=_num(attribution['upside_drag'], 2),
         downside_cushion_pp=_num(attribution['downside_cushion'], 2),
         final_position_pct=_num(bt['position'].iloc[-1] * 100, 1),
+        latest_panic_index=_num(latest_panic, 2),
+        latest_regime=_classify(latest_panic, buy_threshold, sell_threshold)[0],
+        **params.as_dict(),
+        position_rule=params.describe(),
         verdict=build_backtest_verdict(bt),
     )
 
@@ -311,7 +330,7 @@ def rule_based_summary(market, as_of, start_date=None,
                        sell_threshold=DEFAULT_SELL_THRESHOLD):
     """Deterministic fallback summary used when the LLM path is unavailable."""
     df, target_col, as_of = _frame(market, as_of, start_date)
-    bt = _run_backtest(df, target_col, reduce_amount=10,
+    bt = _run_backtest(df, target_col,
                        buy_threshold=buy_threshold, sell_threshold=sell_threshold)
     return build_threshold_research_summary(
         df, bt, target_col, MARKETS[market][1], buy_threshold, sell_threshold,
