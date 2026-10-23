@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from typing import Optional
 
 import anthropic
+import openai
 from mcp import Client
 
 from tools import rule_based_summary
@@ -34,6 +35,9 @@ DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
 # Models that accept server-side refusal fallbacks with the "default" routing.
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-flash"
 
 SYSTEM_PROMPT = """\
 You are a market-regime research assistant for the Composite Panic Index
@@ -79,6 +83,15 @@ FINAL_ANSWER_SCHEMA = {
     "required": ["answer", "citations", "caveats"],
     "additionalProperties": False,
 }
+
+
+# DeepSeek has JSON mode but no schema enforcement, so the shape is spelled out.
+JSON_ANSWER_INSTRUCTIONS = """
+Reply to finish with only this JSON object and no other text:
+{"answer": "<string>", "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>"}
+"""
+
+API_ERRORS = (anthropic.AnthropicError, openai.OpenAIError)
 
 
 @dataclass
@@ -134,6 +147,21 @@ def _tool_payload(result):
     return {"text": "\n".join(texts)}
 
 
+def _extract_json(text):
+    """The first JSON object in ``text`` (tolerates code fences), or None."""
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`").removeprefix("json").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _clamp_as_of(arguments, as_of):
     requested = arguments.get("as_of")
     try:
@@ -146,6 +174,10 @@ def _clamp_as_of(arguments, as_of):
 
 
 class ResearchAgent:
+    """Claude (Anthropic Messages API) research agent."""
+
+    provider = "anthropic"
+
     def __init__(self, server=None, client=None, model=DEFAULT_MODEL,
                  effort=DEFAULT_EFFORT, cache=None, ledger=None,
                  max_steps=8, max_tokens=16000, fallback_market="QQQ"):
@@ -177,7 +209,7 @@ class ResearchAgent:
         result = AgentResult(question=question, as_of=as_of, answer="", model=self.model)
         try:
             await self._loop(question, as_of, result)
-        except (anthropic.AnthropicError, BudgetExceeded, RuntimeError, ValueError) as exc:
+        except (*API_ERRORS, BudgetExceeded, RuntimeError, ValueError) as exc:
             result.fallback_reason = f"{type(exc).__name__}: {exc}"
             result.answer = rule_based_summary(market or self.fallback_market, as_of)
             result.citations = []
@@ -208,25 +240,33 @@ class ResearchAgent:
             params["fallbacks"] = "default"
         return params
 
+    def _send(self, params):
+        try:
+            return self.client.beta.messages.create(**params).to_dict()
+        except TypeError as exc:
+            # The SDK raises TypeError when no API key / auth profile is set.
+            if "authentication" not in str(exc):
+                raise
+            raise RuntimeError("no Anthropic credentials configured") from exc
+
+    @staticmethod
+    def _usage(response):
+        """Token counts in the ledger's (Anthropic) field names."""
+        return SimpleNamespace(**response.get("usage", {}))
+
     def _create(self, params, result):
         key = request_hash(params)
         cached = self.cache.get(key)
         started = time.perf_counter()
         if cached is None:
             self.ledger.check_budget()
-            try:
-                response = self.client.beta.messages.create(**params).to_dict()
-            except TypeError as exc:
-                # The SDK raises TypeError when no API key / auth profile is set.
-                if "authentication" not in str(exc):
-                    raise
-                raise RuntimeError("no Anthropic credentials configured") from exc
+            response = self._send(params)
             self.cache.put(key, response)
         else:
             response = cached
             result.cached_responses += 1
         latency_ms = (time.perf_counter() - started) * 1000
-        usage = SimpleNamespace(**response.get("usage", {}))
+        usage = self._usage(response)
         record = self.ledger.record(
             usage, response.get("model", self.model), latency_ms, key,
             cached_response=cached is not None,
@@ -286,13 +326,14 @@ class ResearchAgent:
             messages.append({"role": "user", "content": tool_results})
         raise RuntimeError(f"no final answer after {self.max_steps} steps")
 
-    async def _call_tool(self, mcp, block, as_of, result):
-        arguments, clamped = _clamp_as_of(dict(block.get("input") or {}), as_of)
+    async def _execute_tool(self, mcp, name, arguments, as_of, result):
+        """Run one MCP tool call with the as-of clamp; returns (text, is_error)."""
+        arguments, clamped = _clamp_as_of(dict(arguments or {}), as_of)
         started = time.perf_counter()
-        tool_result = await mcp.call_tool(block["name"], arguments)
+        tool_result = await mcp.call_tool(name, arguments)
         payload = _tool_payload(tool_result)
         result.tool_calls.append(ToolCall(
-            name=block["name"],
+            name=name,
             arguments=arguments,
             result=payload,
             is_error=tool_result.is_error,
@@ -302,19 +343,155 @@ class ResearchAgent:
         text = json.dumps(payload, default=str)
         if clamped:
             text = f"[as_of set to session cutoff {as_of.isoformat()}]\n{text}"
+        return text, tool_result.is_error
+
+    async def _call_tool(self, mcp, block, as_of, result):
+        text, is_error = await self._execute_tool(
+            mcp, block["name"], block.get("input"), as_of, result
+        )
         return {
             "type": "tool_result",
             "tool_use_id": block["id"],
             "content": text,
-            "is_error": tool_result.is_error,
+            "is_error": is_error,
         }
 
     @staticmethod
-    def _parse_final(content, result):
+    def _apply_final(data, result):
+        if not isinstance(data.get("answer"), str):
+            raise RuntimeError("final answer is missing the 'answer' string")
+        citations = data.get("citations") or []
+        result.answer = data["answer"]
+        result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
+        result.caveats = str(data.get("caveats") or "")
+
+    @classmethod
+    def _parse_final(cls, content, result):
         text = next((b["text"] for b in content if b.get("type") == "text"), None)
         if text is None:
             raise RuntimeError("final response had no text block")
-        data = json.loads(text)
-        result.answer = data["answer"]
-        result.citations = data.get("citations", [])
-        result.caveats = data.get("caveats", "")
+        cls._apply_final(json.loads(text), result)
+
+
+class DeepSeekAgent(ResearchAgent):
+    """DeepSeek (OpenAI-compatible Chat Completions) research agent.
+
+    Shares the MCP tools, as-of clamp, response cache, usage ledger, and
+    fallback with the Claude agent. Thinking mode is disabled: DeepSeek's API
+    reference does not say how ``reasoning_content`` must be replayed across
+    tool calls. The final answer uses JSON mode, which (unlike Claude's
+    structured outputs) does not enforce a schema, so it is validated here and
+    re-requested once if it does not parse.
+    """
+
+    provider = "deepseek"
+
+    def __init__(self, api_key=None, model=DEEPSEEK_DEFAULT_MODEL, max_tokens=8000, **kwargs):
+        super().__init__(model=model, max_tokens=max_tokens, **kwargs)
+        self._api_key = api_key
+
+    @property
+    def client(self):
+        if self._client is None:
+            api_key = self._api_key or os.getenv("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise RuntimeError("no DeepSeek API key configured")
+            self._client = openai.OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+        return self._client
+
+    def _send(self, params):
+        return self.client.chat.completions.create(**params).model_dump()
+
+    @staticmethod
+    def _usage(response):
+        usage = response.get("usage") or {}
+        hits = usage.get("prompt_cache_hit_tokens") or 0
+        misses = usage.get("prompt_cache_miss_tokens")
+        if misses is None:
+            misses = (usage.get("prompt_tokens") or 0) - hits
+        return SimpleNamespace(
+            input_tokens=misses,
+            output_tokens=usage.get("completion_tokens") or 0,
+            cache_read_input_tokens=hits,
+            cache_creation_input_tokens=0,
+        )
+
+    def _request_params(self, tools, messages, final_json=False):
+        params = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT + JSON_ANSWER_INSTRUCTIONS}]
+                        + messages,
+            "extra_body": {"thinking": {"type": "disabled"}},
+        }
+        if final_json:
+            params["response_format"] = {"type": "json_object"}
+        else:
+            params["tools"] = tools
+        return params
+
+    async def _steps(self, mcp, question, as_of, result):
+        listed = await mcp.list_tools()
+        tools = sorted(
+            ({"type": "function",
+              "function": {"name": t.name, "description": t.description or "",
+                           "parameters": t.input_schema}}
+             for t in listed.tools),
+            key=lambda t: t["function"]["name"],
+        )
+        messages = [{
+            "role": "user",
+            "content": f"as_of: {as_of.isoformat()}\n\nQuestion: {question}",
+        }]
+        for _ in range(self.max_steps):
+            message = self._next_message(self._request_params(tools, messages), result)
+            calls = message.get("tool_calls") or []
+            if not calls:
+                data = _extract_json(message.get("content"))
+                if data is None:
+                    # One retry in JSON mode, without tools, to get the final object.
+                    messages.append({"role": "assistant", "content": message.get("content") or ""})
+                    messages.append({"role": "user", "content": "Reply with only the final JSON object."})
+                    retry = self._next_message(
+                        self._request_params(tools, messages, final_json=True), result
+                    )
+                    data = _extract_json(retry.get("content"))
+                    if data is None:
+                        raise RuntimeError("model did not return the final JSON answer")
+                self._apply_final(data, result)
+                return
+
+            messages.append({
+                "role": "assistant",
+                "content": message.get("content") or "",
+                "tool_calls": [
+                    {"id": c["id"], "type": "function",
+                     "function": {"name": c["function"]["name"],
+                                  "arguments": c["function"]["arguments"]}}
+                    for c in calls
+                ],
+            })
+            for call in calls:
+                try:
+                    arguments = json.loads(call["function"]["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    text = json.dumps({"error": "tool arguments were not valid JSON"})
+                else:
+                    text, _ = await self._execute_tool(
+                        mcp, call["function"]["name"], arguments, as_of, result
+                    )
+                messages.append({"role": "tool", "tool_call_id": call["id"], "content": text})
+        raise RuntimeError(f"no final answer after {self.max_steps} steps")
+
+    def _next_message(self, params, result):
+        response = self._create(params, result)
+        result.steps += 1
+        choice = (response.get("choices") or [{}])[0]
+        finish = choice.get("finish_reason")
+        if finish == "content_filter":
+            raise RuntimeError("model declined the request")
+        if finish == "length":
+            raise RuntimeError("response hit max_tokens before finishing")
+        if finish in ("insufficient_system_resource", "aborted"):
+            raise RuntimeError(f"DeepSeek stopped the response ({finish})")
+        return choice.get("message") or {}

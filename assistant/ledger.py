@@ -23,7 +23,13 @@ PRICING = {
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
     "claude-haiku-5-5": {"input": 0.10, "output": 0.50, "cache_read": 0.01, "cache_write": 0.125},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25},
+    # DeepSeek peak-hour rates (off-peak is half); "input" is a cache miss.
+    "deepseek-flash": {"input": 0.30, "output": 1.20, "cache_read": 0.006, "cache_write": 0.0},
+    "deepseek-v4-pro": {"input": 1.32, "output": 3.96, "cache_read": 0.044, "cache_write": 0.0},
 }
+# Model names not listed above are priced by family, e.g. a new DeepSeek
+# release at the most expensive DeepSeek rate.
+FAMILY_FALLBACKS = {"deepseek-": "deepseek-v4-pro", "deepseek-v4-flash": "deepseek-flash"}
 # Unknown models are billed at the highest listed rates so the budget never
 # under-counts spend.
 FALLBACK_RATES = {key: max(rates[key] for rates in PRICING.values())
@@ -38,6 +44,9 @@ def rates_for(model):
     """(rates, priced_as) for a model; unknown models use FALLBACK_RATES."""
     if model in PRICING:
         return PRICING[model], model
+    for prefix, listed in sorted(FAMILY_FALLBACKS.items(), key=lambda kv: -len(kv[0])):
+        if model.startswith(prefix):
+            return PRICING[listed], listed
     return FALLBACK_RATES, "unlisted-model-max-rate"
 
 
@@ -64,6 +73,7 @@ class UsageRecord:
     cached_response: bool
     request_hash: str
     priced_as: str = ""
+    billed_to: str = "owner"
     session_id: str = ""
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -74,11 +84,16 @@ class UsageLedger:
     Daily totals are kept in memory and the file is read incrementally from
     the last offset seen, so budget checks stay cheap as the log grows while
     still counting records written by other processes.
+
+    ``billed_to`` separates the app owner's key ("owner") from keys that
+    visitors paste into the page ("user"): both are logged to the same file,
+    but each ledger's budget only counts its own records.
     """
 
-    def __init__(self, path=LOG_PATH, daily_budget_usd=1.00):
+    def __init__(self, path=LOG_PATH, daily_budget_usd=1.00, billed_to="owner"):
         self.path = Path(path)
         self.daily_budget_usd = daily_budget_usd
+        self.billed_to = billed_to
         self._lock = threading.Lock()
         self._offset = 0
         self._daily_totals = defaultdict(float)
@@ -103,6 +118,7 @@ class UsageLedger:
             cached_response=cached_response,
             request_hash=request_hash,
             priced_as=priced_as,
+            billed_to=self.billed_to,
             session_id=session_id,
         )
         with self._lock:
@@ -131,7 +147,8 @@ class UsageLedger:
                 self._offset += len(raw)
                 if raw.strip():
                     entry = json.loads(raw)
-                    self._daily_totals[entry["timestamp"][:10]] += entry["cost_usd"]
+                    if entry.get("billed_to", "owner") == self.billed_to:
+                        self._daily_totals[entry["timestamp"][:10]] += entry["cost_usd"]
 
     def spent_today(self):
         today = datetime.now(timezone.utc).date().isoformat()

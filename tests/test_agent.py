@@ -5,6 +5,7 @@ import sys
 from datetime import date
 
 import anthropic
+import openai
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -230,3 +231,151 @@ def test_budget_counts_records_from_other_processes_incrementally(tmp_path):
     assert reader.spent_today() == pytest.approx(0.8)
     path.write_text("")  # rotated log
     assert reader.spent_today() == 0
+
+
+def test_visitor_key_spend_does_not_count_against_owner_budget(tmp_path):
+    path = tmp_path / "usage.jsonl"
+    owner = UsageLedger(path, daily_budget_usd=0.5)
+    visitor = UsageLedger(path, daily_budget_usd=float("inf"), billed_to="user")
+
+    class Usage:
+        input_tokens = 1_000_000
+        output_tokens = 0
+        cache_read_input_tokens = 0
+        cache_creation_input_tokens = 0
+
+    visitor.record(Usage, "claude-opus-5-5", 1.0, "a")
+    assert owner.spent_today() == 0
+    assert owner.check_budget() == pytest.approx(0.5)
+    assert visitor.spent_today() == pytest.approx(4.0)
+    assert [r["billed_to"] for r in owner.records()] == ["user"]
+
+
+# ── DeepSeek (OpenAI-compatible) agent ───────────────────────────────────────
+DS_USAGE = {"prompt_tokens": 1200, "completion_tokens": 100,
+            "prompt_cache_hit_tokens": 200, "prompt_cache_miss_tokens": 1000}
+
+
+def ds_tool_call(name, arguments, call_id="call_1"):
+    return {"model": "deepseek-flash", "usage": DS_USAGE, "choices": [{
+        "finish_reason": "tool_calls",
+        "message": {"role": "assistant", "content": "", "tool_calls": [{
+            "id": call_id, "type": "function",
+            "function": {"name": name, "arguments": json.dumps(arguments)},
+        }]},
+    }]}
+
+
+def ds_final(content, finish="stop"):
+    return {"model": "deepseek-flash", "usage": DS_USAGE, "choices": [{
+        "finish_reason": finish, "message": {"role": "assistant", "content": content},
+    }]}
+
+
+class FakeDeepSeekResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def model_dump(self):
+        return self._payload
+
+
+class ScriptedDeepSeekClient:
+    """Mimics openai.OpenAI(...).chat.completions.create."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.requests = []
+        self.chat = self
+        self.completions = self
+
+    def create(self, **params):
+        self.requests.append(json.loads(json.dumps(params, default=str)))
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return FakeDeepSeekResponse(item)
+
+
+@pytest.fixture
+def make_deepseek_agent(tmp_path):
+    from assistant import DeepSeekAgent
+
+    def make(responses):
+        client = ScriptedDeepSeekClient(responses)
+        agent = DeepSeekAgent(
+            server=build_server(), client=client,
+            cache=ResponseCache(tmp_path / "ds-cache"),
+            ledger=UsageLedger(tmp_path / "usage.jsonl", billed_to="user",
+                               daily_budget_usd=float("inf")),
+        )
+        return agent, client
+    return make
+
+
+def test_deepseek_tool_loop_and_final_json(make_deepseek_agent):
+    final = json.dumps({"answer": "QQQ was in the panic regime (79.8).",
+                        "citations": [], "caveats": "none"})
+    agent, client = make_deepseek_agent([
+        ds_tool_call("get_regime", {"market": "QQQ", "as_of": "2025-12-31"}),
+        ds_final(f"```json\n{final}\n```"),
+    ])
+    result = agent.run("What regime is QQQ in?", date(2022, 10, 13))
+
+    assert result.fallback_reason is None
+    assert result.answer.startswith("QQQ was in the panic regime")
+    call = result.tool_calls[0]
+    assert call.as_of_clamped and call.arguments["as_of"] == "2022-10-13"
+    first, second = client.requests
+    assert first["tools"][0]["type"] == "function"
+    assert first["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert first["messages"][0]["role"] == "system"
+    tool_message = second["messages"][-1]
+    assert tool_message["role"] == "tool" and tool_message["tool_call_id"] == "call_1"
+    assert second["messages"][-2]["tool_calls"][0]["function"]["name"] == "get_regime"
+    # Cache misses at the input rate, hits at the cache-read rate.
+    assert result.cost_usd == pytest.approx(2 * cost_usd("deepseek-flash", 1000, 100, 200), abs=2e-6)
+
+
+def test_deepseek_unparseable_final_answer_gets_one_json_retry(make_deepseek_agent):
+    agent, client = make_deepseek_agent([
+        ds_final("QQQ looks calm."),
+        ds_final(json.dumps({"answer": "QQQ is neutral.", "citations": [], "caveats": ""})),
+    ])
+    result = agent.run("Regime?", date(2022, 10, 13))
+    assert result.answer == "QQQ is neutral."
+    retry = client.requests[1]
+    assert retry["response_format"] == {"type": "json_object"}
+    assert "tools" not in retry
+
+
+def test_deepseek_without_key_falls_back(tmp_path, monkeypatch):
+    from assistant import DeepSeekAgent
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    agent = DeepSeekAgent(server=build_server(), cache=ResponseCache(tmp_path / "c"),
+                          ledger=UsageLedger(tmp_path / "u.jsonl"))
+    result = agent.run("Regime?", date(2022, 10, 13), market="QQQ")
+    assert result.fallback_reason == "RuntimeError: no DeepSeek API key configured"
+    assert "Panic Index" in result.answer
+
+
+def test_deepseek_api_error_and_truncation_fall_back(make_deepseek_agent):
+    import httpx2
+
+    request = httpx2.Request("POST", "https://api.deepseek.com/chat/completions")
+    response = httpx2.Response(401, request=request)
+    auth_error = openai.AuthenticationError("invalid key", response=response, body=None)
+    agent, _ = make_deepseek_agent([auth_error])
+    assert agent.run("Regime?", date(2022, 10, 13)).fallback_reason.startswith("AuthenticationError")
+
+    agent, _ = make_deepseek_agent([ds_final("partial", finish="length")])
+    assert "max_tokens" in agent.run("Regime?", date(2022, 10, 13)).fallback_reason
+
+
+def test_deepseek_pricing_families():
+    from assistant.ledger import rates_for
+
+    assert rates_for("deepseek-flash")[1] == "deepseek-flash"
+    assert rates_for("deepseek-v4-flash")[1] == "deepseek-flash"
+    assert rates_for("deepseek-v5-preview")[1] == "deepseek-v4-pro"

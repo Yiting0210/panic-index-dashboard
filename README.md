@@ -53,7 +53,7 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **Interactive Controls**: market selector, date range, thresholds, position sizing, horizons, and peak-detection parameters.
 - **MCP Research Server**: regime, backtest, forward-return, peak-detection, and FOMC-search tools for any MCP client, each pinned to an `as_of` date.
 - **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 93 statements and minutes, filtered by public release date.
-- **Research Assistant**: Claude tool-use client with citations, cost and latency logging, a daily budget, and a rule-based fallback.
+- **Research Assistant**: tool-use client for Claude or DeepSeek with bring-your-own API keys, citations, cost and latency logging, a daily budget for the app's key, and a rule-based fallback.
 - **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
 - **Daily Data Updates**: scheduled, append-only ingestion of prices, Fear & Greed, and FOMC documents with data-quality checks.
 
@@ -270,7 +270,21 @@ Look-ahead leakage is the most common failure in financial agents (much of the r
 - The stable prefix (tool definitions and system prompt) is prompt-cached across agent steps.
 - On a missing key, an API error, a refusal, or an exhausted budget, the page falls back to the deterministic rule-based Research Summary.
 
-The default model is `claude-opus-5-5` (override with `PANIC_LLM_MODEL`, e.g. `claude-sonnet-5-5`, and effort with `PANIC_LLM_EFFORT`). Requests opt in to server-side refusal fallbacks. The final answer uses structured output with a JSON schema of `answer`, `citations`, and `caveats`.
+### Model providers and API keys
+
+The Research Assistant page lets each visitor pick a provider and model, then paste their own API key:
+
+| Provider | Models | Client | Final answer |
+|---|---|---|---|
+| Claude (Anthropic) | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Anthropic Messages API (server-side refusal fallbacks on) | Structured output with a JSON schema (`answer`, `citations`, `caveats`) |
+| DeepSeek | `deepseek-flash`, `deepseek-v4-pro` | OpenAI-compatible Chat Completions at `api.deepseek.com`, thinking disabled | JSON mode; the object is validated and re-requested once if it does not parse |
+
+Both providers use the same MCP tools, as-of clamp, response cache, usage ledger, and rule-based fallback.
+
+- A visitor's key is kept only in that browser session's memory. It is not written to disk, the response cache, or the usage log, and requests are billed to the visitor's account.
+- Visitor-key calls are logged with `billed_to: "user"` and do not consume the app's daily budget.
+- With no key entered, the page uses the app owner's `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` (if set) under `PANIC_LLM_DAILY_BUDGET_USD`; otherwise it shows the rule-based summary.
+- DeepSeek costs are recorded at peak-hour rates (off-peak is half), so logged spend can overstate but not understate the bill.
 
 ### Evaluation
 
@@ -345,7 +359,7 @@ Several methodology choices are intentional tradeoffs for a historical research 
 | Visualization | Plotly |
 | Data | CSV files refreshed daily by GitHub Actions |
 | Language | Python 3.12 |
-| Agent interface | MCP Python SDK (`MCPServer`), Anthropic Python SDK |
+| Agent interface | MCP Python SDK (`MCPServer`), Anthropic Python SDK, OpenAI Python SDK (DeepSeek) |
 | Retrieval | fastembed (`BAAI/bge-small-en-v1.5`), FAISS, BM25, reciprocal rank fusion |
 | Testing / CI | pytest, GitHub Actions |
 | Deployment | Streamlit Community Cloud |
@@ -411,7 +425,8 @@ MCP server and assistant:
 ```bash
 python mcp_server.py                      # stdio, for MCP clients
 python mcp_server.py --http --port 8765   # Streamable HTTP
-export ANTHROPIC_API_KEY=...              # only the assistant page and the agent eval need a key
+export ANTHROPIC_API_KEY=...              # optional app keys; visitors can paste their own on the page
+export DEEPSEEK_API_KEY=...
 ```
 
 The FOMC corpus and index are committed. To rebuild them:

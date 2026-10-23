@@ -6,6 +6,7 @@ scipy>=1.11.0
 # MCP server, research assistant, and RAG
 mcp>=2.3,<3
 anthropic>=1.17,<2
+openai>=1.50  # DeepSeek client (OpenAI-compatible API)
 pydantic>=2.7
 fastembed>=0.9
 faiss-cpu>=1.9
