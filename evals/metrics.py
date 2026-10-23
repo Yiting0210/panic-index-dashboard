@@ -27,16 +27,23 @@ def unique_doc_ids(hits):
     return seen
 
 
+def _answer_groups(relevant):
+    """Each label is a doc id or a list of alternatives that answer equally well."""
+    return [{item} if isinstance(item, str) else set(item) for item in relevant]
+
+
 def recall_at_k(retrieved_doc_ids, relevant, k):
     if not relevant:
         return float("nan")
     top = set(retrieved_doc_ids[:k])
-    return len(top & set(relevant)) / len(relevant)
+    groups = _answer_groups(relevant)
+    return sum(bool(top & group) for group in groups) / len(groups)
 
 
 def reciprocal_rank(retrieved_doc_ids, relevant):
+    accepted = set().union(*_answer_groups(relevant))
     for rank, doc_id in enumerate(retrieved_doc_ids, start=1):
-        if doc_id in relevant:
+        if doc_id in accepted:
             return 1.0 / rank
     return 0.0
 

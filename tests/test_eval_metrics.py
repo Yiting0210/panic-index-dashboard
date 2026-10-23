@@ -20,6 +20,13 @@ def test_recall_and_mrr():
     assert reciprocal_rank(retrieved, ["z"]) == 0
 
 
+def test_alternative_labels_count_as_one_answer():
+    retrieved = ["a", "b", "c"]
+    assert recall_at_k(retrieved, [["z", "b"]], k=2) == 1.0
+    assert recall_at_k(retrieved, [["z", "c"], "a"], k=2) == 0.5
+    assert reciprocal_rank(retrieved, [["z", "b"]]) == 0.5
+
+
 def test_extract_numbers_skips_years_and_iso_dates():
     text = "On 2022-10-13 the index was 79.8 (92.6th percentile) in 2022, up 1,250 points."
     assert extract_numbers(text) == [79.8, 92.6, 1250.0]
