@@ -19,8 +19,8 @@ from tools import RESEARCH_TOOLS, get_store  # noqa: E402
 
 INSTRUCTIONS = """\
 Point-in-time market-regime research over the Composite Panic Index
-(VIX + CNN Fear & Greed) for QQQ, SMH, SPX, and DJI, plus FOMC statements and
-minutes. Every tool requires an as_of date and reads nothing published after
+(VIX + CNN Fear & Greed) for QQQ, SMH, SPX, and DJI, plus FOMC statements,
+minutes, and Chair press conferences. Every tool requires an as_of date and reads nothing published after
 it; pass the date the question is being asked from, not today's date, when
 studying history. Results include data_through so you can cite how fresh the
 data is. Treat outputs as historical research evidence, not trading advice.

@@ -4,8 +4,8 @@
       "config": "dense",
       "k": 5,
       "questions": 30,
-      "recall@5": 0.7,
-      "mrr": 0.5417,
+      "recall@5": 0.7333,
+      "mrr": 0.4944,
       "leakage_rate": 0
     },
     "misses": [
@@ -14,7 +14,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 658,
+        "eligible_chunks": 1259,
         "retrieved": [
           "minutes-20211215",
           "minutes-20220126",
@@ -25,48 +25,21 @@
         ]
       },
       {
-        "id": "r03",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 725,
-        "retrieved": [
-          "minutes-20211215",
-          "minutes-20211103",
-          "statement-20211103"
-        ],
-        "relevant": [
-          "statement-20220504"
-        ]
-      },
-      {
         "id": "r07",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 1779,
+        "eligible_chunks": 3441,
         "retrieved": [
           "minutes-20240501",
           "minutes-20230920",
           "minutes-20240320"
         ],
         "relevant": [
-          "statement-20240918"
-        ]
-      },
-      {
-        "id": "r10",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 1629,
-        "retrieved": [
-          "minutes-20240320",
-          "minutes-20231213",
-          "minutes-20220727"
-        ],
-        "relevant": [
-          "statement-20240501"
+          [
+            "statement-20240918",
+            "press_conference-20240918"
+          ]
         ]
       },
       {
@@ -74,13 +47,13 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2255,
+        "eligible_chunks": 4414,
         "retrieved": [
           "minutes-20220921",
           "minutes-20240501",
           "minutes-20220126",
-          "minutes-20250319",
-          "statement-20250319"
+          "press_conference-20211103",
+          "minutes-20250319"
         ],
         "relevant": [
           "statement-20251029"
@@ -91,7 +64,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2368,
+        "eligible_chunks": 4586,
         "retrieved": [
           "minutes-20240131",
           "minutes-20250917",
@@ -108,7 +81,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2587,
+        "eligible_chunks": 4998,
         "retrieved": [
           "minutes-20240918",
           "minutes-20230920",
@@ -124,15 +97,30 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2544,
+        "eligible_chunks": 4955,
         "retrieved": [
           "minutes-20230726",
           "minutes-20220727",
-          "statement-20240731",
-          "minutes-20220615"
+          "press_conference-20240731"
         ],
         "relevant": [
           "statement-20260729"
+        ]
+      },
+      {
+        "id": "r20",
+        "recall": 0.0,
+        "reciprocal_rank": 0.0,
+        "leaked": 0,
+        "eligible_chunks": 987,
+        "retrieved": [
+          "press_conference-20211103",
+          "press_conference-20211215",
+          "minutes-20211103",
+          "minutes-20210922"
+        ],
+        "relevant": [
+          "statement-20211215"
         ]
       },
       {
@@ -140,7 +128,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2366,
+        "eligible_chunks": 4584,
         "retrieved": [
           "minutes-20230322",
           "minutes-20251029",
@@ -159,8 +147,8 @@
       "config": "bm25",
       "k": 5,
       "questions": 30,
-      "recall@5": 0.7,
-      "mrr": 0.6,
+      "recall@5": 0.7333,
+      "mrr": 0.5889,
       "leakage_rate": 0
     },
     "misses": [
@@ -169,7 +157,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 658,
+        "eligible_chunks": 1259,
         "retrieved": [
           "minutes-20220126",
           "minutes-20210317"
@@ -179,33 +167,17 @@
         ]
       },
       {
-        "id": "r07",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 1779,
-        "retrieved": [
-          "minutes-20240731",
-          "minutes-20210127",
-          "minutes-20240501",
-          "minutes-20210428"
-        ],
-        "relevant": [
-          "statement-20240918"
-        ]
-      },
-      {
         "id": "r12",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2156,
+        "eligible_chunks": 4206,
         "retrieved": [
           "minutes-20220615",
           "minutes-20241218",
           "minutes-20240918",
-          "minutes-20210728",
-          "minutes-20220727"
+          "press_conference-20211215",
+          "press_conference-20210317"
         ],
         "relevant": [
           "statement-20250730"
@@ -216,13 +188,13 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2368,
+        "eligible_chunks": 4586,
         "retrieved": [
           "minutes-20250129",
           "minutes-20220126",
-          "minutes-20240320",
+          "minutes-20241218",
           "minutes-20210127",
-          "minutes-20241218"
+          "minutes-20240320"
         ],
         "relevant": [
           "statement-20260128"
@@ -233,13 +205,13 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2587,
+        "eligible_chunks": 4998,
         "retrieved": [
-          "minutes-20211103",
-          "minutes-20251029",
-          "minutes-20210616",
           "minutes-20230920",
-          "minutes-20260729"
+          "minutes-20260729",
+          "minutes-20211103",
+          "press_conference-20240612",
+          "minutes-20251029"
         ],
         "relevant": [
           "statement-20260916"
@@ -250,13 +222,12 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2544,
+        "eligible_chunks": 4955,
         "retrieved": [
           "minutes-20220615",
-          "minutes-20221214",
-          "minutes-20210922",
-          "minutes-20251029",
-          "minutes-20241218"
+          "press_conference-20260429",
+          "press_conference-20220921",
+          "minutes-20221214"
         ],
         "relevant": [
           "statement-20260729"
@@ -267,10 +238,11 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 438,
+        "eligible_chunks": 860,
         "retrieved": [
+          "minutes-20210728",
           "minutes-20210922",
-          "minutes-20210728"
+          "minutes-20210616"
         ],
         "relevant": [
           "statement-20211103"
@@ -281,12 +253,12 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 498,
+        "eligible_chunks": 987,
         "retrieved": [
           "minutes-20210728",
+          "press_conference-20211103",
           "minutes-20210922",
-          "minutes-20211103",
-          "minutes-20210428"
+          "minutes-20211103"
         ],
         "relevant": [
           "statement-20211215"
@@ -297,7 +269,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 563,
+        "eligible_chunks": 1052,
         "retrieved": [
           "minutes-20210922",
           "minutes-20210728"
@@ -313,72 +285,43 @@
       "config": "hybrid_no_date",
       "k": 5,
       "questions": 30,
-      "recall@5": 0.7,
-      "mrr": 0.5494,
+      "recall@5": 0.6667,
+      "mrr": 0.5333,
       "leakage_rate": 0
     },
     "misses": [
-      {
-        "id": "r03",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 725,
-        "retrieved": [
-          "minutes-20211103",
-          "statement-20211103",
-          "minutes-20210616",
-          "minutes-20211215"
-        ],
-        "relevant": [
-          "statement-20220504"
-        ]
-      },
-      {
-        "id": "r07",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 1779,
-        "retrieved": [
-          "minutes-20240501",
-          "minutes-20240731"
-        ],
-        "relevant": [
-          "statement-20240918"
-        ]
-      },
-      {
-        "id": "r10",
-        "recall": 0.0,
-        "reciprocal_rank": 0.0,
-        "leaked": 0,
-        "eligible_chunks": 1629,
-        "retrieved": [
-          "minutes-20240320",
-          "minutes-20220727",
-          "minutes-20231213",
-          "minutes-20220316"
-        ],
-        "relevant": [
-          "statement-20240501"
-        ]
-      },
       {
         "id": "r12",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2156,
+        "eligible_chunks": 4206,
         "retrieved": [
           "minutes-20241218",
           "minutes-20240918",
           "minutes-20240731",
-          "minutes-20250129",
-          "minutes-20240612"
+          "press_conference-20250730",
+          "minutes-20250129"
         ],
         "relevant": [
           "statement-20250730"
+        ]
+      },
+      {
+        "id": "r14",
+        "recall": 0.0,
+        "reciprocal_rank": 0.0,
+        "leaked": 0,
+        "eligible_chunks": 4414,
+        "retrieved": [
+          "minutes-20220921",
+          "minutes-20240501",
+          "minutes-20250319",
+          "statement-20250319",
+          "press_conference-20211103"
+        ],
+        "relevant": [
+          "statement-20251029"
         ]
       },
       {
@@ -386,7 +329,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2368,
+        "eligible_chunks": 4586,
         "retrieved": [
           "minutes-20241218",
           "minutes-20220126",
@@ -403,13 +346,12 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2587,
+        "eligible_chunks": 4998,
         "retrieved": [
           "minutes-20260729",
           "minutes-20260318",
           "minutes-20230920",
-          "minutes-20260617",
-          "minutes-20240918"
+          "minutes-20260617"
         ],
         "relevant": [
           "statement-20260916"
@@ -420,7 +362,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2544,
+        "eligible_chunks": 4955,
         "retrieved": [
           "minutes-20220615",
           "minutes-20230726",
@@ -432,17 +374,49 @@
         ]
       },
       {
+        "id": "r19",
+        "recall": 0.0,
+        "reciprocal_rank": 0.0,
+        "leaked": 0,
+        "eligible_chunks": 860,
+        "retrieved": [
+          "minutes-20210922",
+          "minutes-20210728",
+          "press_conference-20211103"
+        ],
+        "relevant": [
+          "statement-20211103"
+        ]
+      },
+      {
+        "id": "r20",
+        "recall": 0.0,
+        "reciprocal_rank": 0.0,
+        "leaked": 0,
+        "eligible_chunks": 987,
+        "retrieved": [
+          "press_conference-20211103",
+          "minutes-20210922",
+          "press_conference-20211215",
+          "minutes-20211103",
+          "minutes-20210728"
+        ],
+        "relevant": [
+          "statement-20211215"
+        ]
+      },
+      {
         "id": "r21",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 2415,
+        "eligible_chunks": 4685,
         "retrieved": [
           "minutes-20220126",
           "minutes-20250319",
           "minutes-20220316",
-          "minutes-20231213",
-          "minutes-20230322"
+          "minutes-20230322",
+          "minutes-20240320"
         ],
         "relevant": [
           "statement-20260318"
@@ -453,13 +427,30 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 563,
+        "eligible_chunks": 1052,
         "retrieved": [
           "minutes-20210922",
           "minutes-20210728"
         ],
         "relevant": [
           "minutes-20211215"
+        ]
+      },
+      {
+        "id": "r30",
+        "recall": 0.0,
+        "reciprocal_rank": 0.0,
+        "leaked": 0,
+        "eligible_chunks": 4584,
+        "retrieved": [
+          "minutes-20251029",
+          "minutes-20231101",
+          "minutes-20230322",
+          "minutes-20230201",
+          "minutes-20250507"
+        ],
+        "relevant": [
+          "minutes-20251210"
         ]
       }
     ]
@@ -470,40 +461,42 @@
       "k": 5,
       "questions": 30,
       "recall@5": 0.9333,
-      "mrr": 0.7994,
+      "mrr": 0.7639,
       "leakage_rate": 0
     },
     "misses": [
       {
-        "id": "r03",
+        "id": "r14",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 725,
+        "eligible_chunks": 4414,
         "retrieved": [
-          "minutes-20211103",
-          "statement-20211103",
-          "minutes-20210616",
-          "minutes-20211215"
+          "minutes-20220921",
+          "minutes-20240501",
+          "minutes-20250319",
+          "statement-20250319",
+          "press_conference-20211103"
         ],
         "relevant": [
-          "statement-20220504"
+          "statement-20251029"
         ]
       },
       {
-        "id": "r10",
+        "id": "r30",
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 1629,
+        "eligible_chunks": 4584,
         "retrieved": [
-          "minutes-20240320",
-          "minutes-20220727",
-          "minutes-20231213",
-          "minutes-20220316"
+          "minutes-20251029",
+          "minutes-20231101",
+          "minutes-20230322",
+          "minutes-20230201",
+          "minutes-20250507"
         ],
         "relevant": [
-          "statement-20240501"
+          "minutes-20251210"
         ]
       }
     ]

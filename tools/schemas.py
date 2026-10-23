@@ -100,10 +100,13 @@ class FedDocChunk(BaseModel):
     doc_id: str
     chunk_id: str
     title: str
-    doc_type: Literal["statement", "minutes"]
+    doc_type: Literal["statement", "minutes", "press_conference"]
     meeting_date: date
     published_at: date
     url: str
+    speaker: Optional[str] = Field(
+        default=None, description="Fed Chair holding the press conference (surname)."
+    )
     score: float
     text: str
 

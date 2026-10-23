@@ -5,6 +5,8 @@ from pathlib import Path
 
 MAX_CHARS = 1200
 MIN_CHARS = 200
+# Leading part of a reporter's question repeated on each piece of a long answer.
+QUESTION_CONTEXT_CHARS = 400
 
 
 def _split_long_paragraph(paragraph, max_chars):
@@ -48,11 +50,59 @@ def split_text(text, max_chars=MAX_CHARS, min_chars=MIN_CHARS):
     return chunks
 
 
+def _transcript_exchanges(text):
+    """Group transcript turns into the Chair's opening statement and Q&A pairs.
+
+    Turns start with the speaker's name ("CHAIR POWELL. ..."). Consecutive
+    non-Chair turns (moderator plus reporter) form one question, and the
+    Chair turns that follow form its answer.
+    """
+    opening, exchanges = [], []
+    for turn in (t.strip() for t in text.split("\n\n")):
+        if not turn:
+            continue
+        if turn.startswith("CHAIR"):
+            (exchanges[-1][1] if exchanges else opening).append(turn)
+        elif exchanges and not exchanges[-1][1]:
+            exchanges[-1][0].append(turn)
+        else:
+            exchanges.append(([turn], []))
+    return opening, exchanges
+
+
+def _question_context(question, limit=QUESTION_CONTEXT_CHARS):
+    if len(question) <= limit:
+        return question
+    return question[:limit].rsplit(" ", 1)[0] + " ..."
+
+
+def split_transcript(text, max_chars=MAX_CHARS, min_chars=MIN_CHARS):
+    """Chunk a press conference so every piece of an answer keeps its question."""
+    opening, exchanges = _transcript_exchanges(text)
+    chunks = split_text("\n\n".join(opening), max_chars, min_chars) if opening else []
+    for question_turns, answer_turns in exchanges:
+        question = "\n\n".join(question_turns)
+        answer = "\n\n".join(answer_turns)
+        whole = f"{question}\n\n{answer}".strip()
+        if len(whole) < min_chars and chunks:
+            # e.g. the closing "Thank you all." exchange.
+            chunks[-1] = f"{chunks[-1]}\n\n{whole}"
+        elif len(whole) <= max_chars or not answer:
+            chunks.extend(split_text(whole, max_chars, min_chars))
+        else:
+            context = _question_context(question)
+            budget = max(max_chars - len(context) - 2, min_chars)
+            chunks.extend(f"{context}\n\n{piece}"
+                          for piece in split_text(answer, budget, min_chars))
+    return chunks
+
+
 def chunk_documents(documents, max_chars=MAX_CHARS):
     """Yield chunk records that inherit every document's metadata."""
     for doc in documents:
-        for i, text in enumerate(split_text(doc["text"], max_chars=max_chars)):
-            yield {
+        splitter = split_transcript if doc["doc_type"] == "press_conference" else split_text
+        for i, text in enumerate(splitter(doc["text"], max_chars=max_chars)):
+            chunk = {
                 "chunk_id": f"{doc['doc_id']}#{i:03d}",
                 "doc_id": doc["doc_id"],
                 "doc_type": doc["doc_type"],
@@ -62,6 +112,9 @@ def chunk_documents(documents, max_chars=MAX_CHARS):
                 "url": doc["url"],
                 "text": text,
             }
+            if doc.get("speaker"):
+                chunk["speaker"] = doc["speaker"]
+            yield chunk
 
 
 def embedding_text(chunk):

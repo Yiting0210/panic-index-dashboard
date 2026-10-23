@@ -5,6 +5,9 @@
 # the retriever respects the as-of cutoff (minutes are dated by release day).
 # Labels were checked against the document text by phrase search
 # (e.g. "$60 billion ... $35 billion", "mild recession", "Hammack").
+# A nested list means any one of those documents answers the question; the
+# press conference alternatives were checked the same way ("June 1",
+# "1/2 percentage point", "$60 billion per month to $25 billion").
 questions:
   - id: r01
     question: Did the FOMC raise the federal funds rate in March 2022, and to what target range?
@@ -17,7 +20,7 @@ questions:
   - id: r03
     question: When did the Committee say it would begin reducing its holdings of Treasury securities and agency mortgage-backed securities?
     as_of: 2022-05-06
-    relevant: [statement-20220504]
+    relevant: [[statement-20220504, press_conference-20220504]]
   - id: r04
     question: How far did the FOMC raise rates in June 2022 and who voted against the action?
     as_of: 2022-06-17
@@ -33,7 +36,7 @@ questions:
   - id: r07
     question: How large was the Fed's first rate cut in September 2024?
     as_of: 2024-09-20
-    relevant: [statement-20240918]
+    relevant: [[statement-20240918, press_conference-20240918]]
   - id: r08
     question: Which governor dissented against the half-point cut in September 2024, and what alternative was preferred?
     as_of: 2024-09-22
@@ -45,7 +48,7 @@ questions:
   - id: r10
     question: When did the FOMC slow balance sheet runoff by lowering the Treasury redemption cap from $60 billion to $25 billion?
     as_of: 2024-05-03
-    relevant: [statement-20240501]
+    relevant: [[statement-20240501, press_conference-20240501]]
   - id: r11
     question: What change to the monthly Treasury redemption cap did the Committee announce in March 2025?
     as_of: 2025-03-21

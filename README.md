@@ -52,7 +52,7 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **RealTimePeakDetector Causal Signal Analysis**: past/current-data-only panic-reversal confirmation signal for tactical research.
 - **Interactive Controls**: market selector, date range, thresholds, position sizing, horizons, and peak-detection parameters.
 - **MCP Research Server**: regime, backtest, forward-return, peak-detection, and FOMC-search tools for any MCP client, each pinned to an `as_of` date.
-- **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 93 statements and minutes, filtered by public release date.
+- **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 137 FOMC statements, minutes, and Chair press conference transcripts, filtered by public release date.
 - **Research Assistant**: tool-use client for Claude or DeepSeek with bring-your-own API keys, citations, cost and latency logging, a daily budget for the app's key, and a rule-based fallback.
 - **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
 - **Daily Data Updates**: scheduled, append-only ingestion of prices, Fear & Greed, and FOMC documents with data-quality checks.
@@ -221,7 +221,8 @@ tools/  <- one tool layer: every function takes as_of and returns a pydantic mod
                   ^                      response cache, usage ledger, budget, fallback
                   +-- pages/3_🤖_Research_Assistant.py
 
-rag/    <- 93 FOMC statements + minutes (2021-2026) -> 2,623 chunks,
+rag/    <- 137 FOMC statements, minutes, press conferences (2021-2026)
+           -> 5,034 chunks,
            FAISS dense + BM25 hybrid search, filtered by release date
 evals/  <- retrieval, agent, and point-in-time evaluations (pytest + CI)
 ```
@@ -256,7 +257,7 @@ Look-ahead leakage is the most common failure in financial agents (much of the r
 
 - **Truncate before deriving.** The dashboard normalizes VIX with the full-sample min/max, and the sample maximum falls on 2025-04-08, so every dashboard Panic Index value before that date uses future information. The tools drop rows after `as_of` first, then recompute the normalization.
 - **Causal gap filling.** The dashboard linearly interpolates missing prices, which borrows the next observed price. The tools forward-fill instead.
-- **Release dates, not meeting dates.** FOMC minutes become public about three weeks after the meeting. Each document is indexed by `published_at`, so an as-of query on the meeting day cannot see that meeting's minutes.
+- **Release dates, not meeting dates.** FOMC minutes become public about three weeks after the meeting. Each document is indexed by `published_at`, so an as-of query on the meeting day cannot see that meeting's minutes. Press conferences are broadcast live on the decision day and keep that date even when the transcript PDF is posted weeks later; until it is posted, the daily update skips that meeting and tries again the next day.
 - **Filter inside the search.** Retrieval passes the eligible ids to FAISS as an `IDSelector` (and restricts BM25 to the same ids) instead of over-fetching and dropping late documents afterwards, which can silently return fewer than `k` results.
 - **Agent guardrail.** The assistant clamps any `as_of` the model passes to the session cutoff and records that the clamp happened.
 
@@ -299,12 +300,14 @@ Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
 | Configuration | recall@5 | MRR | Leakage |
 |---|---|---|---|
-| Dense (bge-small-en-v1.5 + FAISS) | 0.700 | 0.542 | 0 |
-| BM25 | 0.700 | 0.600 | 0 |
-| Hybrid (RRF of dense + BM25) | 0.700 | 0.549 | 0 |
-| **Hybrid + meeting-month ranking** | **0.933** | **0.799** | **0** |
+| Dense (bge-small-en-v1.5 + FAISS) | 0.733 | 0.494 | 0 |
+| BM25 | 0.733 | 0.589 | 0 |
+| Hybrid (RRF of dense + BM25) | 0.667 | 0.533 | 0 |
+| **Hybrid + meeting-month ranking** | **0.933** | **0.764** | **0** |
 
 Most misses in the first three rows were questions that name a month ("September 2024"), where a short policy statement was outranked by long minutes. When a query names a month, the final configuration adds a third ranked list restricted to that meeting month. That feature was designed after inspecting misses on the same 30 questions and there is no held-out split, so treat the final row as optimistic.
+
+Adding the 44 press conference transcripts lowered MRR from 0.799 to 0.764. Three questions whose answer the same day's press conference also states (r03, r07, r10) now accept either document, after checking the transcript text by phrase search. Two questions (r14, r30) now rank the labelled document sixth, just outside the top five, because long transcripts compete for the same slots.
 
 CI runs the unit, leakage, and retrieval tests on every push. The agent eval replays recorded responses from `evals/recordings/` without an API key, and a manually triggered workflow (`workflow_dispatch` with `live_agent_eval`) runs it against the real API with the `ANTHROPIC_API_KEY` repository secret:
 
@@ -320,7 +323,7 @@ python -m evals.agent_eval --mode replay   # no API key needed
 A scheduled GitHub Actions workflow (`.github/workflows/daily-update.yml`) refreshes the data every weekday at 22:30 UTC, after the New York close:
 
 1. `scripts/update_market_data.py` fetches Yahoo Finance closes (QQQ, SMH, S&P 500, Dow, VIX) and the CNN Fear & Greed history from the last complete row onward.
-2. `scripts/fetch_fomc.py --incremental` downloads FOMC statements and minutes that are not stored yet, and the FAISS index embeds only those new documents.
+2. `scripts/fetch_fomc.py --incremental` downloads FOMC statements, minutes, and press conference transcripts that are not stored yet, and the FAISS index embeds only those new documents.
 3. The full test suite runs against the updated data. If anything fails, nothing is committed.
 4. The bot commits the new rows to `main`, and Streamlit Community Cloud redeploys from that commit.
 
@@ -448,7 +451,7 @@ The dashboard reads CSV data from the `data/` directory at runtime; the daily wo
 - **Fear & Greed Index (2023-2026)**: CNN internal endpoint (`production.dataviz.cnn.io`)
 - **Price data**: Yahoo Finance (historical file via `yfinance` adjusted closes; daily updates via the chart API): QQQ, SMH, SPX, DJI, VIX
 - **Missing values**: Market holidays handled via linear interpolation in the dashboard; the MCP tools forward-fill instead (see Point-in-time design)
-- **FOMC statements and minutes (2021-2026)**: [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm), public U.S. government documents, fetched with their release dates by `scripts/fetch_fomc.py`
+- **FOMC statements, minutes, and Chair press conference transcripts (2021-2026)**: [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm), public U.S. government documents, fetched with their release dates by `scripts/fetch_fomc.py`
 
 ---
 

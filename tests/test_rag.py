@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from rag import FedDocIndex, chunk_documents, split_text
+from rag.chunking import split_transcript
 from rag.lexical import BM25, reciprocal_rank_fusion
 from rag.query import month_mentions
 
@@ -143,3 +144,32 @@ def test_incremental_add_matches_full_build():
     for mode in ("dense", "bm25", "hybrid"):
         query = ("balance sheet runoff caps in March 2023", date(2023, 12, 31))
         assert incremental.search(*query, mode=mode) == full.search(*query, mode=mode)
+
+
+def test_split_transcript_keeps_each_question_with_its_answer():
+    opening = "CHAIR POWELL. " + "Good afternoon. Inflation remains elevated. " * 40
+    question = "MICHELLE SMITH. Steve.\n\nSTEVE LIESMAN. How many hikes do you expect this year?"
+    answer = "CHAIR POWELL. " + "We will be nimble and watch the data closely. " * 60
+    closing = "MICHELLE SMITH. Thank you all.\n\nCHAIR POWELL. Thank you."
+    chunks = split_transcript("\n\n".join([opening, question, answer, closing]))
+
+    opening_chunks = [c for c in chunks if "Good afternoon" in c]
+    answer_chunks = [c for c in chunks if "nimble" in c]
+    assert opening_chunks and not any("LIESMAN" in c for c in opening_chunks)
+    assert len(answer_chunks) > 1
+    assert all(c.startswith(question) for c in answer_chunks)
+    assert all(len(c) <= 1200 for c in chunks)
+    # The short closing exchange is folded into the last chunk.
+    assert chunks[-1].endswith("CHAIR POWELL. Thank you.")
+
+
+def test_press_conference_chunks_carry_the_speaker():
+    presser = {**doc("press_conference-20260729", "press_conference", "2026-07-29",
+                     "2026-07-29", "CHAIRMAN WARSH. Good day."), "speaker": "Warsh"}
+    chunks = list(chunk_documents([presser, DOCS[0]]))
+    assert chunks[0]["speaker"] == "Warsh"
+    assert "speaker" not in chunks[1]
+    index = FedDocIndex.build([presser, *DOCS], HashEmbedder())
+    hits, _ = index.search("good day", as_of=date(2026, 7, 29), k=10,
+                           doc_type="press_conference")
+    assert [h["doc_id"] for h in hits] == ["press_conference-20260729"]

@@ -284,15 +284,19 @@ def search_fed_docs(
     query: Annotated[str, Field(min_length=3, description="Natural-language search query.")],
     as_of: AsOf,
     k: Annotated[int, Field(ge=1, le=10, description="Number of passages to return.")] = 5,
-    doc_type: Annotated[Optional[Literal["statement", "minutes"]], Field(
-        description="Restrict to policy statements or meeting minutes."
+    doc_type: Annotated[Optional[Literal["statement", "minutes", "press_conference"]], Field(
+        description="Restrict to policy statements, meeting minutes, or Chair press "
+                    "conference transcripts."
     )] = None,
 ) -> FedDocSearchResult:
-    """Search FOMC policy statements and minutes published on or before as_of.
+    """Search FOMC statements, minutes, and Chair press conferences published on or before as_of.
 
-    Minutes are dated by their public release (about three weeks after the
-    meeting), so a query as of a meeting date will not see that meeting's
-    minutes. Each passage includes its source URL for citation.
+    Statements and press conferences come out on the decision day; minutes
+    are dated by their public release (about three weeks after the meeting),
+    so a query as of a meeting date will not see that meeting's minutes.
+    Press conferences give the Chair's own framing and carry the Chair's name
+    in ``speaker``; minutes show how views spread across the Committee. Each
+    passage includes its source URL for citation.
     """
     from rag import get_index
 
