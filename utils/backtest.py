@@ -1,5 +1,10 @@
-def run_backtest(dff, target_col, pos_initial=50, add_amount=20,
-                 reduce_amount=20, pos_max=100, pos_min=0, buy_threshold=64, sell_threshold=15):
+from .strategy import DEFAULT_STRATEGY as _D
+
+
+def run_backtest(dff, target_col, pos_initial=_D.initial_position_pct, add_amount=_D.add_pct,
+                 reduce_amount=_D.reduce_pct, pos_max=_D.max_position_pct,
+                 pos_min=_D.min_position_pct, buy_threshold=_D.buy_threshold,
+                 sell_threshold=_D.sell_threshold):
     bt = dff[['date_dt', target_col, 'panic_index']].dropna().copy().reset_index(drop=True)
 
     position = pos_initial / 100  # 转成小数
@@ -20,8 +25,9 @@ def run_backtest(dff, target_col, pos_initial=50, add_amount=20,
     return bt
 
 def run_backtest_with_signals(dff, target_col, signal_mask,
-                               pos_initial=50, add_amount=20,
-                               reduce_amount=10, pos_max=100, pos_min=0):
+                               pos_initial=_D.initial_position_pct, add_amount=_D.add_pct,
+                               reduce_amount=_D.reduce_pct, pos_max=_D.max_position_pct,
+                               pos_min=_D.min_position_pct):
     """
     Backtest using a precomputed signal mask instead of threshold.
     signal_mask: boolean Series where True = buy signal day
