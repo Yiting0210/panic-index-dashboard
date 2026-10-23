@@ -1,0 +1,72 @@
+# Agent evaluation set. expected_tools lists the tools a correct run must
+# call (extra calls are allowed). Each question is answered as of its date.
+questions:
+  - id: a01
+    question: What Panic Index regime is QQQ in, and how extreme is the reading relative to its history?
+    as_of: 2022-10-13
+    market: QQQ
+    expected_tools: [get_regime]
+  - id: a02
+    question: How did the threshold strategy compare with Buy & Hold on SMH, including drawdown and average exposure?
+    as_of: 2023-12-31
+    market: SMH
+    expected_tools: [run_backtest]
+  - id: a03
+    question: Historically, what were 1-month and 3-month forward returns for SPX after panic-regime days?
+    as_of: 2024-06-28
+    market: SPX
+    expected_tools: [get_forward_returns]
+  - id: a04
+    question: Did the causal panic-reversal detector fire for QQQ during the April 2025 selloff, and on which dates?
+    as_of: 2025-05-30
+    market: QQQ
+    expected_tools: [detect_peaks]
+  - id: a05
+    question: What did the Fed decide at its most recent meeting, and is the market currently in a panic regime?
+    as_of: 2022-06-17
+    market: SPX
+    expected_tools: [search_fed_docs, get_regime]
+  - id: a06
+    question: The market is in extreme fear. What did the latest FOMC statement say about the banking system?
+    as_of: 2023-03-24
+    market: SPX
+    expected_tools: [search_fed_docs]
+  - id: a07
+    question: Is now a historically favorable entry point for DJI based on panic-regime forward returns?
+    as_of: 2025-04-11
+    market: DJI
+    expected_tools: [get_regime, get_forward_returns]
+  - id: a08
+    question: What were the Fed's most recent policy decision and the current QQQ Panic Index reading?
+    as_of: 2024-09-20
+    market: QQQ
+    expected_tools: [search_fed_docs, get_regime]
+  - id: a09
+    question: Compare the scipy hindsight peaks with the realtime detector signals for SMH in 2022.
+    as_of: 2022-12-30
+    market: SMH
+    expected_tools: [detect_peaks]
+  - id: a10
+    # Point-in-time trap: the minutes for the 2022-03-16 meeting were released 2022-04-06.
+    question: What did the minutes of the March 2022 FOMC meeting say about balance sheet runoff caps?
+    as_of: 2022-03-25
+    market: QQQ
+    expected_tools: [search_fed_docs]
+    expect_unanswerable: true
+    # The caps from those minutes; stating them means the answer leaked.
+    forbidden_phrases: ["$60 billion", "$35 billion"]
+  - id: a11
+    # Point-in-time trap: the question asks about a meeting after as_of.
+    question: What did the FOMC decide at the September 2024 meeting?
+    as_of: 2024-08-30
+    market: SPX
+    expected_tools: [search_fed_docs]
+    expect_unanswerable: true
+    # The September 2024 decision: a 1/2-point cut to 4-3/4 to 5 percent.
+    forbidden_phrases: ["1/2 percentage point", "50 basis", "half-point", "half a percentage",
+                        "half percentage", "4-3/4 to 5", "4.75"]
+  - id: a12
+    question: How did the greed regime affect the strategy's exposure on QQQ since 2023, and what was the upside drag?
+    as_of: 2024-12-31
+    market: QQQ
+    expected_tools: [run_backtest]

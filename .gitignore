@@ -22,3 +22,14 @@ data/*
 
 # 忽略其他特定文件（可选）
 data/raw_json.html
+
+# FOMC corpus and index are committed for reproducible, offline retrieval
+!data/fomc/
+!data/fomc/**
+
+# Project virtualenv, LLM response cache, usage logs, local launch config
+.venv/
+.cache/
+logs/
+evals/results/agent_usage.jsonl
+.claude/

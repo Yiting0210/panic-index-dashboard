@@ -1,4 +1,4 @@
-from .data_loader import load_data, load_filtered_data
+from .data_loader import data_version, load_data, load_filtered_data
 from .metrics import RISK_FREE_RATE
 from .metrics import (build_performance_metrics, max_drawdown, sharpe_ratio,
                       render_kpi_row)
@@ -40,6 +40,7 @@ __all__ = [
     "build_threshold_research_summary",
     "build_threshold_masks",
     "build_watch_zone_shapes",
+    "data_version",
     "detect_peaks_realtime",
     "detect_peaks_scipy",
     "load_data",

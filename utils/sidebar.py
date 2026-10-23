@@ -1,6 +1,11 @@
 # utils/sidebar.py
 import streamlit as st
 
+# Colour emoji fonts, listed explicitly because the app font has its own
+# monochrome glyphs for some emoji (e.g. 🤖).
+EMOJI_FONTS = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif"
+
+
 def render_sidebar_header(title_text, icon):
     """Standardize the sidebar headings with an icon."""
     st.sidebar.markdown(f"**{icon} {title_text.upper()}**")
@@ -10,10 +15,16 @@ def render_sidebar_header(title_text, icon):
 def add_sidebar_nav():
     # 统一用粗体 Markdown 替代 Subheader
 
+    st.sidebar.markdown(
+        "<style>[data-testid='stPageLink-NavLink'] [data-testid='stIconEmoji'] "
+        f"{{ font-family: {EMOJI_FONTS}; }}</style>",
+        unsafe_allow_html=True,
+    )
     render_sidebar_header("NAVIGATION", "🧭")
     st.sidebar.page_link("Home.py", label="Home", icon="🏠")
     st.sidebar.page_link("pages/1_💠_Threshold_Strategy.py", label="Threshold Strategy", icon="💠")
     st.sidebar.page_link("pages/2_🏔️_Peak_Detection.py", label="Peak Detection", icon="🏔️")
+    st.sidebar.page_link("pages/3_🤖_Research_Assistant.py", label="Research Assistant", icon="🤖")
 
 
 def render_controls(df):

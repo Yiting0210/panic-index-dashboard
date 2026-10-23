@@ -7,6 +7,15 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      live_agent_eval:
+        description: "Run the agent eval against the real Claude API (uses ANTHROPIC_API_KEY)"
+        type: boolean
+        default: false
+
+env:
+  FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
 
 jobs:
   test:
@@ -20,6 +29,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -27,11 +37,62 @@ jobs:
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
 
-      - name: Compile Streamlit entry points
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/fastembed
+          key: fastembed-${{ hashFiles('data/fomc/index/manifest.json') }}
+
+      - name: Compile Streamlit entry points and MCP server
         run: |
           python -m py_compile Home.py
           python -m py_compile "pages/1_💠_Threshold_Strategy.py"
           python -m py_compile "pages/2_🏔️_Peak_Detection.py"
+          python -m py_compile "pages/3_🤖_Research_Assistant.py"
+          python -m py_compile mcp_server.py
 
-      - name: Run tests
+      - name: Run tests (unit, point-in-time leakage, retrieval eval, agent replay)
         run: python -m pytest -q
+
+      - name: Retrieval eval report
+        run: python -m evals.retrieval_eval
+
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-eval
+          path: evals/results/retrieval.json
+
+  live-agent-eval:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_agent_eval
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install -r requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/fastembed
+          key: fastembed-${{ hashFiles('data/fomc/index/manifest.json') }}
+
+      - name: Run agent eval against the Claude API and record responses
+        run: python -m evals.agent_eval --mode record
+
+      - name: Upload agent eval results and recordings
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval
+          path: |
+            evals/results/agent.json
+            evals/results/agent_usage.jsonl
+            evals/recordings/
