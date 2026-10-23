@@ -3,7 +3,7 @@ import os
 import streamlit as st
 
 from utils import add_sidebar_nav, load_data
-from utils.sidebar import render_sidebar_header
+from utils.sidebar import EMOJI_FONTS, render_sidebar_header
 
 st.set_page_config(layout="wide", page_title="Research Assistant")
 
@@ -75,7 +75,13 @@ def build_agent(provider, model, api_key):
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title("🤖 Research Assistant")
+# The heading font has its own monochrome 🤖 glyph; draw the icon in a colour
+# emoji font so it matches the browser-tab icon.
+st.markdown(
+    f"# <span style=\"font-family: {EMOJI_FONTS}; font-weight: 400\">🤖</span> "
+    "Research Assistant",
+    unsafe_allow_html=True,
+)
 st.markdown(
     "Ask questions about Panic Index regimes, backtests, forward returns, and "
     "FOMC communications. The assistant is a client of the project's **MCP "
