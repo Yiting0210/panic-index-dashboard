@@ -1,4 +1,7 @@
+import json
 import os
+from datetime import date
+from pathlib import Path
 
 import streamlit as st
 
@@ -37,11 +40,22 @@ PROVIDERS = {
     },
 }
 EXAMPLES = [
-    "What Panic Index regime is the market in, and what did the latest FOMC statement say?",
+    "What exposure does the strategy hold right now, and why?",
+    "Is the current regime historically attractive for adding exposure?",
+    "What would make the rule add or reduce exposure from here?",
+    "How does current Fed policy context relate to the regime?",
     "How did the threshold strategy compare with Buy & Hold, including drawdown?",
-    "What were 1-month and 3-month forward returns after panic-regime days?",
-    "Did the causal panic-reversal detector fire recently? On which dates?",
 ]
+FOMC_MANIFEST = Path(__file__).resolve().parent.parent / "data" / "fomc" / "index" / "manifest.json"
+
+
+def latest_fomc_date():
+    """Release date of the newest FOMC document in the search index, or None."""
+    try:
+        manifest = json.loads(FOMC_MANIFEST.read_text(encoding="utf-8"))
+        return date.fromisoformat(manifest["last_published"])
+    except (OSError, KeyError, ValueError):
+        return None
 
 
 @st.cache_resource
@@ -89,6 +103,11 @@ st.markdown(
     "server**: it calls the same tools Claude Code or Cursor would, and every "
     "tool call is pinned to the **as-of date** below, so answers only use data "
     "and Fed documents that were public on that day."
+)
+fomc_through = latest_fomc_date()
+st.caption(
+    f"📅 Market data through **{max_date:%b %d, %Y}** · FOMC library through "
+    + (f"**{fomc_through:%b %d, %Y}**" if fomc_through else "**unknown**")
 )
 
 # ── Model provider and API key ────────────────────────────────────────────────
@@ -160,15 +179,55 @@ if ask:
 
 result = st.session_state.get("last_result")
 if result is not None:
-    if result.used_fallback:
+    if result.violations:
+        st.warning(
+            "The model's explanation contradicted the strategy signal, so it was "
+            "replaced with the rule-based research summary. See Advanced / Debug."
+        )
+    elif result.used_fallback:
         st.warning(
             "LLM path unavailable, so this is the rule-based research summary. "
             f"Reason: {result.fallback_reason}"
         )
-    st.subheader("Answer")
+
+    # Market Regime and Strategy Signal are filled by code from the standard
+    # backtest; the model only writes the explanation below them.
+    signal = result.signal
+    if signal is not None:
+        regime_col, signal_col = st.columns(2)
+        with regime_col.container(border=True):
+            st.markdown("**Market Regime**")
+            st.metric(f"{signal.market} Panic Index", f"{signal.panic_index:.1f}",
+                      help="Composite Panic Index on the latest observation.")
+            st.markdown(
+                f"**{signal.regime.title()}** regime (panic above {signal.buy_threshold:g}, "
+                f"greed below {signal.sell_threshold:g}); "
+                f"{signal.panic_index_percentile:g}th percentile of history to date."
+            )
+            st.caption(f"Latest observation {signal.observation_date:%b %d, %Y}")
+        with signal_col.container(border=True):
+            st.markdown("**Strategy Signal**")
+            st.metric("Current exposure", f"{signal.final_position_pct:g}%",
+                      help="final_position_pct of the standard backtest (0-100).")
+            st.markdown(f"Latest action: **{signal.action}** — {signal.action_text}.  \n"
+                        f"Next session: {signal.next_rule}.")
+            st.caption(
+                f"Standard backtest {signal.backtest_start:%b %d, %Y} – "
+                f"{signal.observation_date:%b %d, %Y}: strategy "
+                f"{signal.strategy_return_pct:+.1f}% vs. Buy & Hold "
+                f"{signal.buyhold_return_pct:+.1f}%; max drawdown "
+                f"{signal.strategy_max_drawdown_pct:.1f}% vs. "
+                f"{signal.buyhold_max_drawdown_pct:.1f}%."
+            )
+        st.caption(f"**Why this signal?** {signal.provenance}.")
+
+    st.subheader("Rule-based summary" if result.used_fallback else "Key Reasons")
     st.markdown(result.answer)
+    for reason in result.key_reasons:
+        st.markdown(f"- {reason}")
     if result.caveats and result.caveats.lower() != "none":
-        st.caption(f"Caveats: {result.caveats}")
+        st.subheader("Risks / Caveats")
+        st.markdown(result.caveats)
 
     retrieved = {}
     for call in result.tool_calls:
@@ -186,23 +245,25 @@ if result is not None:
             else:
                 st.markdown(f"- `{citation['doc_id']}` (not returned by a tool in this run)")
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tool calls", len(result.tool_calls))
-    c2.metric("Model steps", result.steps)
-    c3.metric("Latency", f"{result.latency_ms / 1000:.1f}s")
-    c4.metric("Cost", f"${result.cost_usd:.4f}",
-              help=f"{result.input_tokens} input / {result.output_tokens} output tokens, "
-                   f"{result.cache_read_tokens} cache-read tokens, "
-                   f"{result.cached_responses} cached responses")
-
-    if result.tool_calls:
-        st.subheader("Tool calls")
+    with st.expander("Advanced / Debug"):
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Tool calls", len(result.tool_calls))
+        c2.metric("Model steps", result.steps)
+        c3.metric("Latency", f"{result.latency_ms / 1000:.1f}s")
+        c4.metric("Cost", f"${result.cost_usd:.4f}",
+                  help=f"{result.input_tokens} input / {result.output_tokens} output tokens, "
+                       f"{result.cache_read_tokens} cache-read tokens, "
+                       f"{result.cached_responses} cached responses")
+        if result.fallback_reason:
+            st.markdown(f"**Fallback reason:** {result.fallback_reason}")
+        for violation in result.violations:
+            st.markdown(f"- Guardrail: {violation}")
         for call in result.tool_calls:
             label = f"{call.name}({', '.join(f'{k}={v}' for k, v in call.arguments.items())})"
             if call.as_of_clamped:
                 label += "  · as_of clamped"
-            with st.expander(label):
-                st.json(call.result)
+            st.markdown(f"**{label}**")
+            st.json(call.result, expanded=False)
 
 st.caption(
     "Historical research only, not investment advice. As of "
