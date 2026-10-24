@@ -137,6 +137,31 @@ def test_what_if_figures_match_only_backtest_calls(eighty_pct_signal):
                            eighty_pct_signal)
 
 
+@pytest.mark.parametrize("text", [
+    "Current exposure is 80%, but in a what-if with a higher threshold, the strategy "
+    "would end at 70% exposure.",
+    "In a what-if with a higher threshold the strategy would end at 70% exposure, while "
+    "the current exposure is 80%.",
+    "The current exposure is 80% versus 70% in the what-if.",
+    "In the what-if, the strategy ends at 70% exposure.",
+])
+def test_what_if_label_applies_to_its_own_clause(eighty_pct_signal, text):
+    # The standard 80% and the what-if 70% share a sentence; each is checked on its own.
+    calls = [backtest_call(final_position_pct=70.0)]
+    assert validate_answer(text, eighty_pct_signal, calls) == []
+    swapped = text.replace("80%", "TMP").replace("70%", "80%").replace("TMP", "70%")
+    assert validate_answer(swapped, eighty_pct_signal, calls)
+
+
+@pytest.mark.xfail(strict=True, reason="what-if figures are pooled across run_backtest calls")
+def test_what_if_scenarios_are_not_separated_yet(eighty_pct_signal):
+    calls = [backtest_call(buy_threshold=60.0, final_position_pct=70.0),
+             backtest_call(buy_threshold=70.0, final_position_pct=40.0)]
+    # Scenario A (threshold 60) ends at 70%; 40% belongs to scenario B.
+    text = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
+    assert validate_answer(text, eighty_pct_signal, calls)
+
+
 def test_validator_rejects_contradictory_direction(panic_signal):
     violations = validate_answer("The strategy is now reducing exposure.", panic_signal)
     assert len(violations) == 1 and "contradicts" in violations[0]

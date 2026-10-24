@@ -60,6 +60,10 @@ CLAUSE_BREAK_RE = re.compile(r"[,;:()]|\b(?:and|but|while|so|which|then|whereas)
 WHAT_IF_RE = re.compile(
     r"\bwhat-?if\b|\bhypothetical|\bwould (?:end|have|finish|hold|sit)\b|"
     r"\bhad (?:it|the strategy|the backtest) start", re.IGNORECASE)
+# A what-if label reaches forward over commas ("In the what-if, it ends at
+# 70%") but not past a contrast ("80% now, but the what-if ends at 70%").
+CONTRAST_RE = re.compile(
+    r";|\b(?:but|whereas|while|however|versus|vs)\b|\bcompared (?:with|to)\b", re.IGNORECASE)
 # A step verb right before the figure ("added 20%", "reduced exposure by 10%");
 # "reduced to 0%" states a level, not a step.
 STEP_TAIL = r"(?:\s+(?:only|another|a|further|exposure|its|the|position|allocation|by))*\s*$"
@@ -125,11 +129,17 @@ def claim_role(before, after):
     return "current"
 
 
+def claim_is_what_if(before, after):
+    """Whether a figure is labelled as a what-if, before it or in its own clause."""
+    before = CONTRAST_RE.split(before)[-1]
+    after = CLAUSE_BREAK_RE.split(CONTRAST_RE.split(after, maxsplit=1)[0], maxsplit=1)[0]
+    return bool(WHAT_IF_RE.search(before) or WHAT_IF_RE.search(after))
+
+
 def stated_positions(text):
     """Exposure figures stated in ``text`` with their roles (units as percent)."""
     claims = []
     for sentence in SENTENCE_RE.split(text):
-        what_if = bool(WHAT_IF_RE.search(sentence))
         found = {}  # figure start -> (value, end), so each figure is one claim
         for m in PCT_AFTER_WORD_RE.finditer(sentence):
             if not OTHER_SUBJECT_RE.search(m.group(1)):
@@ -140,8 +150,9 @@ def stated_positions(text):
             if float(m.group(2)) > 0:
                 found[m.start(1)] = (float(m.group(1)) / float(m.group(2)) * 100, m.end())
         for start, (value, end) in sorted(found.items()):
-            role = claim_role(sentence[:start], sentence[end:])
-            claims.append(PositionClaim(value, role, what_if, sentence.strip()))
+            before, after = sentence[:start], sentence[end:]
+            claims.append(PositionClaim(value, claim_role(before, after),
+                                        claim_is_what_if(before, after), sentence.strip()))
     return claims
 
 
@@ -151,6 +162,12 @@ def allowed_positions(signal, tool_calls=(), role="current", what_if=False):
     A what-if figure may match only the run_backtest calls made this turn and
     any other figure only the standard backtest's signal. Averages always come
     from run_backtest calls, since the signal does not carry them.
+
+    TODO: what-if figures are pooled across all of this turn's run_backtest
+    calls, so with two scenarios a figure from scenario B passes when stated
+    for scenario A. Separating them needs each claim tied to its call's
+    parameters (threshold, start date, steps); see
+    test_what_if_scenarios_are_not_separated_yet.
     """
     if what_if or role in ("average", "time_below"):
         allowed = set()
