@@ -2,7 +2,7 @@
   "summary": {
     "fixtures": 10,
     "signal_mismatches": 0,
-    "planted_contradictions": 20,
+    "planted_contradictions": 24,
     "detection_rate": 1,
     "false_positive_rate": 0
   },
@@ -20,7 +20,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 60% (standard backtest final_position_pct is 100%)"
+        "fabricated position 60% (read as the current exposure; expected 100%): With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units."
       ]
     },
     {
@@ -45,7 +45,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 65% (standard backtest final_position_pct is 80%)"
+        "fabricated position 65% (read as the current exposure; expected 80%): Given the panic reading, the strategy now holds 65% exposure."
       ]
     },
     {
@@ -55,6 +55,15 @@
       "correct": true,
       "violations": [
         "direction 'reduce' contradicts the rule's 'add' (panic regime): Because the market is in panic, the rule is now reducing exposure."
+      ]
+    },
+    {
+      "id": "c02_eighty_pct",
+      "probe": "current_equals_add_step",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 20% (read as the current exposure; expected 80%): The strategy currently holds 20% exposure."
       ]
     },
     {
@@ -70,7 +79,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 35% (standard backtest final_position_pct is 0%)"
+        "fabricated position 35% (read as the current exposure; expected 0%): The strategy is currently 35% invested while it waits for a panic signal."
       ]
     },
     {
@@ -95,7 +104,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 40% (standard backtest final_position_pct is 20%)"
+        "fabricated position 40% (read as the current exposure; expected 20%): After the panic reading the rule now holds 40% exposure."
       ]
     },
     {
@@ -108,6 +117,15 @@
       ]
     },
     {
+      "id": "c04_panic_add",
+      "probe": "current_equals_cap",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 100% (read as the current exposure; expected 20%): The current position is 100%."
+      ]
+    },
+    {
       "id": "c05_greed_reduce",
       "probe": "consistent",
       "signal_mismatches": {},
@@ -120,7 +138,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 75% (standard backtest final_position_pct is 30%)"
+        "fabricated position 75% (read as the current exposure; expected 30%): The strategy currently holds 75% exposure."
       ]
     },
     {
@@ -133,6 +151,15 @@
       ]
     },
     {
+      "id": "c05_greed_reduce",
+      "probe": "current_equals_reduce_step",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 10% (read as the current exposure; expected 30%): The current exposure is 10%."
+      ]
+    },
+    {
       "id": "c06_add_into_cap",
       "probe": "consistent",
       "signal_mismatches": {},
@@ -145,7 +172,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 90% (standard backtest final_position_pct is 100%)"
+        "fabricated position 90% (read as the current exposure; expected 100%): After the panic reading the strategy now holds 90% exposure."
       ]
     },
     {
@@ -170,7 +197,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 120% (standard backtest final_position_pct is 100%)"
+        "fabricated position 120% (read as the current exposure; expected 100%): The rule now holds 120% exposure after the panic reading."
       ]
     },
     {
@@ -195,7 +222,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 70% (standard backtest final_position_pct is 100%)"
+        "fabricated position 70% (read as the current exposure; expected 100%): The strategy currently holds 70% exposure while panic persists."
       ]
     },
     {
@@ -220,7 +247,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 25% (standard backtest final_position_pct is 0%)"
+        "fabricated position 25% (read as the current exposure; expected 0%): The strategy currently holds 25% exposure."
       ]
     },
     {
@@ -245,7 +272,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 35% (standard backtest final_position_pct is 0%)"
+        "fabricated position 35% (read as the current exposure; expected 0%): The strategy currently holds 35% exposure."
       ]
     },
     {
@@ -255,6 +282,15 @@
       "correct": true,
       "violations": [
         "direction 'reduce' contradicts the rule's 'hold' (greed regime): The rule is currently reducing exposure further."
+      ]
+    },
+    {
+      "id": "c10_hold_at_floor",
+      "probe": "current_equals_initial",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 50% (read as the current exposure; expected 0%): The strategy currently holds 50% exposure."
       ]
     }
   ]
