@@ -1,11 +1,13 @@
 name: Daily data update
 
-# 22:30 UTC on weekdays is 17:30 or 18:30 in New York (EST / EDT), after the
-# 16:30 settlement cutoff used by scripts/update_market_data.py.
+# 05:00 UTC Tuesday-Saturday is 01:00 New York time (EDT) or 00:00 (EST), so
+# each run picks up the previous weekday's session hours after the close,
+# once every source has published final closes. Saturday's run covers Friday.
+# A session that is still incomplete is retried on the next run.
 # Scheduled workflows only run from the default branch.
 on:
   schedule:
-    - cron: "30 22 * * 1-5"
+    - cron: "0 5 * * 2-6"
   workflow_dispatch:
 
 permissions:
@@ -54,6 +56,8 @@ jobs:
         run: |
           if [ -f logs/daily_update.json ]; then
             { echo '```json'; cat logs/daily_update.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            # Surface data warnings as annotations on the run page.
+            python -c "import json; [print('::warning title=Market data::' + w) for w in json.load(open('logs/daily_update.json'))['market_data']['warnings']]"
           fi
 
       - name: Commit updated data

@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import requests
 
+from .trading_calendar import is_trading_day
+
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -102,15 +104,21 @@ def apply_live_readings(history, live):
     2026-10-21 the 10-20 point read 28.06 while ``previous_close`` was 27.2),
     so: the session on the live reading's New York date takes ``score``, and
     the session before it takes ``previous_close``.
+
+    CNN's history has no points for weekends or market holidays. When the
+    live reading is dated on one (CNN updates the gauge on some holidays),
+    it is added as that day's score; it is the only record CNN keeps of it.
     """
     if "timestamp" not in live:
         return history
     history = history.copy()
     live_date = pd.Timestamp(live["timestamp"]).tz_convert("America/New_York").date()
-    if live.get("score") is not None and live_date in history.index:
+    if live.get("score") is not None and (live_date in history.index
+                                          or not is_trading_day(live_date)):
         history.loc[live_date, ["fear_greed_index", "fear_greed_rating"]] = [
             float(live["score"]), live.get("rating") or score_to_rating(live["score"])
         ]
+        history = history.sort_index()
     earlier = history.index[history.index < live_date]
     if live.get("previous_close") is not None and len(earlier):
         score = float(live["previous_close"])
