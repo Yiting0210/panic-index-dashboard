@@ -57,11 +57,16 @@ jobs:
       - name: Retrieval eval report
         run: python -m evals.retrieval_eval
 
+      - name: Strategy-consistency eval report (offline)
+        run: python -m evals.consistency_eval
+
       - name: Upload eval results
         uses: actions/upload-artifact@v4
         with:
-          name: retrieval-eval
-          path: evals/results/retrieval.json
+          name: offline-evals
+          path: |
+            evals/results/retrieval.json
+            evals/results/consistency_offline.json
 
   live-agent-eval:
     if: github.event_name == 'workflow_dispatch' && inputs.live_agent_eval
@@ -88,11 +93,15 @@ jobs:
       - name: Run agent eval against the Claude API and record responses
         run: python -m evals.agent_eval --mode record
 
+      - name: Run strategy-consistency eval against the Claude API
+        run: python -m evals.consistency_eval --mode record --provider anthropic
+
       - name: Upload agent eval results and recordings
         uses: actions/upload-artifact@v4
         with:
           name: agent-eval
           path: |
             evals/results/agent.json
+            evals/results/consistency_anthropic.json
             evals/results/agent_usage.jsonl
             evals/recordings/

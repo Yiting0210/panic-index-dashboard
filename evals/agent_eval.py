@@ -7,6 +7,7 @@ Modes:
 
 Usage:
     python -m evals.agent_eval --mode record      # needs ANTHROPIC_API_KEY
+    python -m evals.agent_eval --mode record --provider deepseek  # DEEPSEEK_API_KEY
     python -m evals.agent_eval --mode replay
 """
 import argparse
@@ -135,26 +136,31 @@ async def run_eval(agent, questions):
     return summarize(rows), rows
 
 
-def build_agent(mode):
-    from assistant import ResearchAgent, ResponseCache, UsageLedger
+def build_agent(mode, provider="anthropic"):
+    from assistant import DeepSeekAgent, ResearchAgent, ResponseCache, UsageLedger
 
     if mode == "live":
         cache = ResponseCache(mode="readwrite")
     else:
         cache = ResponseCache(RECORDINGS_DIR, mode=mode)
     ledger = UsageLedger(RESULTS_DIR / "agent_usage.jsonl", daily_budget_usd=5.00)
-    return ResearchAgent(cache=cache, ledger=ledger)
+    agent_cls = DeepSeekAgent if provider == "deepseek" else ResearchAgent
+    return agent_cls(cache=cache, ledger=ledger)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["replay", "record", "live"], default="replay")
+    parser.add_argument("--provider", choices=["anthropic", "deepseek"], default="anthropic")
     args = parser.parse_args()
 
-    summary, rows = asyncio.run(run_eval(build_agent(args.mode), load_questions()))
+    agent = build_agent(args.mode, args.provider)
+    summary, rows = asyncio.run(run_eval(agent, load_questions()))
+    summary = {"provider": agent.provider, "model": agent.model, **summary}
     print(json.dumps(summary, indent=2))
     RESULTS_DIR.mkdir(exist_ok=True)
-    out = RESULTS_DIR / "agent.json"
+    out = RESULTS_DIR / ("agent.json" if args.provider == "anthropic"
+                         else f"agent_{args.provider}.json")
     out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str) + "\n",
                    encoding="utf-8")
     print(f"Wrote {out}")

@@ -10,6 +10,11 @@ client sees. Three guardrails sit around the model:
   call is logged to the usage ledger, and a daily budget stops new calls;
 * graceful degradation: on API errors, refusals, or an exhausted budget the
   agent returns the deterministic rule-based summary instead.
+
+Position sizing is not left to the model: the strategy signal (regime,
+final_position_pct, and the rule's action) comes from one standard backtest
+computed in code, and the validator rejects an answer whose prose contradicts
+it, falling back to the rule-based summary.
 """
 import asyncio
 import json
@@ -25,11 +30,13 @@ import openai
 from mcp import Client
 
 from tools import rule_based_summary
-from tools.market import to_date
+from tools.market import ToolInputError, to_date
 from utils.strategy import StrategyParams
 
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
+from .signal import StrategySignal, build_strategy_signal
+from .validator import validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
@@ -62,24 +69,29 @@ date:
 - If the tools cannot answer the question, say so instead of guessing.
 - This is historical research, not investment advice; say so briefly when
   the user asks what to buy or sell.
-- For a position-size question, call run_backtest and report its
-  final_position_pct as the framework's current exposure (scale it to the
-  user's maximum, e.g. 70% of 10 units is 7 units). Describe adding and
-  reducing only with the backtest's position_rule. Do not invent your own
-  sizing, scaling levels, or a mapping from percentile to position, and say
-  that final_position_pct depends on the backtest start date.
+- The question comes with a strategy signal computed by code from a standard
+  backtest. The app shows it to the user as the Market Regime and Strategy
+  Signal panels. You explain it; you do not decide it. If you state the
+  current exposure, use final_position_pct exactly (scaled units are fine,
+  e.g. 80% of 10 units is 8 units), and describe the current action only as
+  the signal states it. Do not invent sizing, scaling levels, or a mapping
+  from percentile to position.
+- For a what-if (other thresholds, start date, or step sizes), call
+  run_backtest with those parameters and label the result as a what-if.
 - If the backtest shows Buy & Hold beating the strategy, say so next to the
   position figure instead of only in the caveats.
 
 When you have what you need, reply with the JSON object the response format
-requires: a concise answer (at most about 200 words), the citations you used,
-and caveats (data limitations, hindsight labels, or "none").
+requires: a concise answer (at most about 150 words), up to four key_reasons
+(one sentence each, grounded in tool results), the citations you used, and
+caveats (risks, data limitations, hindsight labels, or "none").
 """
 
 FINAL_ANSWER_SCHEMA = {
     "type": "object",
     "properties": {
         "answer": {"type": "string"},
+        "key_reasons": {"type": "array", "items": {"type": "string"}},
         "citations": {
             "type": "array",
             "items": {
@@ -94,7 +106,7 @@ FINAL_ANSWER_SCHEMA = {
         },
         "caveats": {"type": "string"},
     },
-    "required": ["answer", "citations", "caveats"],
+    "required": ["answer", "key_reasons", "citations", "caveats"],
     "additionalProperties": False,
 }
 
@@ -102,10 +114,18 @@ FINAL_ANSWER_SCHEMA = {
 # DeepSeek has JSON mode but no schema enforcement, so the shape is spelled out.
 JSON_ANSWER_INSTRUCTIONS = """
 Reply to finish with only this JSON object and no other text:
-{"answer": "<string>", "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>"}
+{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>"}
 """
 
 API_ERRORS = (anthropic.AnthropicError, openai.OpenAIError)
+
+
+class GuardrailViolation(RuntimeError):
+    """The answer contradicted the code-computed strategy signal."""
+
+    def __init__(self, violations):
+        super().__init__("; ".join(violations))
+        self.violations = violations
 
 
 @dataclass
@@ -123,6 +143,7 @@ class AgentResult:
     question: str
     as_of: date
     answer: str
+    key_reasons: list = field(default_factory=list)
     citations: list = field(default_factory=list)
     caveats: str = ""
     tool_calls: list = field(default_factory=list)
@@ -136,6 +157,8 @@ class AgentResult:
     cached_responses: int = 0
     fallback_reason: Optional[str] = None
     strategy: Optional[StrategyParams] = None
+    signal: Optional[StrategySignal] = None
+    violations: list = field(default_factory=list)
 
     @property
     def used_fallback(self):
@@ -201,10 +224,12 @@ def _apply_strategy(name, arguments, strategy):
     return {**filled, **arguments}
 
 
-def _first_message(question, as_of, strategy):
+def _first_message(question, as_of, strategy, signal=None):
     content = f"as_of: {as_of.isoformat()}\n\n"
     if strategy is not None:
         content += f"Strategy settings: {strategy.describe()}.\n\n"
+    if signal is not None:
+        content += signal.prompt_block() + "\n\n"
     return {"role": "user", "content": content + f"Question: {question}"}
 
 
@@ -260,8 +285,16 @@ class ResearchAgent:
         result = AgentResult(question=question, as_of=as_of, answer="", model=self.model,
                              strategy=strategy)
         try:
+            result.signal = build_strategy_signal(market or self.fallback_market, as_of,
+                                                  strategy)
+        except ToolInputError:
+            result.signal = None
+        try:
             await self._loop(question, as_of, result)
+            self._validate(result)
         except (*API_ERRORS, BudgetExceeded, RuntimeError, ValueError) as exc:
+            if isinstance(exc, GuardrailViolation):
+                result.violations = exc.violations
             result.fallback_reason = f"{type(exc).__name__}: {exc}"
             thresholds = {} if strategy is None else {
                 "buy_threshold": strategy.buy_threshold,
@@ -269,6 +302,7 @@ class ResearchAgent:
             }
             result.answer = rule_based_summary(market or self.fallback_market, as_of,
                                                **thresholds)
+            result.key_reasons = []
             result.citations = []
             result.caveats = (
                 "LLM path unavailable; showing the deterministic rule-based "
@@ -277,6 +311,16 @@ class ResearchAgent:
         result.latency_ms = round((time.perf_counter() - started) * 1000, 1)
         result.cost_usd = round(result.cost_usd, 6)
         return result
+
+    @staticmethod
+    def _validate(result):
+        """Reject prose that contradicts the code-computed strategy signal."""
+        if result.signal is None:
+            return
+        text = "\n".join([result.answer, *result.key_reasons, result.caveats])
+        violations = validate_answer(text, result.signal, result.tool_calls)
+        if violations:
+            raise GuardrailViolation(violations)
 
     def _request_params(self, tools, messages):
         params = {
@@ -351,7 +395,7 @@ class ResearchAgent:
         listed = await mcp.list_tools()
         tools = sorted((_mcp_tool_to_anthropic(t) for t in listed.tools),
                        key=lambda t: t["name"])
-        messages = [_first_message(question, as_of, result.strategy)]
+        messages = [_first_message(question, as_of, result.strategy, result.signal)]
         for _ in range(self.max_steps):
             response = self._create(self._request_params(tools, messages), result)
             result.steps += 1
@@ -417,6 +461,7 @@ class ResearchAgent:
             raise RuntimeError("final answer is missing the 'answer' string")
         citations = data.get("citations") or []
         result.answer = data["answer"]
+        result.key_reasons = [str(r) for r in data.get("key_reasons") or [] if r]
         result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
         result.caveats = str(data.get("caveats") or "")
 
@@ -494,7 +539,7 @@ class DeepSeekAgent(ResearchAgent):
              for t in listed.tools),
             key=lambda t: t["function"]["name"],
         )
-        messages = [_first_message(question, as_of, result.strategy)]
+        messages = [_first_message(question, as_of, result.strategy, result.signal)]
         for _ in range(self.max_steps):
             message = self._next_message(self._request_params(tools, messages), result)
             calls = message.get("tool_calls") or []

@@ -1,0 +1,83 @@
+# Strategy-consistency evaluation set. Each fixture is a real date whose
+# standard backtest (QQQ, default strategy, start 2021-05-17, Panic Index
+# recomputed point-in-time as of that date) lands in one position scenario.
+# `expect` pins the code-computed signal, so a data or rule change that moves
+# it fails CI.
+#
+# `probes` are hand-written answers for the offline validator check:
+# `consistent` must pass, every other probe must be rejected. Live runs
+# (--mode record/live) ask `question` and count validator violations.
+fixtures:
+  - id: c01_full_exposure
+    market: QQQ
+    as_of: 2026-10-22
+    question: What exposure does the strategy hold right now, and why?
+    expect: {regime: neutral, final_position_pct: 100.0, action: hold}
+    probes:
+      consistent: >-
+        The strategy currently holds 100% exposure. The Panic Index is 49.0, in the
+        neutral regime, so the rule makes no change. If the index closes above 64, the
+        rule would add 20% exposure, but it is already at the 100% cap.
+      fabricated_position: >-
+        With sentiment in the middle of its range, the framework suggests 60% exposure,
+        or 6 out of 10 units.
+      contradictory_direction: >-
+        The rule is currently adding exposure because sentiment is improving.
+
+  - id: c02_eighty_pct
+    market: QQQ
+    as_of: 2025-03-03
+    question: Is the current regime historically attractive for adding exposure?
+    expect: {regime: panic, final_position_pct: 80.0, action: add}
+    probes:
+      consistent: >-
+        The Panic Index is 64.3, just above the 64 panic threshold, so the rule added
+        20% exposure on the latest observation and now holds 80% exposure, or 8 out of
+        10 units.
+      fabricated_position: >-
+        Given the panic reading, the strategy now holds 65% exposure.
+      contradictory_direction: >-
+        Because the market is in panic, the rule is now reducing exposure.
+
+  - id: c03_after_reduction
+    market: QQQ
+    as_of: 2024-06-28
+    question: What would make the rule add or reduce exposure from here?
+    expect: {regime: neutral, final_position_pct: 0.0, action: hold}
+    probes:
+      consistent: >-
+        Exposure was reduced to 0% during the June 2023 greed regime and the strategy
+        currently holds 0% exposure in a neutral regime. It would add 20% per day only
+        if the Panic Index closes above 64.
+      fabricated_position: >-
+        The strategy is currently 35% invested while it waits for a panic signal.
+      contradictory_direction: >-
+        The framework is buying back exposure today as sentiment normalizes.
+
+  - id: c04_panic_add
+    market: QQQ
+    as_of: 2024-08-05
+    question: What exposure does the strategy hold right now, and why?
+    expect: {regime: panic, final_position_pct: 20.0, action: add}
+    probes:
+      consistent: >-
+        The Panic Index closed at 83.5, above the 64 threshold, so the rule added 20%
+        and now holds 20% exposure.
+      fabricated_position: >-
+        After the panic reading the rule now holds 40% exposure.
+      contradictory_direction: >-
+        The strategy is currently trimming exposure because the market is in panic.
+
+  - id: c05_greed_reduce
+    market: QQQ
+    as_of: 2023-06-13
+    question: What would make the rule add or reduce exposure from here?
+    expect: {regime: greed, final_position_pct: 30.0, action: reduce}
+    probes:
+      consistent: >-
+        The Panic Index fell to 12.3, below 15, so the rule reduced exposure by 10% and
+        currently holds 30% exposure.
+      fabricated_position: >-
+        The strategy currently holds 75% exposure.
+      contradictory_direction: >-
+        Greed is high, so the rule is now adding exposure to ride the momentum.

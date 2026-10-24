@@ -413,3 +413,35 @@ def test_without_strategy_settings_tool_defaults_apply(make_agent):
     assert "Strategy settings" not in client.requests[0]["messages"][0]["content"]
     assert "add_pct" not in result.tool_calls[0].arguments
     assert result.tool_calls[0].result["reduce_pct"] == 10
+
+
+def test_strategy_signal_is_computed_by_code_and_sent_to_the_model(make_agent):
+    agent, client = make_agent([final_response("The rule holds 20% exposure.")])
+    result = agent.run("What exposure does the strategy hold?", date(2024, 8, 5), market="QQQ")
+
+    assert result.fallback_reason is None
+    assert (result.signal.final_position_pct, result.signal.action) == (20.0, "add")
+    first_message = client.requests[0]["messages"][0]["content"]
+    assert "final_position_pct: 20" in first_message
+    assert "do not restate it with different numbers" in first_message
+
+
+def test_answer_contradicting_the_signal_falls_back(make_agent):
+    agent, _ = make_agent([final_response("The framework suggests 60% exposure, so it is "
+                                          "now reducing exposure.")])
+    result = agent.run("What exposure does the strategy hold?", date(2024, 8, 5), market="QQQ")
+
+    assert result.fallback_reason.startswith("GuardrailViolation")
+    assert len(result.violations) == 2
+    assert result.signal.final_position_pct == 20.0  # the code-filled panels still render
+    assert "60%" not in result.answer
+
+
+def test_key_reasons_are_parsed_and_validated(make_agent):
+    body = {"answer": "Panic regime.", "key_reasons": ["The rule now holds 45% exposure."],
+            "citations": [], "caveats": "none"}
+    response = final_response("")
+    response["content"][0]["text"] = json.dumps(body)
+    agent, _ = make_agent([response])
+    result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
+    assert result.violations and "45%" in result.violations[0]

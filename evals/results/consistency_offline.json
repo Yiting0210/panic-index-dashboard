@@ -1,0 +1,136 @@
+{
+  "summary": {
+    "fixtures": 5,
+    "signal_mismatches": 0,
+    "planted_contradictions": 10,
+    "detection_rate": 1,
+    "false_positive_rate": 0
+  },
+  "rows": [
+    {
+      "id": "c01_full_exposure",
+      "probe": "consistent",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": []
+    },
+    {
+      "id": "c01_full_exposure",
+      "probe": "fabricated_position",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 60% (standard backtest final_position_pct is 100%)"
+      ]
+    },
+    {
+      "id": "c01_full_exposure",
+      "probe": "contradictory_direction",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "direction 'add' contradicts the rule's 'hold' (neutral regime): The rule is currently adding exposure because sentiment is improving."
+      ]
+    },
+    {
+      "id": "c02_eighty_pct",
+      "probe": "consistent",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": []
+    },
+    {
+      "id": "c02_eighty_pct",
+      "probe": "fabricated_position",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 65% (standard backtest final_position_pct is 80%)"
+      ]
+    },
+    {
+      "id": "c02_eighty_pct",
+      "probe": "contradictory_direction",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "direction 'reduce' contradicts the rule's 'add' (panic regime): Because volatility is extreme, the rule is now reducing exposure."
+      ]
+    },
+    {
+      "id": "c03_after_reduction",
+      "probe": "consistent",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": []
+    },
+    {
+      "id": "c03_after_reduction",
+      "probe": "fabricated_position",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 35% (standard backtest final_position_pct is 0%)"
+      ]
+    },
+    {
+      "id": "c03_after_reduction",
+      "probe": "contradictory_direction",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "direction 'add' contradicts the rule's 'hold' (neutral regime): The framework is buying back exposure today as sentiment normalizes."
+      ]
+    },
+    {
+      "id": "c04_panic_add",
+      "probe": "consistent",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": []
+    },
+    {
+      "id": "c04_panic_add",
+      "probe": "fabricated_position",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 40% (standard backtest final_position_pct is 20%)"
+      ]
+    },
+    {
+      "id": "c04_panic_add",
+      "probe": "contradictory_direction",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "direction 'reduce' contradicts the rule's 'add' (panic regime): The strategy is currently trimming exposure because the market is in panic."
+      ]
+    },
+    {
+      "id": "c05_greed_reduce",
+      "probe": "consistent",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": []
+    },
+    {
+      "id": "c05_greed_reduce",
+      "probe": "fabricated_position",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "fabricated position 75% (standard backtest final_position_pct is 30%)"
+      ]
+    },
+    {
+      "id": "c05_greed_reduce",
+      "probe": "contradictory_direction",
+      "signal_mismatches": {},
+      "correct": true,
+      "violations": [
+        "direction 'add' contradicts the rule's 'reduce' (greed regime): Greed is high, so the rule is now adding exposure to ride the momentum."
+      ]
+    }
+  ]
+}

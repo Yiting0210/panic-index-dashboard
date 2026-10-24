@@ -263,6 +263,17 @@ Look-ahead leakage is the most common failure in financial agents (much of the r
 
 `tests/test_point_in_time.py` checks this with a perturbation test: every row after `as_of` is replaced with extreme values (VIX 250, prices x10), and each tool's output must be identical to the unperturbed run.
 
+### The model explains, code decides
+
+A position size from a backtest is path dependent: `final_position_pct` changes with the start date and the initial exposure. Earlier versions asked the model (in the system prompt) to copy it from `run_backtest`; a prompt is not a guarantee, so the sizing is now done in code:
+
+- **Standard backtest.** Every question runs one backtest with a fixed start date (2021-05-17, the first observation) and the session's strategy settings, as of the session cutoff. The model never chooses the window that sets the headline position (`assistant/signal.py`).
+- **Code-filled panels.** The page's **Market Regime** and **Strategy Signal** panels (regime, Panic Index and percentile, current exposure, the rule's latest action and what it does next session, backtest window and returns) are rendered from that result, not from model output. A *Why this signal?* line names the fields they come from, e.g. `run_backtest.final_position_pct = 80, run_backtest.latest_regime = panic`.
+- **The model writes the explanation only:** a short answer, up to four key reasons, risks/caveats, and citations. The signal is passed to it as facts to explain.
+- **Validator.** `assistant/validator.py` rejects an explanation that states an exposure (percent or "N of M units") matching neither the standard backtest nor a `run_backtest` call the model made for a what-if, or that says the rule is adding while it reduces or holds (and the reverse). A rejected answer is replaced by the rule-based summary; the panels still render, and the violations are listed under *Advanced / Debug*.
+
+The panels show the framework's rule, not a recommendation; the page's example questions are phrased as research questions for the same reason.
+
 ### Cost and observability
 
 - Every Messages API call is logged to `logs/llm_usage.jsonl` with input, output, and cache tokens, latency, and USD cost.
@@ -277,7 +288,7 @@ The Research Assistant page lets each visitor pick a provider and model, then pa
 
 | Provider | Models | Client | Final answer |
 |---|---|---|---|
-| Claude (Anthropic) | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Anthropic Messages API (server-side refusal fallbacks on) | Structured output with a JSON schema (`answer`, `citations`, `caveats`) |
+| Claude (Anthropic) | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Anthropic Messages API (server-side refusal fallbacks on) | Structured output with a JSON schema (`answer`, `key_reasons`, `citations`, `caveats`) |
 | DeepSeek | `deepseek-flash`, `deepseek-v4-pro` | OpenAI-compatible Chat Completions at `api.deepseek.com`, thinking disabled | JSON mode; the object is validated and re-requested once if it does not parse |
 
 Both providers use the same MCP tools, as-of clamp, response cache, usage ledger, and rule-based fallback.
@@ -295,6 +306,8 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
 | Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs | implemented, not yet run against the API |
 | Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | implemented, not yet run against the API |
+| Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 5 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce) with a consistent answer and two planted contradictions each (`evals/datasets/consistency.yaml`) | 5/5 scenarios, 10/10 caught, 0 false positives |
+| Strategy consistency (live) | answers rejected by the validator, leakage | the same 5 fixtures' questions through the agent | implemented, not yet run against the API |
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
@@ -314,7 +327,11 @@ CI runs the unit, leakage, and retrieval tests on every push. The agent eval rep
 ```bash
 python -m evals.agent_eval --mode record   # real API; writes evals/recordings/
 python -m evals.agent_eval --mode replay   # no API key needed
+python -m evals.consistency_eval           # offline: fixtures + validator probes
+python -m evals.consistency_eval --mode record --provider deepseek   # real API
 ```
+
+The offline consistency numbers measure the validator against hand-written answers, not the model; only the live run says how often a model contradicts the signal.
 
 ---
 
@@ -383,8 +400,8 @@ panic-index-dashboard/
 |-- mcp_server.py                   # MCP server (stdio / Streamable HTTP)
 |-- tools/                          # Point-in-time tool layer and result schemas
 |-- rag/                            # Chunking, embeddings, FAISS + BM25 hybrid index
-|-- assistant/                      # Claude agent loop, response cache, usage ledger
-|-- evals/                          # Eval datasets, metrics, retrieval and agent evals
+|-- assistant/                      # Agent loop, strategy signal + validator, cache, usage ledger
+|-- evals/                          # Eval datasets, metrics, retrieval, agent, and consistency evals
 |-- ingest/                         # Daily market data sources and append-only merge
 |-- scripts/                        # Daily update, FOMC fetcher, and index builder
 |-- utils/
