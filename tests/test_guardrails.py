@@ -75,6 +75,68 @@ def test_validator_allows_what_if_backtest_figures(panic_signal):
     assert validate_answer(text, panic_signal, calls) == []
 
 
+@pytest.fixture
+def eighty_pct_signal(panic_signal):
+    # The rule added 20% (60% -> 80%); add 20, reduce 10, cap 100, floor 0, start 50.
+    return replace(panic_signal, final_position_pct=80.0, previous_position_pct=60.0)
+
+
+@pytest.mark.parametrize("text", [
+    "The current exposure is 20%.",            # the add step
+    "The current exposure is 10%.",            # the reduce step
+    "The current position is 100%.",           # the cap
+    "The current exposure is 0%.",             # the floor
+    "The strategy currently holds 50% exposure.",  # the initial exposure
+    "The strategy now holds 60% exposure.",    # the previous exposure
+    "The strategy holds 2 of 10 units.",
+])
+def test_current_exposure_must_match_final_position(eighty_pct_signal, text):
+    violations = validate_answer(text, eighty_pct_signal)
+    assert len(violations) == 1 and "read as the current exposure" in violations[0]
+
+
+@pytest.mark.parametrize("text", [
+    "The strategy holds 80% exposure, or 8 out of 10 units.",
+    "The rule added 20% today, taking exposure from 60% to 80%.",
+    "The rule adds 20% exposure per panic-regime day and reduces exposure by 10% per "
+    "greed-regime day.",
+    "Exposure is capped at a 100% maximum position and has a 0% exposure floor.",
+    "The backtest started at 50% exposure.",
+    "Exposure was reduced to 0% in June 2023.",
+    "Exposure has held at its level while the index fell 12% this month.",
+])
+def test_figures_pass_when_they_match_their_own_field(eighty_pct_signal, text):
+    assert validate_answer(text, eighty_pct_signal) == []
+
+
+def test_figures_are_checked_against_their_own_field(eighty_pct_signal):
+    assert "read as the add step" in validate_answer(
+        "The rule added 30% exposure today.", eighty_pct_signal)[0]
+    assert "read as the previous exposure" in validate_answer(
+        "Exposure rose from 40% to 80%.", eighty_pct_signal)[0]
+    assert "read as the exposure cap" in validate_answer(
+        "Exposure is capped at 90%.", eighty_pct_signal)[0]
+
+
+def test_clipped_step_matches_the_applied_change(eighty_pct_signal):
+    clipped = replace(eighty_pct_signal, final_position_pct=100.0, previous_position_pct=90.0)
+    assert validate_answer("The rule added 10% exposure, reaching the cap.", clipped) == []
+
+
+def test_what_if_figures_match_only_backtest_calls(eighty_pct_signal):
+    calls = [backtest_call(final_position_pct=70.0, add_pct=30.0, average_exposure_pct=55.5)]
+    # A what-if result cannot stand in for the current exposure, and the reverse.
+    assert validate_answer("The strategy currently holds 70% exposure.", eighty_pct_signal, calls)
+    assert validate_answer("In the what-if the strategy would end at 80% exposure.",
+                           eighty_pct_signal, calls)
+    assert validate_answer("In the what-if the rule adds 30% exposure per panic day.",
+                           eighty_pct_signal, calls) == []
+    assert validate_answer("Over that backtest the average exposure was 55.5%.",
+                           eighty_pct_signal, calls) == []
+    assert validate_answer("Over that backtest the average exposure was 55.5%.",
+                           eighty_pct_signal)
+
+
 def test_validator_rejects_contradictory_direction(panic_signal):
     violations = validate_answer("The strategy is now reducing exposure.", panic_signal)
     assert len(violations) == 1 and "contradicts" in violations[0]
