@@ -1,17 +1,14 @@
-streamlit>=1.35.0
-pandas>=2.0.0
-plotly>=5.22.0
-python-dotenv>=1.0.0
-scipy>=1.11.0
+# Runtime dependencies for Streamlit Community Cloud and the MCP server.
+# Each is bounded to the major version the test suite runs against.
+streamlit>=1.66,<2  # width="stretch" replaces use_container_width
+pandas>=3.0,<4
+numpy>=2.0,<3
+plotly>=7.0,<8
+scipy>=1.11,<2
 # MCP server, research assistant, and RAG
 mcp>=2.3,<3
 anthropic>=1.17,<2
-openai>=1.50  # DeepSeek client (OpenAI-compatible API)
-pydantic>=2.7
-fastembed>=0.9
-faiss-cpu>=1.9
-pyyaml>=6.0
-# Corpus builder (scripts/fetch_fomc.py)
-requests>=2.31
-beautifulsoup4>=4.12
-pypdf>=5.0  # press conference transcripts
+openai>=3.0,<4  # DeepSeek client (OpenAI-compatible API)
+pydantic>=2.7,<3
+fastembed>=0.9,<0.10
+faiss-cpu>=1.9,<2
