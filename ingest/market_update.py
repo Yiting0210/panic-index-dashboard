@@ -7,7 +7,12 @@ Rules:
   upstream revision. (CNN revises its own Fear & Greed history.)
 * **Fill gaps, append new dates.** Empty cells on existing dates are
   filled, and trading days not yet in the file are appended with
-  ``created_at`` set to the ingestion time.
+  ``created_at`` set to the ingestion time. Weekends and market holidays
+  are appended with the Fear & Greed reading only (prices blank) when the
+  source has one.
+* **Wait for complete sessions.** A trading day missing any close or the
+  Fear & Greed score is not appended (never filled from the previous day)
+  and is retried on the next run, with a warning naming what is missing.
 * **Only closed sessions.** Dates whose New York session has not closed
   yet are dropped, because both sources report live intraday values.
 * **Chain-link adjusted prices.** Yahoo re-bases dividend-adjusted closes
@@ -28,6 +33,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+from .trading_calendar import is_trading_day
 
 PRICE_COLUMNS = ["qqq_close", "smh_close", "spx_close", "dji_close"]
 VALUE_COLUMNS = PRICE_COLUMNS + ["vix", "fear_greed_index", "fear_greed_rating"]
@@ -217,14 +224,21 @@ def merge(rows, fetched, now=None):
                 elif not _is_blank(row.get(column)):
                     _record_revision(report, day, column, row[column], value)
             continue
-        if day <= anchor or not has_prices:
+        if day <= anchor:
             continue
+        trading = is_trading_day(day)
+        if trading and not has_prices:
+            continue  # reported by _missing_price_warnings
         if pd.isna(values.get("fear_greed_index")):
-            report.warnings.append(f"{day}: no Fear & Greed score yet; row not appended")
+            if trading:
+                report.warnings.append(f"{day}: no Fear & Greed score yet; row not appended")
             continue
         row = {"id": str(next_id), "date": format_date(day), "created_at": created_at}
         for column in VALUE_COLUMNS:
-            row[column] = _format_value(column, values[column])
+            if trading or column not in PRICE_COLUMNS + ["vix"]:
+                row[column] = _format_value(column, values[column])
+            else:
+                row[column] = ""  # weekend or holiday: score only, no prices
         rows.append(row)
         by_date[day] = row
         report.appended_dates.append(day)
@@ -237,26 +251,24 @@ def merge(rows, fetched, now=None):
 
 
 def _missing_price_warnings(fetched, by_date, anchor, settled):
-    """Name each settled weekday after the anchor that was not stored for lack of prices.
+    """Name each settled trading day after the anchor that was not stored for lack of prices.
 
     Such a day is retried on the next run (the fetch window starts before the
-    anchor), so a warning is the only sign that a source is lagging. A
-    weekday with no price at all is usually a market holiday, which is
-    expected; a weekday with only some prices means a source has not
-    published every close yet.
+    anchor), so a warning is the only sign that a source is lagging.
+    Weekends and market holidays never have prices and are not reported.
     """
     warnings = []
     day = anchor + timedelta(days=1)
     while day <= settled:
-        if day.weekday() < 5 and day not in by_date:
+        if is_trading_day(day) and day not in by_date:
             columns = PRICE_COLUMNS + ["vix"]
             if day in fetched.index:
                 missing = [c for c in columns if pd.isna(fetched.at[day, c])]
             else:
                 missing = columns
             if len(missing) == len(columns):
-                warnings.append(f"{day}: no prices from Yahoo (market holiday, or closes "
-                                "not published yet); row not appended")
+                warnings.append(f"{day}: no prices from Yahoo yet; row not appended, "
+                                "retried on the next run")
             elif missing:
                 warnings.append(f"{day}: missing {', '.join(missing)} from Yahoo; row not "
                                 "appended, retried on the next run")

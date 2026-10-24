@@ -154,17 +154,48 @@ def test_partially_published_session_waits_with_a_warning():
     ]
 
 
-def test_holiday_without_prices_warns_but_weekends_do_not():
+def test_trading_day_without_any_prices_warns():
     rows = base_rows()[:2]
     fetched = fetched_frame({
         date(2026, 10, 2): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
-        date(2026, 10, 3): (40.5, None, None, None, None, None),  # CNN weekend point
-        date(2026, 10, 5): (41.0, None, None, None, None, None),  # holiday: score only
+        date(2026, 10, 5): (41.0, None, None, None, None, None),  # score only, Yahoo lagging
     })
     _, report = merge(rows, fetched, now=RUN_AT_1AM)
     assert report.appended_dates == []
-    assert len(report.warnings) == 1
-    assert report.warnings[0].startswith("2026-10-05: no prices from Yahoo (market holiday")
+    assert report.warnings == [
+        "2026-10-05: no prices from Yahoo yet; row not appended, retried on the next run"
+    ]
+
+
+def test_weekends_and_holidays_store_the_score_only_without_warnings():
+    rows = [stored_row(1, date(2026, 11, 24)), stored_row(2, date(2026, 11, 25), qqq=101.0)]
+    fetched = fetched_frame({
+        date(2026, 11, 25): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
+        date(2026, 11, 26): (41.5, None, None, None, None, None),     # Thanksgiving
+        date(2026, 11, 27): (42.0, 19.0, 102.0, 201.0, 5010, 40100),  # Friday session
+        date(2026, 11, 28): (42.5, None, None, None, None, None),     # Saturday
+    })
+    sunday_night = datetime(2026, 11, 30, 1, 0, tzinfo=NEW_YORK)    # settles Sunday 11-29
+    new_rows, report = merge(rows, fetched, now=sunday_night)
+    assert report.appended_dates == [date(2026, 11, 26), date(2026, 11, 27), date(2026, 11, 28)]
+    assert report.warnings == []
+    thanksgiving, friday, saturday = new_rows[2:]
+    assert thanksgiving["fear_greed_index"] == "41.5"
+    assert saturday["fear_greed_rating"] == "fear"
+    for row in (thanksgiving, saturday):
+        assert all(row[c] == "" for c in ["vix", "qqq_close", "smh_close", "spx_close", "dji_close"])
+    assert friday["qqq_close"] == "102"
+
+
+def test_trading_calendar_matches_nyse_holidays():
+    from ingest.trading_calendar import is_trading_day
+
+    closed = [date(2025, 1, 9), date(2025, 4, 18), date(2026, 6, 19), date(2026, 7, 3),
+              date(2026, 11, 26), date(2027, 12, 24)]
+    open_ = [date(2021, 12, 31), date(2026, 10, 12), date(2026, 11, 11), date(2026, 11, 27)]
+    assert not any(is_trading_day(d) for d in closed)
+    assert all(is_trading_day(d) for d in open_)
+    assert not is_trading_day(date(2026, 10, 24))  # Saturday
 
 
 def test_complete_session_has_no_warnings():
@@ -239,6 +270,31 @@ def test_cnn_live_fields_override_drifting_history_points():
     assert fixed.at[date(2026, 10, 20), "fear_greed_index"] == 27.2
     assert fixed.at[date(2026, 10, 21), "fear_greed_index"] == 28.06
     assert fixed.at[date(2026, 10, 19), "fear_greed_index"] == 20.80
+
+
+def test_cnn_live_reading_on_a_holiday_becomes_that_days_score():
+    from ingest.sources import apply_live_readings
+
+    history = pd.DataFrame(
+        {"fear_greed_index": [30.0, 31.0], "fear_greed_rating": ["fear", "fear"]},
+        index=[date(2026, 11, 24), date(2026, 11, 25)],
+    )
+    live = {"score": 33.0, "rating": "fear", "previous_close": 31.5,
+            "timestamp": "2026-11-26T20:00:00+00:00"}  # Thanksgiving, 15:00 New York
+    fixed = apply_live_readings(history, live)
+    assert fixed.at[date(2026, 11, 26), "fear_greed_index"] == 33.0
+    assert fixed.at[date(2026, 11, 25), "fear_greed_index"] == 31.5
+    assert list(fixed.index) == sorted(fixed.index)
+
+
+def test_cnn_live_reading_on_a_missing_trading_day_is_not_added():
+    from ingest.sources import apply_live_readings
+
+    history = pd.DataFrame({"fear_greed_index": [30.0], "fear_greed_rating": ["fear"]},
+                           index=[date(2026, 10, 22)])
+    live = {"score": 33.0, "rating": "fear", "previous_close": 31.5,
+            "timestamp": "2026-10-23T18:00:00+00:00"}  # trading day, still moving
+    assert date(2026, 10, 23) not in apply_live_readings(history, live).index
 
 
 def test_blank_cells_are_missing_not_forward_filled():
