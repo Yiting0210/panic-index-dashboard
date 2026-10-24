@@ -231,8 +231,37 @@ def merge(rows, fetched, now=None):
         changed.add(day)
         next_id += 1
 
+    report.warnings.extend(_missing_price_warnings(fetched, by_date, anchor, settled))
     validate(rows, settled, changed)
     return rows, report
+
+
+def _missing_price_warnings(fetched, by_date, anchor, settled):
+    """Name each settled weekday after the anchor that was not stored for lack of prices.
+
+    Such a day is retried on the next run (the fetch window starts before the
+    anchor), so a warning is the only sign that a source is lagging. A
+    weekday with no price at all is usually a market holiday, which is
+    expected; a weekday with only some prices means a source has not
+    published every close yet.
+    """
+    warnings = []
+    day = anchor + timedelta(days=1)
+    while day <= settled:
+        if day.weekday() < 5 and day not in by_date:
+            columns = PRICE_COLUMNS + ["vix"]
+            if day in fetched.index:
+                missing = [c for c in columns if pd.isna(fetched.at[day, c])]
+            else:
+                missing = columns
+            if len(missing) == len(columns):
+                warnings.append(f"{day}: no prices from Yahoo (market holiday, or closes "
+                                "not published yet); row not appended")
+            elif missing:
+                warnings.append(f"{day}: missing {', '.join(missing)} from Yahoo; row not "
+                                "appended, retried on the next run")
+        day += timedelta(days=1)
+    return warnings
 
 
 def _record_revision(report, day, column, stored, fetched_value):

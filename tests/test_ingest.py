@@ -138,6 +138,46 @@ def test_session_without_fear_greed_waits():
     assert "no Fear & Greed score" in report.warnings[0]
 
 
+RUN_AT_1AM = datetime(2026, 10, 6, 1, 0, tzinfo=NEW_YORK)  # Tuesday; settles Monday 10-05
+
+
+def test_partially_published_session_waits_with_a_warning():
+    rows = base_rows()[:2]
+    fetched = fetched_frame({
+        date(2026, 10, 2): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
+        date(2026, 10, 5): (41.0, None, 102.0, 201.0, 5010, 40100),  # VIX not published
+    })
+    _, report = merge(rows, fetched, now=RUN_AT_1AM)
+    assert report.appended_dates == []
+    assert report.warnings == [
+        "2026-10-05: missing vix from Yahoo; row not appended, retried on the next run"
+    ]
+
+
+def test_holiday_without_prices_warns_but_weekends_do_not():
+    rows = base_rows()[:2]
+    fetched = fetched_frame({
+        date(2026, 10, 2): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
+        date(2026, 10, 3): (40.5, None, None, None, None, None),  # CNN weekend point
+        date(2026, 10, 5): (41.0, None, None, None, None, None),  # holiday: score only
+    })
+    _, report = merge(rows, fetched, now=RUN_AT_1AM)
+    assert report.appended_dates == []
+    assert len(report.warnings) == 1
+    assert report.warnings[0].startswith("2026-10-05: no prices from Yahoo (market holiday")
+
+
+def test_complete_session_has_no_warnings():
+    rows = base_rows()[:2]
+    fetched = fetched_frame({
+        date(2026, 10, 2): (40.0, 20.0, 101.0, 200.0, 5000, 40000),
+        date(2026, 10, 5): (41.0, 20.0, 102.0, 201.0, 5010, 40100),
+    })
+    _, report = merge(rows, fetched, now=RUN_AT_1AM)
+    assert report.appended_dates == [date(2026, 10, 5)]
+    assert report.warnings == []
+
+
 @pytest.mark.parametrize("bad_values, message", [
     ((140.0, 20.0, 102.0, 201.0, 5010, 40100), "Fear & Greed outside"),
     ((41.0, 20.0, 150.0, 201.0, 5010, 40100), "qqq_close moved"),
