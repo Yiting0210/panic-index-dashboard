@@ -119,7 +119,7 @@ evidence_summary = build_correlation_evidence_summary(
     scatter_data,
     INDEX_MARKETS,
 )
-st.dataframe(evidence_summary, use_container_width=True, hide_index=True)
+st.dataframe(evidence_summary, width="stretch", hide_index=True)
 
 st.caption(
     "Pearson r summarizes linear association; Spearman ρ summarizes monotonic "

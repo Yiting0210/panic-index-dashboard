@@ -117,7 +117,7 @@ with tabs[1]:
                            row=2, col=1)
 
         apply_peak_chart_layout(fig1, signal_label)
-        st.plotly_chart(fig1, use_container_width=True, key="scipy_chart")
+        st.plotly_chart(fig1, width="stretch", key="scipy_chart")
 
         st.divider()
 
@@ -127,7 +127,7 @@ with tabs[1]:
         with col_chart:
             st.markdown("**Return Distribution After Historical Peak Labels**")
             fig_h1 = render_forward_return_histogram(dff, scipy_mask, target_col, horizons)
-            st.plotly_chart(fig_h1, use_container_width=True, key="hist_scipy")
+            st.plotly_chart(fig_h1, width="stretch", key="hist_scipy")
         with col_table:
             st.markdown("**Statistical Edge Summary**")
             st.markdown("🟣 scipy Historical Peak Labels")
@@ -202,7 +202,7 @@ with tabs[2]:
         add_peak_markers(fig2, rt_peaks, "RealTime Signal", '#F97316')
 
         apply_peak_chart_layout(fig2, signal_label)
-        st.plotly_chart(fig2, use_container_width=True, key="realtime_chart")
+        st.plotly_chart(fig2, width="stretch", key="realtime_chart")
 
         st.divider()
 
@@ -216,7 +216,7 @@ with tabs[2]:
         with col_chart2:
             st.markdown("**Return Distribution After RealTime Peak Signals**")
             fig_h2 = render_forward_return_histogram(dff, rt_mask, target_col, horizons)
-            st.plotly_chart(fig_h2, use_container_width=True, key="hist_rt")
+            st.plotly_chart(fig_h2, width="stretch", key="hist_rt")
         with col_table2:
             st.markdown("**Statistical Edge Summary**")
             st.markdown("🟠 RealTime Peak Signals")
@@ -232,7 +232,7 @@ with tabs[3]:
     )
 
     if not df_comparison.empty:
-        st.dataframe(df_comparison, use_container_width=True, hide_index=True)
+        st.dataframe(df_comparison, width="stretch", hide_index=True)
         st.caption(
             "Outcome comparison across signals with different roles. Threshold "
             "rows are regime-based accumulation days, scipy rows are hindsight "
