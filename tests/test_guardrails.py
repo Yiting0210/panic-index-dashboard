@@ -3,6 +3,7 @@ import os
 import sys
 from dataclasses import replace
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,9 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from assistant import (STANDARD_BACKTEST_START, ToolCall, build_strategy_signal,  # noqa: E402
                        validate_answer)
-from assistant.signal import _action  # noqa: E402
+from assistant.signal import _action_text  # noqa: E402
 from evals.consistency_eval import load_fixtures, run_offline  # noqa: E402
-from utils.strategy import DEFAULT_STRATEGY, StrategyParams  # noqa: E402
+from utils.strategy import StrategyParams  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -38,15 +39,21 @@ def test_signal_uses_the_fixed_start_and_session_strategy(panic_signal):
     assert custom.initial_position_pct == 100.0
 
 
-@pytest.mark.parametrize("regime, position, expected", [
-    ("panic", 60.0, "add"),
-    ("panic", 100.0, "hold"),
-    ("greed", 30.0, "reduce"),
-    ("greed", 0.0, "hold"),
-    ("neutral", 50.0, "hold"),
+@pytest.mark.parametrize("regime, action, previous, final, expected", [
+    ("panic", "add", 60.0, 80.0, "panic regime: added 20% exposure"),
+    ("panic", "add", 80.0, 100.0, "panic regime: added 20% exposure, reaching the 100% cap"),
+    ("panic", "add", 90.0, 100.0, "panic regime: added 10% exposure, reaching the 100% cap"),
+    ("panic", "hold", 100.0, 100.0, "panic regime, already at the 100% cap"),
+    ("greed", "reduce", 10.0, 0.0, "greed regime: reduced exposure by 10%, reaching the 0% floor"),
+    ("greed", "hold", 0.0, 0.0, "greed regime, already at the 0% floor"),
+    ("neutral", "hold", 50.0, 50.0, "neutral regime: no change"),
 ])
-def test_action_respects_caps(regime, position, expected):
-    assert _action(regime, position, DEFAULT_STRATEGY)[0] == expected
+def test_action_text_uses_the_applied_step(regime, action, previous, final, expected):
+    bt = SimpleNamespace(latest_regime=regime, latest_action=action,
+                         final_position_pct=final, previous_position_pct=previous,
+                         latest_position_change_pct=final - previous,
+                         max_position_pct=100.0, min_position_pct=0.0)
+    assert _action_text(bt) == expected
 
 
 def test_validator_accepts_signal_figures_and_scaled_units(panic_signal):
@@ -86,7 +93,7 @@ def test_hold_signal_ignores_past_tense_history(panic_signal):
 
 def test_offline_consistency_eval_catches_every_planted_contradiction():
     summary, rows = run_offline(load_fixtures())
-    assert summary["fixtures"] == 5
+    assert summary["fixtures"] == 10
     assert summary["signal_mismatches"] == 0, [r for r in rows if r["signal_mismatches"]]
     assert summary["detection_rate"] == 1.0, [r for r in rows if not r["correct"]]
     assert summary["false_positive_rate"] == 0.0, [r for r in rows if not r["correct"]]

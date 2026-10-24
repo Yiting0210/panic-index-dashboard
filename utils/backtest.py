@@ -24,6 +24,20 @@ def run_backtest(dff, target_col, pos_initial=_D.initial_position_pct, add_amoun
     bt['cumulative_buyhold']  = (1 + bt['daily_return'].fillna(0)).cumprod() * 100
     return bt
 
+def latest_transition(bt):
+    """(previous_pct, change_pct, action) of the position on the last row.
+
+    The action is read from the position change itself, not from the regime
+    and the final position: a step that lands exactly on the cap or floor is
+    still an add or reduce, and only an unchanged position is a hold.
+    """
+    final = round(bt['position'].iloc[-1] * 100, 1)
+    previous = round(bt['position'].iloc[-2] * 100, 1) if len(bt) > 1 else final
+    change = round(final - previous, 1)
+    action = "add" if change > 0 else "reduce" if change < 0 else "hold"
+    return previous, change, action
+
+
 def run_backtest_with_signals(dff, target_col, signal_mask,
                                pos_initial=_D.initial_position_pct, add_amount=_D.add_pct,
                                reduce_amount=_D.reduce_pct, pos_max=_D.max_position_pct,

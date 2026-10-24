@@ -57,6 +57,14 @@ class BacktestResult(PointInTime):
         "Exposure the rule holds after the latest observation (0-100). Path "
         "dependent: it changes with start_date and initial_position_pct."
     ))
+    previous_position_pct: float = Field(description="Exposure before the latest observation (0-100).")
+    latest_position_change_pct: float = Field(description=(
+        "final_position_pct minus previous_position_pct: the step actually applied on "
+        "the latest observation, smaller than add_pct / reduce_pct when clipped at a cap or floor."
+    ))
+    latest_action: Literal["add", "reduce", "hold"] = Field(description=(
+        "What the rule did on the latest observation, read from the position change."
+    ))
     latest_panic_index: float
     latest_regime: Regime
     initial_position_pct: float
