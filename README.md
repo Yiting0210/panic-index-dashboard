@@ -327,7 +327,7 @@ A scheduled GitHub Actions workflow (`.github/workflows/daily-update.yml`) refre
 3. The full test suite runs against the updated data. If anything fails, nothing is committed.
 4. The bot commits the new rows to `main`, and Streamlit Community Cloud redeploys from that commit.
 
-Run the same refresh locally with `python scripts/daily_update.py` (or `python scripts/update_market_data.py --dry-run` to preview).
+Run the same refresh locally with `python scripts/daily_update.py` after `pip install -r requirements-dev.txt` (or `python scripts/update_market_data.py --dry-run` to preview).
 
 The update follows the same point-in-time rules as the tools:
 
@@ -434,7 +434,7 @@ export ANTHROPIC_API_KEY=...              # optional app keys; visitors can past
 export DEEPSEEK_API_KEY=...
 ```
 
-The FOMC corpus and index are committed. To rebuild them:
+The FOMC corpus and index are committed. To rebuild them (needs `requirements-dev.txt`):
 
 ```bash
 python scripts/fetch_fomc.py --start-year 2021 --end-year 2026
@@ -442,6 +442,13 @@ python scripts/build_fomc_index.py
 ```
 
 On Windows with an Anaconda-based Python, `onnxruntime` 1.21 or later can crash on import because of the older MSVC runtime bundled with Anaconda; `pip install "onnxruntime<1.21"` works around it.
+
+### Dependencies and deployment
+
+- `requirements.txt` holds only what the deployed app and the MCP server import; Streamlit Community Cloud installs it. Data refresh, corpus building, eval, and test tools are in `requirements-dev.txt`.
+- Each dependency is bounded to the major version the tests run against (for example `pandas>=3.0,<4`), so a fresh install cannot pick up a breaking major release.
+- `.python-version` pins Python 3.12 for local tools and matches CI. **Streamlit Community Cloud does not read it**: the Python version is chosen under *Advanced settings* when the app is deployed, and changing it later means deleting the app and deploying it again.
+- The dashboard pages import only `utils`; the LLM SDKs, MCP, the embedding model, and FAISS load only when the Research Assistant answers a question (`tests/test_import_footprint.py` guards this).
 
 ---
 

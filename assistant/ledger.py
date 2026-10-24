@@ -10,7 +10,8 @@ LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "llm_usage.jsonl"
 
 # USD per million tokens (Claude API first-party rates, 2026-10).
 # cache_write is the 5-minute TTL rate (1.25x input). Older models are listed
-# because server-side refusal fallbacks can answer from them.
+# because server-side refusal fallbacks can answer from them. Haiku 5.5 uses
+# its rate for prompts up to 100K tokens, which covers every agent request.
 PRICING = {
     "claude-fable-5-1": {"input": 10.00, "output": 50.00, "cache_read": 0.25, "cache_write": 12.50},
     "claude-fable-5": {"input": 10.00, "output": 50.00, "cache_read": 1.00, "cache_write": 12.50},
@@ -18,7 +19,7 @@ PRICING = {
     "claude-opus-5": {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
     "claude-opus-4-8": {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
     "claude-opus-4-7": {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
-    "claude-sonnet-5-5": {"input": 2.00, "output": 10.00, "cache_read": 0.20, "cache_write": 2.50},
+    "claude-sonnet-5-5": {"input": 2.00, "output": 10.00, "cache_read": 0.10, "cache_write": 2.50},
     "claude-sonnet-5": {"input": 2.00, "output": 10.00, "cache_read": 0.20, "cache_write": 2.50},
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
     "claude-haiku-5-5": {"input": 0.10, "output": 0.50, "cache_read": 0.01, "cache_write": 0.125},
