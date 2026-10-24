@@ -13,6 +13,7 @@ from pydantic import Field
 from utils.analysis import (build_backtest_verdict,
                             build_exposure_tradeoff_attribution,
                             build_strategy_diagnostics)
+from utils.backtest import latest_transition
 from utils.backtest import run_backtest as _run_backtest
 from utils.metrics import build_performance_metrics
 from utils.narrative import build_threshold_research_summary
@@ -133,9 +134,10 @@ def run_backtest(
     reduce_pct on each greed-regime day, within min/max_position_pct, applied
     from the next observation. Reports return, max drawdown, Sharpe, Calmar,
     average exposure, the upside-drag / downside-cushion attribution of
-    reduced exposure, and final_position_pct: the exposure the rule holds
-    now. Use final_position_pct and position_rule for any position-size
-    question. The backtest ends at as_of.
+    reduced exposure, final_position_pct: the exposure the rule holds now,
+    and latest_action / latest_position_change_pct: what it did on the latest
+    observation. Use final_position_pct and position_rule for any
+    position-size question. The backtest ends at as_of.
     """
     if min_position_pct > max_position_pct:
         raise ToolInputError("min_position_pct cannot exceed max_position_pct.")
@@ -156,6 +158,7 @@ def run_backtest(
         sell_threshold=sell_threshold,
     )
     latest_panic = bt['panic_index'].iloc[-1]
+    previous_position, position_change, latest_action = latest_transition(bt)
     metrics = build_performance_metrics(bt)
     diagnostics = build_strategy_diagnostics(bt)
     attribution = build_exposure_tradeoff_attribution(bt)
@@ -178,6 +181,9 @@ def run_backtest(
         upside_drag_pp=_num(attribution['upside_drag'], 2),
         downside_cushion_pp=_num(attribution['downside_cushion'], 2),
         final_position_pct=_num(bt['position'].iloc[-1] * 100, 1),
+        previous_position_pct=previous_position,
+        latest_position_change_pct=position_change,
+        latest_action=latest_action,
         latest_panic_index=_num(latest_panic, 2),
         latest_regime=_classify(latest_panic, buy_threshold, sell_threshold)[0],
         **params.as_dict(),

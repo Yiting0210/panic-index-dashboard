@@ -117,3 +117,25 @@ def test_backtest_tool_reports_the_rule_behind_its_position():
     assert result.latest_regime in {"panic", "greed", "neutral"}
     with pytest.raises(ToolInputError):
         backtest_tool("QQQ", "2022-10-13", min_position_pct=60, max_position_pct=50)
+
+
+import pytest  # noqa: E402
+
+from utils.backtest import latest_transition  # noqa: E402
+
+
+@pytest.mark.parametrize("initial, panic, expected", [
+    (60, [70, 70], (80.0, 20.0, "add")),         # add into the cap
+    (70, [70, 70], (90.0, 10.0, "add")),         # add clipped at the cap
+    (80, [70, 70, 70], (100.0, 0.0, "hold")),    # hold at the cap
+    (20, [10, 10], (10.0, -10.0, "reduce")),     # reduce into the floor
+    (10, [10, 10, 10], (0.0, 0.0, "hold")),      # hold at the floor
+    (50, [50, 50], (50.0, 0.0, "hold")),         # neutral
+])
+def test_latest_transition_reads_the_position_change(initial, panic, expected):
+    dff = pd.DataFrame({
+        'date_dt': pd.date_range('2022-01-03', periods=len(panic), freq='B'),
+        'qqq_close': [100.0] * len(panic),
+        'panic_index': panic,
+    })
+    assert latest_transition(run_backtest(dff, 'qqq_close', pos_initial=initial)) == expected

@@ -81,3 +81,75 @@ fixtures:
         The strategy currently holds 75% exposure.
       contradictory_direction: >-
         Greed is high, so the rule is now adding exposure to ride the momentum.
+
+  # Cap / floor boundaries (#19): a step that lands exactly on the cap or floor
+  # is still an add or reduce; only an unchanged position is a hold.
+  - id: c06_add_into_cap
+    market: QQQ
+    as_of: 2025-03-04
+    question: What exposure does the strategy hold right now, and why?
+    expect: {regime: panic, final_position_pct: 100.0, action: add}
+    probes:
+      consistent: >-
+        The Panic Index closed at 66.3, above the 64 threshold, so the rule added 20%
+        exposure on the latest observation and now holds 100% exposure, the cap.
+      fabricated_position: >-
+        After the panic reading the strategy now holds 90% exposure.
+      contradictory_direction: >-
+        The strategy is now reducing exposure as the panic deepens.
+
+  - id: c07_add_clipped_at_cap
+    market: QQQ
+    as_of: 2021-11-26
+    question: What exposure does the strategy hold right now, and why?
+    expect: {regime: panic, final_position_pct: 100.0, action: add}
+    probes:
+      consistent: >-
+        The Panic Index closed at 84.4, in the panic regime. The step was clipped at the
+        cap, so the rule added only 10% and now holds 100% exposure.
+      fabricated_position: >-
+        The rule now holds 120% exposure after the panic reading.
+      contradictory_direction: >-
+        The framework is currently trimming exposure because of the panic.
+
+  - id: c08_hold_at_cap
+    market: QQQ
+    as_of: 2025-03-06
+    question: Is the current regime historically attractive for adding exposure?
+    expect: {regime: panic, final_position_pct: 100.0, action: hold}
+    probes:
+      consistent: >-
+        The Panic Index is 65.8, in the panic regime, but the strategy already holds
+        100% exposure at the cap, so it makes no change today.
+      fabricated_position: >-
+        The strategy currently holds 70% exposure while panic persists.
+      contradictory_direction: >-
+        The rule is adding exposure now because of the panic reading.
+
+  - id: c09_reduce_into_floor
+    market: QQQ
+    as_of: 2023-06-16
+    question: What would make the rule add or reduce exposure from here?
+    expect: {regime: greed, final_position_pct: 0.0, action: reduce}
+    probes:
+      consistent: >-
+        The Panic Index fell to 9.4, below 15, so the rule reduced exposure by 10% and
+        currently holds 0% exposure, the floor.
+      fabricated_position: >-
+        The strategy currently holds 25% exposure.
+      contradictory_direction: >-
+        Greed is extreme, so the rule is now adding exposure.
+
+  - id: c10_hold_at_floor
+    market: QQQ
+    as_of: 2023-06-20
+    question: What would make the rule add or reduce exposure from here?
+    expect: {regime: greed, final_position_pct: 0.0, action: hold}
+    probes:
+      consistent: >-
+        The Panic Index is 10.7, in the greed regime, but the strategy currently holds 0%
+        exposure at the floor, so it makes no change today.
+      fabricated_position: >-
+        The strategy currently holds 35% exposure.
+      contradictory_direction: >-
+        The rule is currently reducing exposure further.

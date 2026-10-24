@@ -31,6 +31,7 @@ class StrategySignal:
     sell_threshold: float
     backtest_start: date
     final_position_pct: float
+    previous_position_pct: float
     action: Action
     action_text: str
     next_rule: str
@@ -50,6 +51,8 @@ class StrategySignal:
         """Which tool fields the panels come from ("Why this signal?")."""
         return (
             f"run_backtest.final_position_pct = {self.final_position_pct:g}, "
+            f"run_backtest.latest_action = {self.action} "
+            f"(from {self.previous_position_pct:g}%), "
             f"run_backtest.latest_regime = {self.regime} "
             f"(Panic Index {self.panic_index:g} vs. thresholds "
             f"{self.buy_threshold:g} / {self.sell_threshold:g}), "
@@ -75,21 +78,26 @@ class StrategySignal:
         )
 
 
-def _action(regime, position, params):
-    """What the rule did on the latest observation, from the regime and caps.
+def _action_text(bt):
+    """Describe the backtest's latest transition; the action itself comes from code.
 
-    The backtest applies a regime's change on the day it is observed, so
-    final_position_pct already includes it.
+    Uses the step actually applied, which is smaller than add_pct / reduce_pct
+    when the position was clipped at the cap or floor.
     """
-    if regime == "panic":
-        if position < params.max_position_pct:
-            return "add", f"panic regime: added {params.add_pct:g}% exposure"
-        return "hold", f"panic regime, already at the {params.max_position_pct:g}% cap"
-    if regime == "greed":
-        if position > params.min_position_pct:
-            return "reduce", f"greed regime: reduced exposure by {params.reduce_pct:g}%"
-        return "hold", f"greed regime, already at the {params.min_position_pct:g}% floor"
-    return "hold", "neutral regime: no change"
+    regime, change, final = bt.latest_regime, bt.latest_position_change_pct, bt.final_position_pct
+    if bt.latest_action == "add":
+        text = f"{regime} regime: added {change:g}% exposure"
+        return text + (f", reaching the {bt.max_position_pct:g}% cap"
+                       if final >= bt.max_position_pct else "")
+    if bt.latest_action == "reduce":
+        text = f"{regime} regime: reduced exposure by {-change:g}%"
+        return text + (f", reaching the {bt.min_position_pct:g}% floor"
+                       if final <= bt.min_position_pct else "")
+    if regime == "panic" and final >= bt.max_position_pct:
+        return f"panic regime, already at the {bt.max_position_pct:g}% cap"
+    if regime == "greed" and final <= bt.min_position_pct:
+        return f"greed regime, already at the {bt.min_position_pct:g}% floor"
+    return f"{regime} regime: no change"
 
 
 def build_strategy_signal(market, as_of, strategy=None):
@@ -99,7 +107,6 @@ def build_strategy_signal(market, as_of, strategy=None):
     bt = run_backtest(market, as_of, start_date=STANDARD_BACKTEST_START, **settings)
     regime = get_regime(market, as_of, buy_threshold=params.buy_threshold,
                         sell_threshold=params.sell_threshold)
-    action, action_text = _action(bt.latest_regime, bt.final_position_pct, params)
     next_rule = (
         f"holds {bt.final_position_pct:g}%; adds {params.add_pct:g}% if the Panic Index "
         f"closes above {params.buy_threshold:g}, reduces {params.reduce_pct:g}% if it "
@@ -117,8 +124,9 @@ def build_strategy_signal(market, as_of, strategy=None):
         sell_threshold=params.sell_threshold,
         backtest_start=bt.start_date,
         final_position_pct=bt.final_position_pct,
-        action=action,
-        action_text=action_text,
+        previous_position_pct=bt.previous_position_pct,
+        action=bt.latest_action,
+        action_text=_action_text(bt),
         next_rule=next_rule,
         position_rule=bt.position_rule,
         add_pct=params.add_pct,
