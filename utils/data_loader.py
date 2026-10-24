@@ -6,6 +6,7 @@ CSV_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "market_data_clean.csv"
 )
 PRICE_COLS = ['qqq_close', 'smh_close', 'spx_close', 'dji_close', 'vix']
+CLOSE_COLS = ['qqq_close', 'smh_close', 'spx_close', 'dji_close']
 
 
 def _score_to_rating(score):
@@ -27,10 +28,16 @@ def _score_to_rating(score):
 def read_market_data(csv_path=CSV_PATH, as_of=None, fill_method='linear'):
     """Read and clean the raw market CSV without Streamlit or derived signals.
 
+    Only trading sessions are returned: rows without any close (weekends and
+    market holidays, stored with the Fear & Greed score only) are dropped,
+    so moving averages, returns, and forward horizons count trading days and
+    no price is invented for a day the market was closed.
+
     ``as_of`` drops rows dated after it *before* gaps are filled, and
-    ``fill_method='ffill'`` fills missing prices from earlier rows only.
-    The dashboard keeps linear interpolation, which borrows the next
-    observed price and is therefore not point-in-time safe.
+    ``fill_method='ffill'`` fills a session's missing prices from earlier
+    rows only. The dashboard keeps linear interpolation, which borrows the
+    next observed price and is therefore not point-in-time safe; neither
+    fill applies to closed-market days, which are no longer rows.
     """
     df = pd.read_csv(csv_path)
 
@@ -39,6 +46,7 @@ def read_market_data(csv_path=CSV_PATH, as_of=None, fill_method='linear'):
     df = df.sort_values('date_dt')
     df = df.drop_duplicates(subset=['date_only'], keep='last')
     df = df.dropna(subset=['date_dt'])
+    df = df.dropna(subset=CLOSE_COLS, how='all')
     if as_of is not None:
         df = df[df['date_dt'] <= pd.Timestamp(as_of)].copy()
 
