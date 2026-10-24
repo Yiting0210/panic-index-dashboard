@@ -99,13 +99,36 @@ def test_forward_fill_never_borrows_future_prices(tmp_path):
         'qqq_close': [100.0, None, 200.0],
         'smh_close': [100.0, None, 200.0],
         'spx_close': [100.0, None, 200.0],
-        'dji_close': [100.0, None, 200.0],
+        'dji_close': [100.0, 150.0, 200.0],  # a session with some closes missing
     })
     path = tmp_path / "gap.csv"
     raw.to_csv(path, index=False)
     df = read_market_data(path, fill_method='ffill')
     assert df['qqq_close'].tolist() == [100.0, 100.0, 200.0]
     assert df['vix'].tolist() == [20.0, 20.0, 40.0]
+
+
+@pytest.mark.parametrize("fill_method", ['linear', 'ffill'])
+def test_closed_market_days_are_not_rows(tmp_path, fill_method):
+    """Weekends and holidays are stored with the score only; analytics skip them."""
+    raw = pd.DataFrame({
+        'id': [1, 2, 3, 4],
+        'date': ['2/7/2026 00:00:00', '3/7/2026 00:00:00', '4/7/2026 00:00:00',
+                 '6/7/2026 00:00:00'],  # Thu, Fri (holiday), Sat, Mon
+        'fear_greed_index': [40.0, 41.0, 42.0, 43.0],
+        'fear_greed_rating': ['fear'] * 4,
+        'vix': [20.0, None, None, 22.0],
+        'created_at': ['x'] * 4,
+        'qqq_close': [100.0, None, None, 110.0],
+        'smh_close': [100.0, None, None, 110.0],
+        'spx_close': [100.0, None, None, 110.0],
+        'dji_close': [100.0, None, None, 110.0],
+    })
+    path = tmp_path / "holiday.csv"
+    raw.to_csv(path, index=False)
+    df = read_market_data(path, fill_method=fill_method)
+    assert df['date_only'].astype(str).tolist() == ['2026-07-02', '2026-07-06']
+    assert df['qqq_return'].round(6).tolist()[1] == 10.0  # one session-to-session return
 
 
 def test_as_of_before_data_start_is_a_clear_tool_error(real_store):

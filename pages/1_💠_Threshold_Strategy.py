@@ -361,9 +361,10 @@ with st.expander("📝 Project Write-up", expanded=False):
   [CNN](https://www.cnn.com/markets/fear-and-greed)
 - **Price data**: Yahoo Finance via `yfinance` — QQQ, SMH, SPX, DJI, VIX
   daily adjusted closing prices.
-- **Missing values**: Market holidays (e.g., Christmas, Thanksgiving, Good Friday,
-  Easter) have no trading data and are handled via linear interpolation for
-  chart continuity.
+- **Missing values**: Weekends and market holidays (e.g., Christmas,
+  Thanksgiving, Good Friday) have no trading data. Their Fear & Greed readings
+  are stored, but charts, moving averages, and backtests use trading sessions
+  only.
 
 ---
 

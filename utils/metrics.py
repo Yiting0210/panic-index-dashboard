@@ -33,8 +33,8 @@ def sharpe_ratio(
 
     Missing returns are excluded, including the first pct_change NaN. When
     dates are supplied, annualization is inferred from the observed backtest
-    rows over elapsed calendar time so interpolated dashboard rows are handled
-    consistently. If dates are omitted, the legacy 252-period convention is
+    rows over elapsed calendar time, which tracks the number of trading
+    sessions actually observed. If dates are omitted, the legacy 252-period convention is
     used.
     """
     clean_returns = returns.dropna()

@@ -187,7 +187,7 @@ Attribution uses **lagged effective exposure** to match backtest timing:
 strategy_return_t = market_return_t x position_{t-1}
 ```
 
-This attribution is arithmetic and does not exactly reconcile to compounded total-return differences. It is a diagnostic accounting view, not a causal estimate. Dashboard observation periods may include interpolated non-trading rows under the current data pipeline.
+This attribution is arithmetic and does not exactly reconcile to compounded total-return differences. It is a diagnostic accounting view, not a causal estimate. Observation periods contain trading sessions only.
 
 ---
 
@@ -256,7 +256,7 @@ Then ask, for example: *"As of 2022-06-17, what did the Fed just decide and is S
 Look-ahead leakage is the most common failure in financial agents (much of the recent release history of the TradingAgents project fixes leakage bugs), so the tool layer enforces the cutoff itself instead of trusting the model:
 
 - **Truncate before deriving.** The dashboard normalizes VIX with the full-sample min/max, and the sample maximum falls on 2025-04-08, so every dashboard Panic Index value before that date uses future information. The tools drop rows after `as_of` first, then recompute the normalization.
-- **Causal gap filling.** The dashboard linearly interpolates missing prices, which borrows the next observed price. The tools forward-fill instead.
+- **Causal gap filling.** Weekends and holidays are not rows, so nothing is filled for them. If a session is missing some closes, the dashboard linearly interpolates them, which borrows the next observed price; the tools forward-fill instead.
 - **Release dates, not meeting dates.** FOMC minutes become public about three weeks after the meeting. Each document is indexed by `published_at`, so an as-of query on the meeting day cannot see that meeting's minutes. Press conferences are broadcast live on the decision day and keep that date even when the transcript PDF is posted weeks later; until it is posted, the daily update skips that meeting and tries again the next day.
 - **Filter inside the search.** Retrieval passes the eligible ids to FAISS as an `IDSelector` (and restricts BM25 to the same ids) instead of over-fetching and dropping late documents afterwards, which can silently return fewer than `k` results.
 - **Agent guardrail.** The assistant clamps any `as_of` the model passes to the session cutoff and records that the clamp happened.
@@ -346,7 +346,7 @@ The dashboard's full-sample VIX normalization means a new VIX high or low shifts
 Several methodology choices are intentional tradeoffs for a historical research dashboard:
 
 - **Full-sample VIX normalization**: VIX is normalized using the full historical sample to place the 2021-2026 period on one comparable 0-100 scale. This is useful for retrospective analysis and visual comparability, but it is not strict live signal construction.
-- **Interpolation for dashboard continuity**: Missing price and VIX values around weekends or market holidays are linearly interpolated to keep the static dataset and visualizations continuous. A stricter analytics pipeline could separate display-smoothed data from trading-day-only analytical data.
+- **Trading sessions only**: Weekends and market holidays are stored with the Fear & Greed score and no prices, and are dropped when the data is read. Moving averages, returns, backtests, forward-return horizons, and the Panic Index therefore count trading sessions, and no price is invented for a closed market. A trading day the sources have not published yet is simply absent until the next daily run fills it.
 - **Overlapping observations**: Consecutive panic-zone days are expected because the Threshold Strategy models gradual accumulation during sustained stress regimes. Forward-return summaries should be interpreted as regime-conditioned observations, not independent trade-level experiments.
 - **Threshold Strategy interpretation**: Thresholds define panic and greed regimes for accumulation / risk-warning research. They are not designed to predict exact market bottoms or tops.
 - **Attribution interpretation**: Exposure attribution is arithmetic, uses lagged exposure, and should be read as diagnostic evidence rather than a compounded performance reconciliation.
@@ -386,7 +386,7 @@ panic-index-dashboard/
 |-- ingest/                         # Daily market data sources and append-only merge
 |-- scripts/                        # Daily update, FOMC fetcher, and index builder
 |-- utils/
-|   |-- data_loader.py              # Static data loading, filtering, interpolation, Panic Index
+|   |-- data_loader.py              # Trading-session data loading, filtering, Panic Index
 |   |-- backtest.py                 # Threshold strategy backtest logic
 |   |-- metrics.py                  # Canonical performance metrics and KPI rendering
 |   |-- analysis.py                 # Diagnostics, attribution, comparison tables, evidence summaries
@@ -450,7 +450,7 @@ The dashboard reads CSV data from the `data/` directory at runtime; the daily wo
 - **Fear & Greed Index (2021-2022)**: [MacroMicro](https://sc.macromicro.me/charts/50108/cnn-fear-and-greed)
 - **Fear & Greed Index (2023-2026)**: CNN internal endpoint (`production.dataviz.cnn.io`)
 - **Price data**: Yahoo Finance (historical file via `yfinance` adjusted closes; daily updates via the chart API): QQQ, SMH, SPX, DJI, VIX
-- **Missing values**: Market holidays handled via linear interpolation in the dashboard; the MCP tools forward-fill instead (see Point-in-time design)
+- **Missing values**: Weekends and market holidays keep their Fear & Greed score in the data but are excluded from price analytics (see Methodology Design Choices)
 - **FOMC statements, minutes, and Chair press conference transcripts (2021-2026)**: [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm), public U.S. government documents, fetched with their release dates by `scripts/fetch_fomc.py`
 
 ---
@@ -473,7 +473,6 @@ These findings are descriptive historical evidence and should not be interpreted
 - The Research Summary is deterministic and based on dashboard outputs; it does not provide investment advice.
 - Exposure attribution is arithmetic and does not exactly reconcile with compounded return differences.
 - Attribution uses lagged effective exposure consistent with the backtest timing convention.
-- Current analytical observations may include interpolated non-trading rows.
 - Full-sample VIX normalization is suitable for historical research but not strict causal live deployment.
 - Forward-return summaries can include overlapping observations during sustained regimes, so results should not be interpreted as independent trade experiments.
 - Greed-side de-risking remains a strategy design choice under evaluation, not a proven optimal exit rule.

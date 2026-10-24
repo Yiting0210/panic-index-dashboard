@@ -127,7 +127,7 @@ st.caption(
     "outliers, or regime-dependent behavior. These statistics describe "
     "contemporaneous association between sentiment and price position relative "
     "to MA50 within the current historical data pipeline; they do not establish "
-    "causality, trading-day-only proof, or future predictive performance. "
+    "causality or future predictive performance. "
     "Forward-return analysis and strategy backtests are separate questions "
     "handled in the strategy pages."
 )
