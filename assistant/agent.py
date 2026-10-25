@@ -36,7 +36,7 @@ from utils.strategy import StrategyParams
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
 from .signal import StrategySignal, build_strategy_signal
-from .validator import ACTIONS, CLAIM_ROLES, validate_answer
+from .validator import ACTIONS, CLAIM_ROLES, parse_structured, validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
@@ -198,6 +198,8 @@ class AgentResult:
     violations: list = field(default_factory=list)
     position_claims: Optional[list] = None
     current_action: Optional[str] = None
+    # Malformed position_claims / current_action, reported as violations.
+    structured_errors: list = field(default_factory=list)
     # Repair turns used, and the violations that triggered the first one.
     repairs: int = 0
     first_violations: list = field(default_factory=list)
@@ -361,9 +363,9 @@ class ResearchAgent:
         if result.signal is None:
             return []
         text = "\n".join([result.answer, *result.key_reasons, result.caveats])
-        return validate_answer(text, result.signal, result.tool_calls,
-                               claims=result.position_claims,
-                               current_action=result.current_action)
+        return result.structured_errors + validate_answer(
+            text, result.signal, result.tool_calls, claims=result.position_claims,
+            current_action=result.current_action)
 
     def _needs_repair(self, result):
         """Whether to send the violations back for one more try."""
@@ -527,17 +529,10 @@ class ResearchAgent:
         result.key_reasons = [str(r) for r in data.get("key_reasons") or [] if r]
         result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
         result.caveats = str(data.get("caveats") or "")
-        claims = data.get("position_claims")
-        # DeepSeek does not enforce the schema; without a list, fall back to
-        # parsing the prose (claims None) rather than trusting an empty one.
-        result.position_claims = None if not isinstance(claims, list) else [
-            {"value": float(c["value"]), "role": c["role"], "what_if": bool(c.get("what_if"))}
-            for c in claims
-            if isinstance(c, dict) and c.get("role") in CLAIM_ROLES
-            and isinstance(c.get("value"), (int, float)) and not isinstance(c.get("value"), bool)
-        ]
-        action = data.get("current_action")
-        result.current_action = action if action in ACTIONS else None
+        # DeepSeek does not enforce the schema, so malformed claims are possible;
+        # they make the whole claims field untrusted and count as violations.
+        (result.position_claims, result.current_action,
+         result.structured_errors) = parse_structured(data)
 
     @classmethod
     def _parse_final(cls, content, result):

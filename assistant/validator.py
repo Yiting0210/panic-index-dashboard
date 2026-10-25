@@ -20,6 +20,7 @@ the direction check, and levels in conditional sentences ("would take
 exposure from 30% to 20%") by the position check, so describing the rule
 itself is allowed. Step sizes, caps, and what-ifs are checked either way.
 """
+import math
 import re
 from dataclasses import dataclass
 
@@ -248,6 +249,57 @@ CLAIM_ROLES = {
     "average": "average", "time_below_full": "time_below", "past_level": "history",
 }
 ACTIONS = ("add", "reduce", "hold")
+CLAIM_KEYS = {"value", "role", "what_if"}
+
+
+def _claim_error(index, claim):
+    """Why one position_claims item is malformed, or None."""
+    if not isinstance(claim, dict):
+        return f"position_claims[{index}] is not an object"
+    if set(claim) != CLAIM_KEYS:
+        return (f"position_claims[{index}] must have exactly the keys value, role, "
+                f"what_if (got {sorted(claim)})")
+    value = claim["value"]
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value)):
+        return f"position_claims[{index}].value {value!r} is not a finite number"
+    if claim["role"] not in CLAIM_ROLES:
+        return (f"position_claims[{index}].role {claim['role']!r} is not one of "
+                f"{', '.join(CLAIM_ROLES)}")
+    if not isinstance(claim["what_if"], bool):
+        return f"position_claims[{index}].what_if {claim['what_if']!r} is not true or false"
+    return None
+
+
+def parse_structured(data):
+    """(claims, current_action, errors) from a final answer, validated strictly.
+
+    Malformed structured output must never weaken validation: if any claim
+    or current_action is malformed, nothing structured is trusted (claims is
+    None, so the prose is checked without the declared-figure relaxation)
+    and the errors are reported as violations, which triggers the repair
+    turn. A missing position_claims field also gives None. current_action
+    may be missing or "not_stated"; any other value outside add / reduce /
+    hold is an error.
+    """
+    errors = []
+    claims = None
+    if "position_claims" in data:
+        raw = data["position_claims"]
+        if not isinstance(raw, list):
+            errors.append(f"position_claims is not a list (got {type(raw).__name__})")
+        else:
+            errors += [e for e in (_claim_error(i, c) for i, c in enumerate(raw)) if e]
+            if not errors:
+                claims = [{"value": float(c["value"]), "role": c["role"],
+                           "what_if": c["what_if"]} for c in raw]
+    action = data.get("current_action")
+    if action is not None and action not in (*ACTIONS, "not_stated"):
+        errors.append(f"current_action {action!r} is not one of add, reduce, hold, not_stated")
+    if errors:
+        # Any malformed field makes the whole structured output untrusted.
+        return None, None, [f"invalid structured output: {e}" for e in errors]
+    return claims, action if action in ACTIONS else None, []
 
 
 def grounded_numbers(signal, tool_calls=()):

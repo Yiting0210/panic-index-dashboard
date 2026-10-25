@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from assistant import (STANDARD_BACKTEST_START, ToolCall, build_strategy_signal,  # noqa: E402
                        validate_answer)
 from assistant.signal import _action_text  # noqa: E402
+from assistant.validator import parse_structured  # noqa: E402
 from evals.consistency_eval import load_fixtures, run_offline  # noqa: E402
 from utils.strategy import StrategyParams  # noqa: E402
 
@@ -250,3 +251,44 @@ def test_unconditional_current_level_is_still_checked(panic_signal):
     assert validate_answer("The strategy holds 60% exposure.", panic_signal)
     assert validate_answer("If you ask me, the rule adds 35% exposure per panic-regime day.",
                            panic_signal)
+
+
+# Issue #24: malformed structured claims must not weaken validation.
+VALID_CLAIM = {"value": 20, "role": "current", "what_if": False}
+
+
+@pytest.mark.parametrize("data, error", [
+    ({"position_claims": [{"value": 64, "role": "threshold", "what_if": False}]}, "role"),
+    ({"position_claims": [{"value": 64, "what_if": False}]}, "exactly the keys"),
+    ({"position_claims": [{"role": "current", "what_if": False}]}, "exactly the keys"),
+    ({"position_claims": [{"value": "64", "role": "current", "what_if": False}]}, "finite"),
+    ({"position_claims": [{"value": True, "role": "current", "what_if": False}]}, "finite"),
+    ({"position_claims": [{"value": 20, "role": "current", "what_if": "no"}]}, "what_if"),
+    ({"position_claims": [VALID_CLAIM, {"value": 64, "role": "threshold", "what_if": False}]},
+     "role"),
+    ({"position_claims": [{**VALID_CLAIM, "note": "x"}]}, "exactly the keys"),
+    ({"position_claims": {"value": 20}}, "not a list"),
+    ({"position_claims": [], "current_action": "buy"}, "current_action"),
+])
+def test_malformed_structured_output_is_untrusted(data, error):
+    claims, _, errors = parse_structured(data)
+    assert claims is None
+    assert len(errors) == 1 and error in errors[0]
+
+
+def test_well_formed_structured_output_parses():
+    claims, action, errors = parse_structured(
+        {"position_claims": [VALID_CLAIM], "current_action": "add"})
+    assert errors == [] and action == "add"
+    assert claims == [{"value": 20.0, "role": "current", "what_if": False}]
+    assert parse_structured({"current_action": "not_stated"}) == (None, None, [])
+
+
+def test_issue_24_threshold_declared_as_claim_is_rejected(panic_signal):
+    # Current exposure is 20%; 64 is the buy threshold, present in the signal.
+    claims, action, errors = parse_structured(
+        {"position_claims": [{"value": 64, "role": "threshold", "what_if": False}]})
+    assert errors
+    violations = validate_answer("Current exposure is 64%.", panic_signal,
+                                 claims=claims, current_action=action)
+    assert any("64%" in v for v in violations)
