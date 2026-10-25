@@ -154,13 +154,46 @@ def test_what_if_label_applies_to_its_own_clause(eighty_pct_signal, text):
     assert validate_answer(swapped, eighty_pct_signal, calls)
 
 
-@pytest.mark.xfail(strict=True, reason="what-if figures are pooled across run_backtest calls")
-def test_what_if_scenarios_are_not_separated_yet(eighty_pct_signal):
-    calls = [backtest_call(buy_threshold=60.0, final_position_pct=70.0),
-             backtest_call(buy_threshold=70.0, final_position_pct=40.0)]
+TWO_THRESHOLDS = [backtest_call(buy_threshold=60.0, final_position_pct=70.0,
+                                average_exposure_pct=81.0),
+                  backtest_call(buy_threshold=70.0, final_position_pct=40.0,
+                                average_exposure_pct=52.0)]
+
+
+def test_what_if_figures_are_checked_against_their_own_scenario(eighty_pct_signal):
     # Scenario A (threshold 60) ends at 70%; 40% belongs to scenario B.
-    text = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
-    assert validate_answer(text, eighty_pct_signal, calls)
+    swapped = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
+    violations = validate_answer(swapped, eighty_pct_signal, TWO_THRESHOLDS)
+    assert len(violations) == 1 and "expected 70%" in violations[0]
+    for text in ("In a what-if with a 60 threshold, the strategy would end at 70% exposure.",
+                 "In a what-if with a 70 threshold, the strategy would end at 40% exposure.",
+                 # The figure equal to the other scenario's threshold is not a parameter.
+                 "In a what-if with a 60 threshold, the strategy would end at 70% exposure, "
+                 "averaging 81% exposure."):
+        assert validate_answer(text, eighty_pct_signal, TWO_THRESHOLDS) == [], text
+    assert validate_answer("With a 70 threshold the what-if averaged 81% exposure.",
+                           eighty_pct_signal, TWO_THRESHOLDS)
+
+
+def test_what_if_scenarios_by_start_date(eighty_pct_signal):
+    calls = [backtest_call(start_date="2023-01-03", final_position_pct=60.0),
+             backtest_call(start_date="2024-01-02", final_position_pct=100.0)]
+    assert validate_answer("In a what-if starting 2023-01-03 the strategy would end at "
+                           "60% exposure.", eighty_pct_signal, calls) == []
+    assert validate_answer("In a what-if starting in 2024 the strategy would end at "
+                           "60% exposure.", eighty_pct_signal, calls)
+
+
+def test_declared_what_if_figure_does_not_skip_the_scenario_check(eighty_pct_signal):
+    swapped = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
+    claims = [{"value": 40.0, "role": "current", "what_if": True}]
+    assert validate_answer(swapped, eighty_pct_signal, TWO_THRESHOLDS, claims=claims)
+
+
+def test_unidentified_what_if_figure_matches_any_scenario(eighty_pct_signal):
+    # The sentence names no parameter, so any scenario's result is accepted.
+    text = "In the what-if the strategy would end at 40% exposure."
+    assert validate_answer(text, eighty_pct_signal, TWO_THRESHOLDS) == []
 
 
 def test_validator_rejects_contradictory_direction(panic_signal):

@@ -98,8 +98,9 @@ ROLE_RES = (
     ("time_below", re.compile(r"\btime below\b|\bbelow full\b", re.IGNORECASE)),
     ("previous", re.compile(r"\b(?:previous|previously|prior|yesterday|before)\b|\bfrom\W*$",
                             re.IGNORECASE)),
-    ("initial", re.compile(r"\b(?:initial|initially|began|start(?:s|ed|ing)?(?:\s+(?:at|with|from))?)\b",
-                           re.IGNORECASE)),
+    # "starting 2023-01-03" / "starting in 2023" is a start date, not an exposure.
+    ("initial", re.compile(r"\b(?:initial|initially|began|start(?:s|ed|ing)?(?:\s+(?:at|with|from))?)"
+                           r"\b(?!\s+(?:in\s+|on\s+)?\d{4})", re.IGNORECASE)),
     ("cap", re.compile(r"\b(?:cap|capped|maximum|max|ceiling|upper limit)\b", re.IGNORECASE)),
     ("floor", re.compile(r"\b(?:floor|minimum|min|lower limit)\b", re.IGNORECASE)),
     ("history", re.compile(r"\b(?:was|were|had|reached|(?:19|20)\d{2})\b", re.IGNORECASE)),
@@ -133,6 +134,8 @@ class PositionClaim:
     role: str
     what_if: bool
     sentence: str
+    # Where the figure sits in the sentence, so the scenario match can ignore it.
+    span: tuple = (0, 0)
 
 
 def claim_role(before, after):
@@ -167,6 +170,7 @@ def stated_positions(text):
     """Exposure figures stated in ``text`` with their roles (units as percent)."""
     claims = []
     for sentence in SENTENCE_RE.split(text):
+        sentence = sentence.strip()
         found = {}  # figure start -> (value, end), so each figure is one claim
         for m in PCT_AFTER_WORD_RE.finditer(sentence):
             # A ";" ends the exposure's clause; a figure past it, or one
@@ -183,8 +187,65 @@ def stated_positions(text):
         for start, (value, end) in sorted(found.items()):
             before, after = sentence[:start], sentence[end:]
             claims.append(PositionClaim(value, claim_role(before, after),
-                                        claim_is_what_if(before, after), sentence.strip()))
+                                        claim_is_what_if(before, after), sentence,
+                                        (start, end)))
     return claims
+
+
+# run_backtest result fields that echo a scenario's parameters.
+SCENARIO_FIELDS = ("buy_threshold", "sell_threshold", "initial_position_pct", "add_pct",
+                   "reduce_pct", "max_position_pct", "min_position_pct", "start_date")
+ISO_DATE_RE = re.compile(r"\b(\d{4})-\d{2}-\d{2}\b")
+NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
+
+
+def backtest_calls(tool_calls):
+    return [call for call in tool_calls
+            if call.name == "run_backtest" and call.result and not call.is_error]
+
+
+def scenario_calls(claim, tool_calls):
+    """The run_backtest calls a figure's sentence identifies by their parameters.
+
+    With several what-if backtests, "with a 60 threshold ... 40%" must be
+    checked against the call whose buy_threshold is 60, not against every
+    call. Only parameters that differ between the calls can identify one; the
+    figure itself is ignored. Dates match the full ISO date or the year.
+    When the sentence names no distinguishing parameter, all calls stay
+    candidates.
+    """
+    calls = backtest_calls(tool_calls)
+    if len(calls) < 2:
+        return calls
+    varying = [f for f in SCENARIO_FIELDS
+               if len({str(call.result.get(f)) for call in calls}) > 1]
+    if not varying:
+        return calls
+    start, end = claim.span
+    text = claim.sentence[:start] + " " + claim.sentence[end:]
+    dates = {m.group(0) for m in ISO_DATE_RE.finditer(text)}
+    years = {d[:4] for d in dates}
+    numbers = [float(n) for n in NUMBER_RE.findall(ISO_DATE_RE.sub(" ", text))]
+
+    def matches(call):
+        score = 0
+        for f in varying:
+            value = call.result.get(f)
+            if value is None:
+                continue
+            if f == "start_date":
+                # An exact date outranks a year ("since 2023").
+                iso = str(value)[:10]
+                score += 2 if iso in dates else (
+                    1 if iso[:4] in years or _near(float(iso[:4]), numbers, 0) else 0)
+            else:
+                score += _near(float(value), numbers, 0.01)
+        return score
+
+    scores = [matches(call) for call in calls]
+    best = max(scores)
+    return calls if best == 0 else [c for c, s in zip(calls, scores) if s == best]
+
 
 
 def allowed_positions(signal, tool_calls=(), role="current", what_if=False):
@@ -192,23 +253,17 @@ def allowed_positions(signal, tool_calls=(), role="current", what_if=False):
 
     A what-if figure may match only the run_backtest calls made this turn and
     any other figure only the standard backtest's signal. Averages always come
-    from run_backtest calls, since the signal does not carry them.
-
-    TODO: what-if figures are pooled across all of this turn's run_backtest
-    calls, so with two scenarios a figure from scenario B passes when stated
-    for scenario A. Separating them needs each claim tied to its call's
-    parameters (threshold, start date, steps); see
-    test_what_if_scenarios_are_not_separated_yet.
+    from run_backtest calls, since the signal does not carry them. Callers
+    narrow ``tool_calls`` to the figure's scenario with scenario_calls.
     """
     if what_if or role in ("average", "time_below"):
         allowed = set()
-        for call in tool_calls:
-            if call.name == "run_backtest" and call.result and not call.is_error:
-                allowed.update(float(call.result[f]) for f in CALL_FIELDS[role]
-                               if call.result.get(f) is not None)
-                change = call.result.get("latest_position_change_pct")
-                if change and role == ("add" if change > 0 else "reduce"):
-                    allowed.add(abs(float(change)))
+        for call in backtest_calls(tool_calls):
+            allowed.update(float(call.result[f]) for f in CALL_FIELDS[role]
+                           if call.result.get(f) is not None)
+            change = call.result.get("latest_position_change_pct")
+            if change and role == ("add" if change > 0 else "reduce"):
+                allowed.add(abs(float(change)))
         return allowed
     # The step actually applied, smaller than add_pct / reduce_pct when clipped.
     change = signal.final_position_pct - signal.previous_position_pct
@@ -376,7 +431,11 @@ def validate_answer(text, signal, tool_calls=(), tolerance=0.51, claims=None,
         if (claim.value, claim.role, claim.what_if) in seen:
             continue
         seen.add((claim.value, claim.role, claim.what_if))
-        if structured and _near(claim.value, declared, tolerance):
+        from_calls = claim.what_if or claim.role in ("average", "time_below")
+        # Declaring a what-if figure does not say which scenario it belongs to,
+        # so what-if and average figures are always checked against their
+        # sentence's scenario, never waved through as declared or grounded.
+        if structured and not from_calls and _near(claim.value, declared, tolerance):
             continue
         # A level in a conditional sentence ("another close below 15 would take
         # exposure from 30% to 20%") is a hypothetical path, not a claim about
@@ -384,10 +443,11 @@ def validate_answer(text, signal, tool_calls=(), tolerance=0.51, claims=None,
         if (not claim.what_if and claim.role in ("current", "previous", "history")
                 and CONDITIONAL_RE.search(claim.sentence)):
             continue
-        allowed = allowed_positions(signal, tool_calls, claim.role, claim.what_if)
+        calls = scenario_calls(claim, tool_calls) if from_calls else tool_calls
+        allowed = allowed_positions(signal, calls, claim.role, claim.what_if)
         if _near(claim.value, allowed, tolerance):
             continue
-        if structured and _near(claim.value, grounded, tolerance):
+        if structured and not from_calls and _near(claim.value, grounded, tolerance):
             continue
         violations.append(_violation(claim.value, claim.role, claim.what_if, allowed,
                                      claim.sentence, "read as"))
