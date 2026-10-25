@@ -270,7 +270,8 @@ A position size from a backtest is path dependent: `final_position_pct` changes 
 - **Standard backtest.** Every question runs one backtest with a fixed start date (2021-05-17, the first observation) and the session's strategy settings, as of the session cutoff. The model never chooses the window that sets the headline position (`assistant/signal.py`).
 - **Code-filled panels.** The page's **Market Regime** and **Strategy Signal** panels (regime, Panic Index and percentile, current exposure, the rule's latest action and what it does next session, backtest window and returns) are rendered from that result, not from model output. A *Why this signal?* line names the fields they come from, e.g. `run_backtest.final_position_pct = 80, run_backtest.latest_regime = panic`.
 - **The model writes the explanation only:** a short answer, up to four key reasons, risks/caveats, and citations. The signal is passed to it as facts to explain.
-- **Validator.** `assistant/validator.py` rejects an explanation that states an exposure (percent or "N of M units") matching neither the standard backtest nor a `run_backtest` call the model made for a what-if, or that says the rule is adding while it reduces or holds (and the reverse). A rejected answer is replaced by the rule-based summary; the panels still render, and the violations are listed under *Advanced / Debug*.
+- **Validator.** `assistant/validator.py` rejects an explanation that states an exposure (percent or "N of M units") matching neither the standard backtest nor a `run_backtest` call the model made for a what-if, or that says the rule is adding while it reduces or holds (and the reverse). - **Declared figures.** Besides the prose, the final JSON lists every exposure figure the model states (`position_claims`: value, role such as `current` / `add_step` / `cap`, and a what-if flag) and the action it describes (`current_action`). Code checks each declared figure against the field for its role, so no prose parsing is needed for them. The prose parser still runs as a backstop, but an undeclared figure fails only when it matches nothing in the signal or this turn's tool results; a return or drawdown next to the word "exposure" is no longer misread.
+- **One repair turn.** If the answer contradicts the signal, the specific violations and the signal's values go back to the model once, and it rewrites the final JSON. If the rewrite still contradicts the signal, it is replaced by the rule-based summary; the panels still render, and the violations (and any repair) are listed under *Advanced / Debug*.
 
 The panels show the framework's rule, not a recommendation; the page's example questions are phrased as research questions for the same reason.
 
@@ -288,7 +289,7 @@ The Research Assistant page lets each visitor pick a provider and model, then pa
 
 | Provider | Models | Client | Final answer |
 |---|---|---|---|
-| Claude (Anthropic) | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Anthropic Messages API (server-side refusal fallbacks on) | Structured output with a JSON schema (`answer`, `key_reasons`, `citations`, `caveats`) |
+| Claude (Anthropic) | `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` | Anthropic Messages API (server-side refusal fallbacks on) | Structured output with a JSON schema (`answer`, `key_reasons`, `citations`, `caveats`, `position_claims`, `current_action`) |
 | DeepSeek | `deepseek-flash`, `deepseek-v4-pro` | OpenAI-compatible Chat Completions at `api.deepseek.com`, thinking disabled | JSON mode; the object is validated and re-requested once if it does not parse |
 
 Both providers use the same MCP tools, as-of clamp, response cache, usage ledger, and rule-based fallback.
@@ -304,14 +305,14 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 |---|---|---|---|
 | Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
-| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 94.8% numeric faithfulness |
-| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 10/12 task success, 0 leaks |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 97.7% numeric faithfulness |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 11/12 task success, 0 leaks |
 | Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 10 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce, adds and reductions clipped at the cap/floor, holds at the cap/floor) with a consistent answer and planted contradictions (`evals/datasets/consistency.yaml`) | 10/10 scenarios, 24/24 caught, 0 false positives |
-| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 2/10 rejected, both false positives on manual review; 0 leaks |
+| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 2/10 flagged on the first pass, 0/10 after one repair turn, 0 fallbacks; 0 leaks |
 
 #### Live run (DeepSeek, 2026-10-25)
 
-Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Three fresh runs cost $0.10 in total.
+Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 4.
 
 The first run exposed false positives in the scoring code, not model errors, so the code was changed **after seeing live answers**:
 
@@ -326,7 +327,8 @@ Each fix has a regression test built from the sentence that triggered it (`tests
 | 1, re-scored | fix round 1 | 0/10 | 12/12 | 98.7% | 0 | 0 |
 | 2, fresh | fix round 1 | 4/10 | 11/12 | 97.6% | 0 | 1 |
 | 2, re-scored | fix round 2 | 0/10 | 12/12 | 98.9% | 0 | 0 |
-| **3, fresh (reported)** | **fix round 2** | **2/10** | **10/12** | **94.8%** | **0** | **0** |
+| 3, fresh | fix round 2 | 2/10 | 10/12 | 94.8% | 0 | 0 |
+| **4, fresh: declared figures + repair** | **structured claims** | **2/10 first pass → 0/10 after repair** | **11/12** | **97.7%** | **0** | **0** |
 
 Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 
@@ -334,7 +336,9 @@ Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 - a10 (trap question): correctly declines to report minutes not yet released; `2017-19` and a derived `~9 days` count as unsupported numbers.
 - a04: partly a real model error. It first gives 77.56 as the 2025-04-09 Panic Index, then corrects itself to 72.13 mid-sentence; its two "80" values are the detector's default threshold, which the scorer does not see.
 
-Across all 30 fresh consistency answers, manual review found no fabricated position and no contradictory direction. The validator's precision is the weak point: on fresh answers it rejected 2–4 correct answers out of 10, and each rejection replaces a correct explanation with the rule-based summary. A regex validator keeps meeting new phrasings; having the model return the figures it states as structured fields, checked by code, would remove the parsing step.
+Across the 30 fresh consistency answers of runs 1–3, manual review found no fabricated position and no contradictory direction. The prose-only validator's precision was the weak point: on fresh answers it rejected 2–4 correct answers out of 10, and each rejection replaced a correct explanation with the rule-based summary.
+
+Run 4 added declared figures and the repair turn, with no code changes after seeing its answers. Its first-pass flags (c02, c03 in consistency; a12 in the agent eval) were all bookkeeping errors in `position_claims`: the model listed the 64 panic threshold as an exposure floor or cap, or gave the wrong time-below-full value, while its prose was correct. The repair turn fixed each one, so no answer fell back to the rule-based summary. The one agent miss (a09) mentions the detector's default 5% retreat, which is not in the tool output. The repair turn adds a request when it fires (average steps 2.17 → 2.5, latency 5.7 s → 7.4 s); run 4 cost $0.04.
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
@@ -536,5 +540,5 @@ These findings are descriptive historical evidence and should not be interpreted
 - RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.
 - The MCP tools guarantee that nothing after `as_of` is read, but a backtest ending at `as_of` still normalizes VIX over its whole window, and the default thresholds (64 / 15) were calibrated on the full sample.
 - The retrieval and agent eval sets are small (30 and 12 questions) and were written for this project; the date-aware retrieval feature was tuned on the same retrieval set.
-- The strategy-signal validator parses prose with regular expressions. On fresh DeepSeek answers it rejected 20–40% of correct explanations (replacing them with the rule-based summary), and its fixes were written after seeing live answers. Live numbers come from one provider and three runs of 10 + 12 questions.
+- The strategy-signal validator first parsed prose only, and on fresh DeepSeek answers it rejected 20–40% of correct explanations; its fixes were written after seeing live answers. Declared figures plus one repair turn brought fallbacks to 0 in one fresh run, but the model sometimes mis-declares figures (e.g. the 64 threshold as a position), and an undeclared fabricated figure that happens to equal some tool number would pass. Live numbers come from one provider and four runs of 10 + 12 questions.
 - The assistant tells the model not to use its own knowledge, but the model's training data can still include events after `as_of`; the agent eval checks answers for future dates and late citations.

@@ -241,14 +241,91 @@ def stated_actions(text, present_only=False):
     return found
 
 
-def validate_answer(text, signal, tool_calls=(), tolerance=0.51):
-    """Violations of the strategy signal in ``text``; empty when consistent."""
+# Roles the model may declare in position_claims, and the validator role each maps to.
+CLAIM_ROLES = {
+    "current": "current", "previous": "previous", "add_step": "add",
+    "reduce_step": "reduce", "cap": "cap", "floor": "floor", "initial": "initial",
+    "average": "average", "time_below_full": "time_below", "past_level": "history",
+}
+ACTIONS = ("add", "reduce", "hold")
+
+
+def grounded_numbers(signal, tool_calls=()):
+    """Every number in the signal and this turn's tool results."""
+    found = []
+
+    def walk(value):
+        if isinstance(value, bool):
+            return
+        if isinstance(value, (int, float)):
+            found.append(float(value))
+        elif isinstance(value, dict):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item)
+
+    walk(vars(signal))
+    for call in tool_calls:
+        if call.result and not call.is_error:
+            walk(call.result)
+    return found
+
+
+def _near(value, candidates, tolerance):
+    return any(abs(value - ok) <= tolerance for ok in candidates)
+
+
+def _violation(value, role, what_if, allowed, sentence, verb):
+    expected = (", ".join(f"{ok:g}%" for ok in sorted(allowed)) if allowed
+                else "a run_backtest call this turn")
+    label = ROLE_LABELS[role] + (" in a what-if" if what_if else "")
+    return f"fabricated position {value:g}% ({verb} {label}; expected {expected}): {sentence}"
+
+
+def check_declared(claims, current_action, signal, tool_calls=(), tolerance=0.51):
+    """Violations among the figures and action the model declared itself.
+
+    The model lists each exposure figure it states with its role, so no
+    prose parsing is needed: each figure is checked against its own field.
+    """
     violations = []
+    for claim in claims:
+        role = CLAIM_ROLES[claim["role"]]
+        allowed = allowed_positions(signal, tool_calls, role, claim["what_if"])
+        if not _near(claim["value"], allowed, tolerance):
+            violations.append(_violation(claim["value"], role, claim["what_if"], allowed,
+                                         "position_claims", "declared as"))
+    if current_action in ACTIONS and current_action != signal.action:
+        violations.append(f"current_action '{current_action}' contradicts the rule's "
+                          f"'{signal.action}' ({signal.regime} regime)")
+    return violations
+
+
+def validate_answer(text, signal, tool_calls=(), tolerance=0.51, claims=None,
+                    current_action=None):
+    """Violations of the strategy signal in ``text``; empty when consistent.
+
+    Without ``claims`` the prose is parsed for exposure figures and each is
+    checked against the field its clause suggests. With ``claims`` (the
+    model's declared figures) those are checked by role, and a figure the
+    parser finds in the prose but the model did not declare fails only when
+    it matches nothing in the signal or this turn's tool results, so a
+    return or drawdown next to the word "exposure" is not misread.
+    """
+    structured = claims is not None
+    violations = (check_declared(claims, current_action, signal, tool_calls, tolerance)
+                  if structured else [])
+    declared = [c["value"] for c in claims or ()]
+    grounded = grounded_numbers(signal, tool_calls) if structured else []
     seen = set()
     for claim in stated_positions(text):
         if (claim.value, claim.role, claim.what_if) in seen:
             continue
         seen.add((claim.value, claim.role, claim.what_if))
+        if structured and _near(claim.value, declared, tolerance):
+            continue
         # A level in a conditional sentence ("another close below 15 would take
         # exposure from 30% to 20%") is a hypothetical path, not a claim about
         # the current or past position; steps, caps, and what-ifs are still checked.
@@ -256,13 +333,12 @@ def validate_answer(text, signal, tool_calls=(), tolerance=0.51):
                 and CONDITIONAL_RE.search(claim.sentence)):
             continue
         allowed = allowed_positions(signal, tool_calls, claim.role, claim.what_if)
-        if any(abs(claim.value - ok) <= tolerance for ok in allowed):
+        if _near(claim.value, allowed, tolerance):
             continue
-        expected = (", ".join(f"{ok:g}%" for ok in sorted(allowed)) if allowed
-                    else "a run_backtest call this turn")
-        label = ROLE_LABELS[claim.role] + (" in a what-if" if claim.what_if else "")
-        violations.append(f"fabricated position {claim.value:g}% (read as {label}; "
-                          f"expected {expected}): {claim.sentence}")
+        if structured and _near(claim.value, grounded, tolerance):
+            continue
+        violations.append(_violation(claim.value, claim.role, claim.what_if, allowed,
+                                     claim.sentence, "read as"))
     for action, sentence in stated_actions(text, present_only=signal.action == "hold"):
         if action != signal.action:
             violations.append(

@@ -36,7 +36,7 @@ from utils.strategy import StrategyParams
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
 from .signal import StrategySignal, build_strategy_signal
-from .validator import validate_answer
+from .validator import ACTIONS, CLAIM_ROLES, validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
@@ -83,8 +83,16 @@ date:
 
 When you have what you need, reply with the JSON object the response format
 requires: a concise answer (at most about 150 words), up to four key_reasons
-(one sentence each, grounded in tool results), the citations you used, and
-caveats (risks, data limitations, hindsight labels, or "none").
+(one sentence each, grounded in tool results), the citations you used,
+caveats (risks, data limitations, hindsight labels, or "none"), and:
+- position_claims: every exposure or position percentage you state anywhere
+  in the answer, reasons, or caveats (units converted to percent), each with
+  its role (current, previous, add_step, reduce_step, cap, floor, initial,
+  average, time_below_full, past_level) and what_if true when it comes from
+  a what-if run_backtest call. Returns, drawdowns, and index levels are not
+  position claims. Use an empty list if you state none.
+- current_action: the rule's action on the latest observation as you
+  describe it (add, reduce, or hold), or not_stated.
 """
 
 FINAL_ANSWER_SCHEMA = {
@@ -105,8 +113,23 @@ FINAL_ANSWER_SCHEMA = {
             },
         },
         "caveats": {"type": "string"},
+        "position_claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": "number"},
+                    "role": {"type": "string", "enum": list(CLAIM_ROLES)},
+                    "what_if": {"type": "boolean"},
+                },
+                "required": ["value", "role", "what_if"],
+                "additionalProperties": False,
+            },
+        },
+        "current_action": {"type": "string", "enum": [*ACTIONS, "not_stated"]},
     },
-    "required": ["answer", "key_reasons", "citations", "caveats"],
+    "required": ["answer", "key_reasons", "citations", "caveats", "position_claims",
+                 "current_action"],
     "additionalProperties": False,
 }
 
@@ -114,8 +137,22 @@ FINAL_ANSWER_SCHEMA = {
 # DeepSeek has JSON mode but no schema enforcement, so the shape is spelled out.
 JSON_ANSWER_INSTRUCTIONS = """
 Reply to finish with only this JSON object and no other text:
-{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>"}
+{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>", "position_claims": [{"value": <number>, "role": "<current|previous|add_step|reduce_step|cap|floor|initial|average|time_below_full|past_level>", "what_if": <true|false>}], "current_action": "<add|reduce|hold|not_stated>"}
 """
+
+
+def _repair_message(violations, signal):
+    """Ask the model to rewrite a final answer that contradicted the signal."""
+    listed = "\n".join(f"- {v}" for v in violations)
+    return (
+        "Your final answer contradicts the code-computed strategy signal:\n"
+        f"{listed}\n"
+        f"The signal: final_position_pct {signal.final_position_pct:g}, action "
+        f"{signal.action}, previous_position_pct {signal.previous_position_pct:g}, "
+        f"position_rule: {signal.position_rule}. Rewrite the final JSON so every "
+        "exposure figure matches its field and is listed in position_claims. Only "
+        "fix these problems; keep the rest of the answer."
+    )
 
 API_ERRORS = (anthropic.AnthropicError, openai.OpenAIError)
 
@@ -159,6 +196,11 @@ class AgentResult:
     strategy: Optional[StrategyParams] = None
     signal: Optional[StrategySignal] = None
     violations: list = field(default_factory=list)
+    position_claims: Optional[list] = None
+    current_action: Optional[str] = None
+    # Repair turns used, and the violations that triggered the first one.
+    repairs: int = 0
+    first_violations: list = field(default_factory=list)
 
     @property
     def used_fallback(self):
@@ -251,7 +293,7 @@ class ResearchAgent:
 
     def __init__(self, server=None, client=None, model=DEFAULT_MODEL,
                  effort=DEFAULT_EFFORT, cache=None, ledger=None,
-                 max_steps=8, max_tokens=16000, fallback_market="QQQ"):
+                 max_steps=8, max_tokens=16000, fallback_market="QQQ", max_repairs=1):
         if server is None:
             from mcp_server import server as default_server
             server = default_server
@@ -264,6 +306,7 @@ class ResearchAgent:
         self.max_steps = max_steps
         self.max_tokens = max_tokens
         self.fallback_market = fallback_market
+        self.max_repairs = max_repairs
 
     @property
     def client(self):
@@ -313,12 +356,28 @@ class ResearchAgent:
         return result
 
     @staticmethod
-    def _validate(result):
-        """Reject prose that contradicts the code-computed strategy signal."""
+    def _violations(result):
+        """How the final answer contradicts the code-computed strategy signal."""
         if result.signal is None:
-            return
+            return []
         text = "\n".join([result.answer, *result.key_reasons, result.caveats])
-        violations = validate_answer(text, result.signal, result.tool_calls)
+        return validate_answer(text, result.signal, result.tool_calls,
+                               claims=result.position_claims,
+                               current_action=result.current_action)
+
+    def _needs_repair(self, result):
+        """Whether to send the violations back for one more try."""
+        violations = self._violations(result)
+        if not violations or result.repairs >= self.max_repairs:
+            return None
+        if not result.first_violations:
+            result.first_violations = violations
+        result.repairs += 1
+        return _repair_message(violations, result.signal)
+
+    def _validate(self, result):
+        """Reject a final answer that still contradicts the signal."""
+        violations = self._violations(result)
         if violations:
             raise GuardrailViolation(violations)
 
@@ -412,7 +471,11 @@ class ResearchAgent:
                 continue
             if stop_reason != "tool_use":
                 self._parse_final(content, result)
-                return
+                repair = self._needs_repair(result)
+                if repair is None:
+                    return
+                messages.append({"role": "user", "content": repair})
+                continue
 
             tool_results = []
             for block in content:
@@ -464,6 +527,17 @@ class ResearchAgent:
         result.key_reasons = [str(r) for r in data.get("key_reasons") or [] if r]
         result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
         result.caveats = str(data.get("caveats") or "")
+        claims = data.get("position_claims")
+        # DeepSeek does not enforce the schema; without a list, fall back to
+        # parsing the prose (claims None) rather than trusting an empty one.
+        result.position_claims = None if not isinstance(claims, list) else [
+            {"value": float(c["value"]), "role": c["role"], "what_if": bool(c.get("what_if"))}
+            for c in claims
+            if isinstance(c, dict) and c.get("role") in CLAIM_ROLES
+            and isinstance(c.get("value"), (int, float)) and not isinstance(c.get("value"), bool)
+        ]
+        action = data.get("current_action")
+        result.current_action = action if action in ACTIONS else None
 
     @classmethod
     def _parse_final(cls, content, result):
@@ -544,19 +618,26 @@ class DeepSeekAgent(ResearchAgent):
             message = self._next_message(self._request_params(tools, messages), result)
             calls = message.get("tool_calls") or []
             if not calls:
-                data = _extract_json(message.get("content"))
+                final_text = message.get("content") or ""
+                data = _extract_json(final_text)
                 if data is None:
                     # One retry in JSON mode, without tools, to get the final object.
-                    messages.append({"role": "assistant", "content": message.get("content") or ""})
+                    messages.append({"role": "assistant", "content": final_text})
                     messages.append({"role": "user", "content": "Reply with only the final JSON object."})
                     retry = self._next_message(
                         self._request_params(tools, messages, final_json=True), result
                     )
-                    data = _extract_json(retry.get("content"))
+                    final_text = retry.get("content") or ""
+                    data = _extract_json(final_text)
                     if data is None:
                         raise RuntimeError("model did not return the final JSON answer")
                 self._apply_final(data, result)
-                return
+                repair = self._needs_repair(result)
+                if repair is None:
+                    return
+                messages.append({"role": "assistant", "content": final_text})
+                messages.append({"role": "user", "content": repair})
+                continue
 
             messages.append({
                 "role": "assistant",

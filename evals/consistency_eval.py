@@ -84,6 +84,9 @@ async def run_agent(agent, fixtures):
             "signal_mismatches": (signal_mismatches(fixture, result.signal)
                                   if result.signal else {"signal": "missing"}),
             "violations": result.violations,
+            "first_violations": result.first_violations,
+            "repairs": result.repairs,
+            "declared_claims": result.position_claims,
             "fallback_reason": None if result.violations else result.fallback_reason,
             "leaked": scored["leaked"],
             "unsupported_numbers": scored["unsupported_numbers"],
@@ -97,8 +100,14 @@ async def run_agent(agent, fixtures):
         "model": agent.model,
         "fixtures": len(rows),
         "answered": len(answered),
+        # Before the repair turn, and after it (an answer still violating is
+        # replaced by the rule-based summary).
+        "first_pass_violation_rate": round(mean(bool(r["first_violations"] or r["violations"])
+                                                for r in answered), 3) if answered else None,
         "violation_rate": round(mean(bool(r["violations"]) for r in answered), 3)
         if answered else None,
+        "repaired": sum(r["repairs"] > 0 and not r["violations"] for r in answered),
+        "declared_claims": sum(r["declared_claims"] is not None for r in rows),
         "leakage_rate": round(mean(r["leaked"] for r in rows), 3),
         "other_fallbacks": len(rows) - len(answered),
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),

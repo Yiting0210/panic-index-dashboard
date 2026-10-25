@@ -256,8 +256,16 @@ if result is not None:
                        f"{result.cached_responses} cached responses")
         if result.fallback_reason:
             st.markdown(f"**Fallback reason:** {result.fallback_reason}")
+        if result.repairs and not result.violations:
+            st.markdown("**Revised once** after the guardrail check found:")
+            for violation in result.first_violations:
+                st.markdown(f"- {violation}")
         for violation in result.violations:
             st.markdown(f"- Guardrail: {violation}")
+        if result.position_claims is not None:
+            st.markdown("**Declared position figures:** " + (", ".join(
+                f"{c['value']:g}% {c['role']}" + (" (what-if)" if c["what_if"] else "")
+                for c in result.position_claims) or "none"))
         for call in result.tool_calls:
             label = f"{call.name}({', '.join(f'{k}={v}' for k, v in call.arguments.items())})"
             if call.as_of_clamped:
