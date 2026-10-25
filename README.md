@@ -376,7 +376,7 @@ A scheduled GitHub Actions workflow (`.github/workflows/daily-update.yml`) refre
 1. `scripts/update_market_data.py` fetches Yahoo Finance closes (QQQ, SMH, S&P 500, Dow, VIX) and the CNN Fear & Greed history from the last complete row onward.
 2. `scripts/fetch_fomc.py --incremental` downloads FOMC statements, minutes, and press conference transcripts that are not stored yet, and the FAISS index embeds only those new documents.
 3. The full test suite runs against the updated data. If anything fails, nothing is committed.
-4. The bot commits the new rows to `main`, and Streamlit Community Cloud redeploys from that commit.
+4. The bot commits the new rows to `main`, and Streamlit Community Cloud redeploys from that commit. If a PR merged while the job ran, `scripts/push_data_update.py` rebases the data commit onto the new `main` and pushes, retrying up to three times if `main` moves again; it never force-pushes, and a conflict on the data files fails the job without pushing. The rebased commit combines the new data with code the job's tests did not run against; the CI run for the merged PR covered that code on the previous data.
 
 Run the same refresh locally with `python scripts/daily_update.py` after `pip install -r requirements-dev.txt` (or `python scripts/update_market_data.py --dry-run` to preview).
 

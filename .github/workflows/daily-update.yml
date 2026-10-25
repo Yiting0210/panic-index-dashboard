@@ -70,4 +70,5 @@ jobs:
             exit 0
           fi
           git commit -m "data: daily update $(date -u +%Y-%m-%d)"
-          git push
+          # Rebase onto main if a PR merged during the run, then push (never --force).
+          python scripts/push_data_update.py
