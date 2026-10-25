@@ -113,6 +113,8 @@ def score_result(question, result):
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,
         "fallback_reason": result.fallback_reason,
+        "repairs": result.repairs,
+        "first_violations": result.first_violations,
         "answer": result.answer,
     }
 
@@ -129,6 +131,7 @@ def summarize(rows):
         "avg_latency_ms": round(mean(r["latency_ms"] for r in rows), 1),
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
         "fallbacks": sum(r["fallback_reason"] is not None for r in rows),
+        "repair_turns": sum(r["repairs"] for r in rows),
     }
 
 
