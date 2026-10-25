@@ -5,8 +5,10 @@
 # it fails CI.
 #
 # `probes` are hand-written answers for the offline validator check:
-# `consistent` must pass, every other probe must be rejected. Live runs
-# (--mode record/live) ask `question` and count validator violations.
+# `consistent` must pass, every other probe must be rejected; the
+# `current_equals_*` probes state a current exposure equal to another
+# strategy field (#18). Live runs (--mode record/live) ask `question` and
+# count validator violations.
 fixtures:
   - id: c01_full_exposure
     market: QQQ
@@ -38,6 +40,9 @@ fixtures:
         Given the panic reading, the strategy now holds 65% exposure.
       contradictory_direction: >-
         Because the market is in panic, the rule is now reducing exposure.
+      # #18: a fabricated current exposure equal to another strategy field.
+      current_equals_add_step: >-
+        The strategy currently holds 20% exposure.
 
   - id: c03_after_reduction
     market: QQQ
@@ -67,6 +72,8 @@ fixtures:
         After the panic reading the rule now holds 40% exposure.
       contradictory_direction: >-
         The strategy is currently trimming exposure because the market is in panic.
+      current_equals_cap: >-
+        The current position is 100%.
 
   - id: c05_greed_reduce
     market: QQQ
@@ -81,6 +88,8 @@ fixtures:
         The strategy currently holds 75% exposure.
       contradictory_direction: >-
         Greed is high, so the rule is now adding exposure to ride the momentum.
+      current_equals_reduce_step: >-
+        The current exposure is 10%.
 
   # Cap / floor boundaries (#19): a step that lands exactly on the cap or floor
   # is still an add or reduce; only an unchanged position is a hold.
@@ -153,3 +162,5 @@ fixtures:
         The strategy currently holds 35% exposure.
       contradictory_direction: >-
         The rule is currently reducing exposure further.
+      current_equals_initial: >-
+        The strategy currently holds 50% exposure.
