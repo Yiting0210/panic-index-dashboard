@@ -15,8 +15,10 @@ contradicts the panels:
 * contradictory direction: a sentence about the current action that says
   add while the rule reduces or holds, or the reverse.
 
-Sentences that are negated or conditional ("would add if...") are skipped,
-so describing the rule itself is allowed.
+Sentences that are negated or conditional ("would add if...") are skipped by
+the direction check, and levels in conditional sentences ("would take
+exposure from 30% to 20%") by the position check, so describing the rule
+itself is allowed. Step sizes, caps, and what-ifs are checked either way.
 """
 import re
 from dataclasses import dataclass
@@ -30,8 +32,16 @@ PCT_BEFORE_WORD_RE = re.compile(PCT + r"\s+(?:\w+\s+){0,2}?" + POSITION_WORDS + 
 UNITS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:out of|of|/)\s*(\d+)\s*units?\b", re.IGNORECASE)
 # In "exposure held while the index fell 12%", the figure describes the index.
 OTHER_SUBJECT_RE = re.compile(
-    r"\b(?:index|prices?|returns?|drawdown|vix|volatility|market|qqq|spx|smh|dji|nasdaq|"
-    r"sharpe|calmar|buy (?:&|and) hold)\b", re.IGNORECASE)
+    r"\b(?:index|prices?|returns?|returned|earned|gained|lost|drawdown|vix|volatility|market|"
+    r"qqq|spx|smh|dji|nasdaq|sharpe|calmar|buy (?:&|and) hold)\b", re.IGNORECASE)
+# In "90% average exposure and 35% max drawdown", the noun after the figure
+# says it is not an exposure.
+FIGURE_NOUN_RE = re.compile(
+    r"^\s*(?:max(?:imum)?\s+|annual(?:ized)?\s+|total\s+|cumulative\s+)?"
+    r"(?:returns?|drawdowns?|gains?|loss(?:es)?|declines?|rally|upside|downside|percentile|"
+    r"win rate)\b", re.IGNORECASE)
+# "Buy & Hold" names the benchmark; its "buy" is not an add action.
+BUY_HOLD_RE = re.compile(r"\bbuy[\s-]*(?:&|and)[\s-]*hold\b", re.IGNORECASE)
 
 CURRENT_RE = re.compile(
     r"\b(?:now|currently|today|right now|at present|next session|latest observation|"
@@ -53,6 +63,8 @@ ADD_ANY_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST})\b", re.IGNORECASE)
 REDUCE_NOW_RE = re.compile(rf"\b(?:{REDUCE_NOW})\b", re.IGNORECASE)
 REDUCE_ANY_RE = re.compile(rf"\b(?:{REDUCE_NOW}|{REDUCE_PAST})\b", re.IGNORECASE)
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+# "if", but not the "-if" of "what-if" (WHAT_IF_RE handles that).
+CONDITIONAL_RE = re.compile(r"\b(?:would|could|unless|will)\b|(?<!-)\bif\b", re.IGNORECASE)
 
 # Claim roles, read from the figure's own clause.
 CLAUSE_BREAK_RE = re.compile(r"[,;:()]|\b(?:and|but|while|so|which|then|whereas)\b",
@@ -67,17 +79,25 @@ CONTRAST_RE = re.compile(
 # A step verb right before the figure ("added 20%", "reduced exposure by 10%");
 # "reduced to 0%" states a level, not a step.
 STEP_TAIL = r"(?:\s+(?:only|another|a|further|exposure|its|the|position|allocation|by))*\s*$"
-ADD_STEP_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST})\b{STEP_TAIL}", re.IGNORECASE)
-REDUCE_STEP_RE = re.compile(rf"\b(?:{REDUCE_NOW}|{REDUCE_PAST})\b{STEP_TAIL}", re.IGNORECASE)
+# Verbs that state a step only next to a figure ("exposure rose 10%"); in a
+# sentence about the current action they could describe the index, so the
+# direction check does not use them.
+ADD_STEP_ONLY = r"rise|rose|rises|rising|grew|grows|climbed|climbs|steps? up|stepped up"
+REDUCE_STEP_ONLY = (r"remov(?:e|es|ed|ing)|fall|fell|falls|dropped|drops|steps? down|"
+                    r"stepped down")
+ADD_STEP_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST}|{ADD_STEP_ONLY})\b{STEP_TAIL}",
+                         re.IGNORECASE)
+REDUCE_STEP_RE = re.compile(rf"\b(?:{REDUCE_NOW}|{REDUCE_PAST}|{REDUCE_STEP_ONLY})\b{STEP_TAIL}",
+                            re.IGNORECASE)
 PER_PANIC_RE = re.compile(r"^\W*(?:\w+\s+)?(?:per|each|a)\s+panic", re.IGNORECASE)
 PER_GREED_RE = re.compile(r"^\W*(?:\w+\s+)?(?:per|each|a)\s+greed", re.IGNORECASE)
 # Checked in order after the step patterns; the first match wins, else "current".
 ROLE_RES = (
-    ("average", re.compile(r"\b(?:average|avg|mean)\b", re.IGNORECASE)),
+    ("average", re.compile(r"\b(?:averag(?:e|es|ed|ing)|avg|mean)\b", re.IGNORECASE)),
     ("time_below", re.compile(r"\btime below\b|\bbelow full\b", re.IGNORECASE)),
     ("previous", re.compile(r"\b(?:previous|previously|prior|yesterday|before)\b|\bfrom\W*$",
                             re.IGNORECASE)),
-    ("initial", re.compile(r"\b(?:initial|initially|began|start(?:s|ed|ing)?\s+(?:at|with|from))\b",
+    ("initial", re.compile(r"\b(?:initial|initially|began|start(?:s|ed|ing)?(?:\s+(?:at|with|from))?)\b",
                            re.IGNORECASE)),
     ("cap", re.compile(r"\b(?:cap|capped|maximum|max|ceiling|upper limit)\b", re.IGNORECASE)),
     ("floor", re.compile(r"\b(?:floor|minimum|min|lower limit)\b", re.IGNORECASE)),
@@ -116,7 +136,13 @@ class PositionClaim:
 
 def claim_role(before, after):
     """Role of a figure, from its clause's text before and after it."""
-    before = CLAUSE_BREAK_RE.split(before)[-1]
+    clauses = CLAUSE_BREAK_RE.split(before)
+    # "average exposure (59.8%)": a bracketed figure belongs to the clause
+    # before the bracket.
+    if before.rstrip().endswith("(") and len(clauses) > 1 and not clauses[-1].strip():
+        before = clauses[-2]
+    else:
+        before = clauses[-1]
     after = CLAUSE_BREAK_RE.split(after, maxsplit=1)[0]
     if ADD_STEP_RE.search(before) or PER_PANIC_RE.search(after):
         return "add"
@@ -142,8 +168,12 @@ def stated_positions(text):
     for sentence in SENTENCE_RE.split(text):
         found = {}  # figure start -> (value, end), so each figure is one claim
         for m in PCT_AFTER_WORD_RE.finditer(sentence):
-            if not OTHER_SUBJECT_RE.search(m.group(1)):
-                found[m.start(2)] = (float(m.group(2)), m.end(2))
+            # A ";" ends the exposure's clause; a figure past it, or one
+            # followed by its own noun ("35% max drawdown"), is something else.
+            if (";" in m.group(1) or OTHER_SUBJECT_RE.search(m.group(1))
+                    or FIGURE_NOUN_RE.search(sentence[m.end():])):
+                continue
+            found[m.start(2)] = (float(m.group(2)), m.end(2))
         for m in PCT_BEFORE_WORD_RE.finditer(sentence):
             found.setdefault(m.start(1), (float(m.group(1)), m.end(1)))
         for m in UNITS_RE.finditer(sentence):
@@ -204,7 +234,8 @@ def stated_actions(text, present_only=False):
             continue
         if HEDGE_RE.search(sentence):
             continue
-        adds, reduces = bool(add_re.search(sentence)), bool(reduce_re.search(sentence))
+        verbs = BUY_HOLD_RE.sub(" ", sentence)
+        adds, reduces = bool(add_re.search(verbs)), bool(reduce_re.search(verbs))
         if adds != reduces:
             found.append(("add" if adds else "reduce", sentence.strip()))
     return found
@@ -218,6 +249,12 @@ def validate_answer(text, signal, tool_calls=(), tolerance=0.51):
         if (claim.value, claim.role, claim.what_if) in seen:
             continue
         seen.add((claim.value, claim.role, claim.what_if))
+        # A level in a conditional sentence ("another close below 15 would take
+        # exposure from 30% to 20%") is a hypothetical path, not a claim about
+        # the current or past position; steps, caps, and what-ifs are still checked.
+        if (not claim.what_if and claim.role in ("current", "previous", "history")
+                and CONDITIONAL_RE.search(claim.sentence)):
+            continue
         allowed = allowed_positions(signal, tool_calls, claim.role, claim.what_if)
         if any(abs(claim.value - ok) <= tolerance for ok in allowed):
             continue

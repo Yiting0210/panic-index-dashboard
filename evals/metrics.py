@@ -2,16 +2,24 @@
 import re
 from datetime import date
 
-NUMBER_RE = re.compile(r"(?<![\w/])(-?\d+(?:,\d{3})*(?:\.\d+)?)(?:st|nd|rd|th)?(?![\w/])")
+# Unit suffixes such as "pp" or "bp" are allowed; (?!\.\d) stops "-83.87pp"
+# from backtracking to "-83".
+NUMBER_RE = re.compile(
+    r"(?<![\w/])(-?\d+(?:,\d{3})*(?:\.\d+)?)(?:st|nd|rd|th|pp|bps?|x)?(?![\w/])(?!\.\d)"
+)
 ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+# Short dates without a year, e.g. "03-07" or "06-15/06-21".
+MONTH_DAY = r"(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])"
+MONTH_DAY_RE = re.compile(rf"(?<![\d-]){MONTH_DAY}(?:/{MONTH_DAY})?(?![\d-])")
 MONTH_YEAR_RE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|October|"
     r"November|December)\s+(?:\d{1,2},\s+)?(\d{4})\b"
 )
-# Prose dates such as "April 9", "Apr 11, 2025", or "September 18th".
+# Prose dates such as "April 9", "Apr 11, 2025", "September 18th", or a
+# two-day meeting such as "March 15–16".
 PROSE_DATE_RE = re.compile(
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+"
-    r"\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?\b"
+    r"\d{1,2}(?:st|nd|rd|th)?(?:\s*[-–]\s*\d{1,2})?(?:,\s*\d{4})?\b"
 )
 MONTHS = {m: i for i, m in enumerate(
     "January February March April May June July August September October "
@@ -67,7 +75,7 @@ def extract_numbers(text):
     day of the month from counting as an unsupported number when the tool
     reported the same day in ISO form.
     """
-    text = PROSE_DATE_RE.sub(" ", ISO_DATE_RE.sub(" ", text))
+    text = MONTH_DAY_RE.sub(" ", PROSE_DATE_RE.sub(" ", ISO_DATE_RE.sub(" ", text)))
     values = []
     for match in NUMBER_RE.findall(text):
         value = float(match.replace(",", ""))

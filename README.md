@@ -304,10 +304,37 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 |---|---|---|---|
 | Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
-| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs | implemented, not yet run against the API |
-| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | implemented, not yet run against the API |
-| Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 5 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce) with a consistent answer and two planted contradictions each (`evals/datasets/consistency.yaml`) | 5/5 scenarios, 10/10 caught, 0 false positives |
-| Strategy consistency (live) | answers rejected by the validator, leakage | the same 5 fixtures' questions through the agent | implemented, not yet run against the API |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 94.8% numeric faithfulness |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 10/12 task success, 0 leaks |
+| Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 10 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce, adds and reductions clipped at the cap/floor, holds at the cap/floor) with a consistent answer and planted contradictions (`evals/datasets/consistency.yaml`) | 10/10 scenarios, 24/24 caught, 0 false positives |
+| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 2/10 rejected, both false positives on manual review; 0 leaks |
+
+#### Live run (DeepSeek, 2026-10-25)
+
+Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Three fresh runs cost $0.10 in total.
+
+The first run exposed false positives in the scoring code, not model errors, so the code was changed **after seeing live answers**:
+
+- Validator: "Buy & Hold" counted as a buy action; returns and drawdowns next to the word "exposure" (`returned 4.24%`, `35.12% max drawdown`) read as positions; step verbs `rose` / `rise` / `fall` / `removes` and `averaged` were not recognized; a bracketed figure (`average exposure (59.8%)`) lost its clause; and levels in conditional sentences (`would take exposure from 30% to 20%`) were read as the current position.
+- Scorer: the code-computed signal given to the model was not counted as a source, and `03-07`, `March 15–16`, and `-83.87pp` were parsed as the wrong numbers.
+
+Each fix has a regression test built from the sentence that triggered it (`tests/test_guardrails.py`, `tests/test_eval_metrics.py`), and the planted contradictions are still all caught. Because the fixes were written against these answers, re-scoring the same answers is not evidence; only a fresh run is. So the loop stopped at a rule decided in advance: fix once per fresh run, then report the next fresh run as-is.
+
+| Run | Code | Consistency: rejected | Agent: task success | Numeric faithfulness | Leakage | Fallbacks |
+|---|---|---|---|---|---|---|
+| 1, fresh | as merged | 3/10 | 6/12 | 79.2% | 0 | 2 |
+| 1, re-scored | fix round 1 | 0/10 | 12/12 | 98.7% | 0 | 0 |
+| 2, fresh | fix round 1 | 4/10 | 11/12 | 97.6% | 0 | 1 |
+| 2, re-scored | fix round 2 | 0/10 | 12/12 | 98.9% | 0 | 0 |
+| **3, fresh (reported)** | **fix round 2** | **2/10** | **10/12** | **94.8%** | **0** | **0** |
+
+Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
+
+- c03, c08 (rejected): both correct. `At 0% exposure the 10-point reductions are already capped by min_position_pct 0%` was read as a cap claim, and `at 100% exposure but returning 15.23%` as a position (`returning` is not in the subject list).
+- a10 (trap question): correctly declines to report minutes not yet released; `2017-19` and a derived `~9 days` count as unsupported numbers.
+- a04: partly a real model error. It first gives 77.56 as the 2025-04-09 Panic Index, then corrects itself to 72.13 mid-sentence; its two "80" values are the detector's default threshold, which the scorer does not see.
+
+Across all 30 fresh consistency answers, manual review found no fabricated position and no contradictory direction. The validator's precision is the weak point: on fresh answers it rejected 2–4 correct answers out of 10, and each rejection replaces a correct explanation with the rule-based summary. A regex validator keeps meeting new phrasings; having the model return the figures it states as structured fields, checked by code, would remove the parsing step.
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
@@ -328,8 +355,11 @@ CI runs the unit, leakage, and retrieval tests on every push. The agent eval rep
 python -m evals.agent_eval --mode record   # real API; writes evals/recordings/
 python -m evals.agent_eval --mode replay   # no API key needed
 python -m evals.consistency_eval           # offline: fixtures + validator probes
-python -m evals.consistency_eval --mode record --provider deepseek   # real API
+python -m evals.agent_eval --mode live --provider deepseek         # DEEPSEEK_API_KEY
+python -m evals.consistency_eval --mode live --provider deepseek   # local cache only
 ```
+
+`--mode live` caches responses under `.cache/llm/` (not committed); a second run with the same code replays them at $0, so move that directory aside for a fresh sample.
 
 The offline consistency numbers measure the validator against hand-written answers, not the model; only the live run says how often a model contradicts the signal.
 
@@ -506,4 +536,5 @@ These findings are descriptive historical evidence and should not be interpreted
 - RealTime forward-return analysis uses the underlying index/ETF as a directional proxy, not a full options pricing backtest.
 - The MCP tools guarantee that nothing after `as_of` is read, but a backtest ending at `as_of` still normalizes VIX over its whole window, and the default thresholds (64 / 15) were calibrated on the full sample.
 - The retrieval and agent eval sets are small (30 and 12 questions) and were written for this project; the date-aware retrieval feature was tuned on the same retrieval set.
+- The strategy-signal validator parses prose with regular expressions. On fresh DeepSeek answers it rejected 20–40% of correct explanations (replacing them with the rule-based summary), and its fixes were written after seeing live answers. Live numbers come from one provider and three runs of 10 + 12 questions.
 - The assistant tells the model not to use its own knowledge, but the model's training data can still include events after `as_of`; the agent eval checks answers for future dates and late citations.
