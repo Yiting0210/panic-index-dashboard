@@ -4,6 +4,7 @@ from .agent import (DEEPSEEK_DEFAULT_MODEL, DEFAULT_MODEL, FINAL_ANSWER_SCHEMA,
 from .cache import CacheMiss, ResponseCache, request_hash
 from .ledger import PRICING, BudgetExceeded, UsageLedger, cost_usd
 from .signal import STANDARD_BACKTEST_START, StrategySignal, build_strategy_signal
+from .render import render
 from .validator import validate_answer
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     "build_strategy_signal",
     "cost_usd",
     "request_hash",
+    "render",
     "validate_answer",
 ]

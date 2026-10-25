@@ -4,7 +4,9 @@
 # `expect` pins the code-computed signal, so a data or rule change that moves
 # it fails CI.
 #
-# `probes` are hand-written answers for the offline validator check:
+# `probes` are hand-written answers for the offline validator check, written
+# like model output: `consistent` uses placeholders ({current_exposure}, ...),
+# which are rendered before validation;
 # `consistent` must pass, every other probe must be rejected; the
 # `current_equals_*` probes state a current exposure equal to another
 # strategy field (#18). Live runs (--mode record/live) ask `question` and
@@ -17,9 +19,10 @@ fixtures:
     expect: {regime: neutral, final_position_pct: 100.0, action: hold}
     probes:
       consistent: >-
-        The strategy currently holds 100% exposure. The Panic Index is 49.0, in the
-        neutral regime, so the rule makes no change. If the index closes above 64, the
-        rule would add 20% exposure, but it is already at the 100% cap.
+        The strategy currently holds {current_exposure} exposure. The Panic Index is
+        49.0, in the neutral regime, so the rule makes no change. If the index closes
+        above 64, the rule would add {add_step} exposure, but it is already at the {cap}
+        cap.
       fabricated_position: >-
         With sentiment in the middle of its range, the framework suggests 60% exposure,
         or 6 out of 10 units.
@@ -34,8 +37,8 @@ fixtures:
     probes:
       consistent: >-
         The Panic Index is 64.3, just above the 64 panic threshold, so the rule added
-        20% exposure on the latest observation and now holds 80% exposure, or 8 out of
-        10 units.
+        {applied_change} exposure on the latest observation and now holds
+        {current_exposure} exposure.
       fabricated_position: >-
         Given the panic reading, the strategy now holds 65% exposure.
       contradictory_direction: >-
@@ -51,9 +54,9 @@ fixtures:
     expect: {regime: neutral, final_position_pct: 0.0, action: hold}
     probes:
       consistent: >-
-        Exposure was reduced to 0% during the June 2023 greed regime and the strategy
-        currently holds 0% exposure in a neutral regime. It would add 20% per day only
-        if the Panic Index closes above 64.
+        Exposure was reduced to the {floor} floor during the June 2023 greed regime and
+        the strategy currently holds {current_exposure} exposure in a neutral regime. It
+        would add {add_step} per day only if the Panic Index closes above 64.
       fabricated_position: >-
         The strategy is currently 35% invested while it waits for a panic signal.
       contradictory_direction: >-
@@ -66,8 +69,8 @@ fixtures:
     expect: {regime: panic, final_position_pct: 20.0, action: add}
     probes:
       consistent: >-
-        The Panic Index closed at 83.5, above the 64 threshold, so the rule added 20%
-        and now holds 20% exposure.
+        The Panic Index closed at 83.5, above the 64 threshold, so the rule added
+        {applied_change} and now holds {current_exposure} exposure.
       fabricated_position: >-
         After the panic reading the rule now holds 40% exposure.
       contradictory_direction: >-
@@ -82,8 +85,8 @@ fixtures:
     expect: {regime: greed, final_position_pct: 30.0, action: reduce}
     probes:
       consistent: >-
-        The Panic Index fell to 12.3, below 15, so the rule reduced exposure by 10% and
-        currently holds 30% exposure.
+        The Panic Index fell to 12.3, below 15, so the rule reduced exposure by
+        {applied_change} and currently holds {current_exposure} exposure.
       fabricated_position: >-
         The strategy currently holds 75% exposure.
       contradictory_direction: >-
@@ -100,8 +103,9 @@ fixtures:
     expect: {regime: panic, final_position_pct: 100.0, action: add}
     probes:
       consistent: >-
-        The Panic Index closed at 66.3, above the 64 threshold, so the rule added 20%
-        exposure on the latest observation and now holds 100% exposure, the cap.
+        The Panic Index closed at 66.3, above the 64 threshold, so the rule added
+        {applied_change} exposure on the latest observation and now holds
+        {current_exposure} exposure, the cap.
       fabricated_position: >-
         After the panic reading the strategy now holds 90% exposure.
       contradictory_direction: >-
@@ -115,7 +119,8 @@ fixtures:
     probes:
       consistent: >-
         The Panic Index closed at 84.4, in the panic regime. The step was clipped at the
-        cap, so the rule added only 10% and now holds 100% exposure.
+        cap, so the rule added only {applied_change} and now holds {current_exposure}
+        exposure.
       fabricated_position: >-
         The rule now holds 120% exposure after the panic reading.
       contradictory_direction: >-
@@ -129,7 +134,7 @@ fixtures:
     probes:
       consistent: >-
         The Panic Index is 65.8, in the panic regime, but the strategy already holds
-        100% exposure at the cap, so it makes no change today.
+        {current_exposure} exposure at the cap, so it makes no change today.
       fabricated_position: >-
         The strategy currently holds 70% exposure while panic persists.
       contradictory_direction: >-
@@ -142,8 +147,8 @@ fixtures:
     expect: {regime: greed, final_position_pct: 0.0, action: reduce}
     probes:
       consistent: >-
-        The Panic Index fell to 9.4, below 15, so the rule reduced exposure by 10% and
-        currently holds 0% exposure, the floor.
+        The Panic Index fell to 9.4, below 15, so the rule reduced exposure by
+        {applied_change} and currently holds {current_exposure} exposure, the floor.
       fabricated_position: >-
         The strategy currently holds 25% exposure.
       contradictory_direction: >-
@@ -156,8 +161,8 @@ fixtures:
     expect: {regime: greed, final_position_pct: 0.0, action: hold}
     probes:
       consistent: >-
-        The Panic Index is 10.7, in the greed regime, but the strategy currently holds 0%
-        exposure at the floor, so it makes no change today.
+        The Panic Index is 10.7, in the greed regime, but the strategy currently holds
+        {current_exposure} exposure at the floor, so it makes no change today.
       fabricated_position: >-
         The strategy currently holds 35% exposure.
       contradictory_direction: >-

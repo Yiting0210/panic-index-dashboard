@@ -1,4 +1,4 @@
-"""Standard-backtest strategy signal and the answer validator."""
+"""Standard-backtest strategy signal, placeholder rendering, and format checks."""
 import os
 import sys
 from dataclasses import replace
@@ -9,10 +9,10 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from assistant import (STANDARD_BACKTEST_START, ToolCall, build_strategy_signal,  # noqa: E402
+from assistant import (STANDARD_BACKTEST_START, build_strategy_signal, render,  # noqa: E402
                        validate_answer)
 from assistant.signal import _action_text  # noqa: E402
-from assistant.validator import parse_structured  # noqa: E402
+from assistant.validator import parse_current_action  # noqa: E402
 from evals.consistency_eval import load_fixtures, run_offline  # noqa: E402
 from utils.strategy import StrategyParams  # noqa: E402
 
@@ -21,11 +21,6 @@ from utils.strategy import StrategyParams  # noqa: E402
 def panic_signal():
     # QQQ 2024-08-05: panic regime, the rule added 20% and holds 20%.
     return build_strategy_signal("QQQ", date(2024, 8, 5))
-
-
-def backtest_call(**fields):
-    return ToolCall(name="run_backtest", arguments={}, result=fields, is_error=False,
-                    latency_ms=1.0)
 
 
 def test_signal_uses_the_fixed_start_and_session_strategy(panic_signal):
@@ -57,143 +52,91 @@ def test_action_text_uses_the_applied_step(regime, action, previous, final, expe
     assert _action_text(bt) == expected
 
 
-def test_validator_accepts_signal_figures_and_scaled_units(panic_signal):
-    text = ("The rule added 20% today and now holds 20% exposure, or 2 out of 10 units. "
-            "It would add another 20% if the Panic Index stays above 64.")
-    assert validate_answer(text, panic_signal) == []
+def check(text, signal, backtests=None, current_action=None):
+    """Render like the agent does, then validate."""
+    return validate_answer(render(text, signal, backtests), signal, current_action)
 
 
-def test_validator_rejects_fabricated_position(panic_signal):
-    violations = validate_answer("The framework suggests 60% exposure here.", panic_signal)
-    assert len(violations) == 1 and "fabricated position 60%" in violations[0]
-    assert validate_answer("Hold 6 of 10 units.", panic_signal)
+# Placeholder rendering.
+def test_signal_placeholders_render_from_the_signal(panic_signal):
+    out = render("Added {applied_change}, now {current_exposure}, step {add_step}, "
+                 "cap {cap}, floor {floor}, start {initial_exposure}, was {previous_exposure}.",
+                 panic_signal)
+    assert out.errors == [] and out.count == 7
+    assert out.text == ("Added 20%, now 20%, step 20%, cap 100%, floor 0%, start 50%, "
+                        "was 0%.")
 
 
-def test_validator_allows_what_if_backtest_figures(panic_signal):
-    text = "In a what-if starting at 2024-01-01, the strategy would end at 70% exposure."
-    assert validate_answer(text, panic_signal)
-    calls = [backtest_call(final_position_pct=70.0, average_exposure_pct=55.5)]
-    assert validate_answer(text, panic_signal, calls) == []
+def test_backtest_placeholders_render_from_the_named_call(panic_signal):
+    backtests = {"bt1": {"final_position_pct": 70.0, "average_exposure_pct": 81.0},
+                 "bt2": {"final_position_pct": 40.0, "average_exposure_pct": 52.5}}
+    out = render("A ends at {bt1.final_position_pct}; B ends at {bt2.final_position_pct} "
+                 "and averaged {bt2.average_exposure_pct}.", panic_signal, backtests)
+    assert out.errors == []
+    assert out.text == "A ends at 70%; B ends at 40% and averaged 52.5%."
 
 
-@pytest.fixture
-def eighty_pct_signal(panic_signal):
-    # The rule added 20% (60% -> 80%); add 20, reduce 10, cap 100, floor 0, start 50.
-    return replace(panic_signal, final_position_pct=80.0, previous_position_pct=60.0)
-
-
-@pytest.mark.parametrize("text", [
-    "The current exposure is 20%.",            # the add step
-    "The current exposure is 10%.",            # the reduce step
-    "The current position is 100%.",           # the cap
-    "The current exposure is 0%.",             # the floor
-    "The strategy currently holds 50% exposure.",  # the initial exposure
-    "The strategy now holds 60% exposure.",    # the previous exposure
-    "The strategy holds 2 of 10 units.",
+@pytest.mark.parametrize("text, error", [
+    ("Now {current_position}.", "unknown placeholder"),
+    ("Ends at {bt3.final_position_pct}.", "unknown run_backtest call id"),
+    ("Ends at {bt1.strategy_return_pct}.", "is not one of"),
+    ("Ends at {bt1.previous_position_pct}.", "has no value"),
 ])
-def test_current_exposure_must_match_final_position(eighty_pct_signal, text):
-    violations = validate_answer(text, eighty_pct_signal)
-    assert len(violations) == 1 and "read as the current exposure" in violations[0]
+def test_bad_placeholders_are_errors(panic_signal, text, error):
+    out = render(text, panic_signal, {"bt1": {"final_position_pct": 70.0}})
+    assert len(out.errors) == 1 and error in out.errors[0]
+    assert check(text, panic_signal, {"bt1": {"final_position_pct": 70.0}})
 
 
+def test_signal_placeholder_without_a_signal_is_an_error():
+    assert render("Now {current_exposure}.").errors
+
+
+# Format contract: position figures come only from placeholders.
 @pytest.mark.parametrize("text", [
-    "The strategy holds 80% exposure, or 8 out of 10 units.",
-    "The rule added 20% today, taking exposure from 60% to 80%.",
-    "The rule adds 20% exposure per panic-regime day and reduces exposure by 10% per "
-    "greed-regime day.",
-    "Exposure is capped at a 100% maximum position and has a 0% exposure floor.",
-    "The backtest started at 50% exposure.",
-    "Exposure was reduced to 0% in June 2023.",
-    "Exposure has held at its level while the index fell 12% this month.",
+    "Current exposure is 64%.",          # #28: 64 is the buy threshold
+    "Current exposure is 99.3%.",        # #28: the percentile
+    "The rule now holds 20% exposure.",  # even the right value must be a placeholder
+    "The strategy is 35% invested.",
+    "That is 2 out of 10 units.",
+    "Exposure is {current_exposure}, or 20 percent of capital invested.",
+    # Another percentage in a clause about exposure breaks the contract too.
+    "Holding {current_exposure} exposure returned 4.24% over the window.",
 ])
-def test_figures_pass_when_they_match_their_own_field(eighty_pct_signal, text):
-    assert validate_answer(text, eighty_pct_signal) == []
+def test_raw_position_figures_are_rejected(panic_signal, text):
+    violations = check(text, panic_signal)
+    assert violations and any("raw position figure" in v for v in violations)
 
 
-def test_figures_are_checked_against_their_own_field(eighty_pct_signal):
-    assert "read as the add step" in validate_answer(
-        "The rule added 30% exposure today.", eighty_pct_signal)[0]
-    assert "read as the previous exposure" in validate_answer(
-        "Exposure rose from 40% to 80%.", eighty_pct_signal)[0]
-    assert "read as the exposure cap" in validate_answer(
-        "Exposure is capped at 90%.", eighty_pct_signal)[0]
-
-
-def test_clipped_step_matches_the_applied_change(eighty_pct_signal):
-    clipped = replace(eighty_pct_signal, final_position_pct=100.0, previous_position_pct=90.0)
-    assert validate_answer("The rule added 10% exposure, reaching the cap.", clipped) == []
-
-
-def test_what_if_figures_match_only_backtest_calls(eighty_pct_signal):
-    calls = [backtest_call(final_position_pct=70.0, add_pct=30.0, average_exposure_pct=55.5)]
-    # A what-if result cannot stand in for the current exposure, and the reverse.
-    assert validate_answer("The strategy currently holds 70% exposure.", eighty_pct_signal, calls)
-    assert validate_answer("In the what-if the strategy would end at 80% exposure.",
-                           eighty_pct_signal, calls)
-    assert validate_answer("In the what-if the rule adds 30% exposure per panic day.",
-                           eighty_pct_signal, calls) == []
-    assert validate_answer("Over that backtest the average exposure was 55.5%.",
-                           eighty_pct_signal, calls) == []
-    assert validate_answer("Over that backtest the average exposure was 55.5%.",
-                           eighty_pct_signal)
-
-
-@pytest.mark.parametrize("text", [
-    "Current exposure is 80%, but in a what-if with a higher threshold, the strategy "
-    "would end at 70% exposure.",
-    "In a what-if with a higher threshold the strategy would end at 70% exposure, while "
-    "the current exposure is 80%.",
-    "The current exposure is 80% versus 70% in the what-if.",
-    "In the what-if, the strategy ends at 70% exposure.",
+@pytest.mark.parametrize("text, backtests", [
+    ("The rule added {applied_change} and now holds {current_exposure} exposure.", None),
+    # Phrasings from the live DeepSeek runs, written with placeholders.
+    ("The latest observation's action was 'add': exposure rose {applied_change} from "
+     "{previous_exposure} to {current_exposure}, reaching the {cap} cap.", None),
+    ("Buy & Hold returned 14.71% (strategy 5.73%), with {bt1.average_exposure_pct} average "
+     "exposure and 35.12% max drawdown.", {"bt1": {"average_exposure_pct": 90.3}}),
+    ("The panel shows a neutral reading, holding {current_exposure} exposure; the strategy "
+     "returned 4.24% vs. Buy & Hold 11.3%.", None),
+    ("The standard backtest holds {current_exposure} exposure and trails Buy & Hold, "
+     "3.88% vs 31.16%.", None),
+    ("The reduction in average exposure ({bt1.average_exposure_pct}) left the strategy "
+     "behind.", {"bt1": {"average_exposure_pct": 59.8}}),
+    ("In a what-if with a 60 threshold the strategy would end at "
+     "{bt1.final_position_pct} exposure.", {"bt1": {"final_position_pct": 70.0}}),
+    # Percentages with no position word in their clause are not position figures.
+    ("The Panic Index is at the 99.3rd percentile, and 63-day returns averaged -1.0%.", None),
 ])
-def test_what_if_label_applies_to_its_own_clause(eighty_pct_signal, text):
-    # The standard 80% and the what-if 70% share a sentence; each is checked on its own.
-    calls = [backtest_call(final_position_pct=70.0)]
-    assert validate_answer(text, eighty_pct_signal, calls) == []
-    swapped = text.replace("80%", "TMP").replace("70%", "80%").replace("TMP", "70%")
-    assert validate_answer(swapped, eighty_pct_signal, calls)
+def test_placeholder_answers_pass(panic_signal, text, backtests):
+    assert check(text, panic_signal, backtests, current_action="add") == []
 
 
-TWO_THRESHOLDS = [backtest_call(buy_threshold=60.0, final_position_pct=70.0,
-                                average_exposure_pct=81.0),
-                  backtest_call(buy_threshold=70.0, final_position_pct=40.0,
-                                average_exposure_pct=52.0)]
-
-
-def test_what_if_figures_are_checked_against_their_own_scenario(eighty_pct_signal):
-    # Scenario A (threshold 60) ends at 70%; 40% belongs to scenario B.
-    swapped = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
-    violations = validate_answer(swapped, eighty_pct_signal, TWO_THRESHOLDS)
-    assert len(violations) == 1 and "expected 70%" in violations[0]
-    for text in ("In a what-if with a 60 threshold, the strategy would end at 70% exposure.",
-                 "In a what-if with a 70 threshold, the strategy would end at 40% exposure.",
-                 # The figure equal to the other scenario's threshold is not a parameter.
-                 "In a what-if with a 60 threshold, the strategy would end at 70% exposure, "
-                 "averaging 81% exposure."):
-        assert validate_answer(text, eighty_pct_signal, TWO_THRESHOLDS) == [], text
-    assert validate_answer("With a 70 threshold the what-if averaged 81% exposure.",
-                           eighty_pct_signal, TWO_THRESHOLDS)
-
-
-def test_what_if_scenarios_by_start_date(eighty_pct_signal):
-    calls = [backtest_call(start_date="2023-01-03", final_position_pct=60.0),
-             backtest_call(start_date="2024-01-02", final_position_pct=100.0)]
-    assert validate_answer("In a what-if starting 2023-01-03 the strategy would end at "
-                           "60% exposure.", eighty_pct_signal, calls) == []
-    assert validate_answer("In a what-if starting in 2024 the strategy would end at "
-                           "60% exposure.", eighty_pct_signal, calls)
-
-
-def test_declared_what_if_figure_does_not_skip_the_scenario_check(eighty_pct_signal):
-    swapped = "In a what-if with a 60 threshold, the strategy would end at 40% exposure."
-    claims = [{"value": 40.0, "role": "current", "what_if": True}]
-    assert validate_answer(swapped, eighty_pct_signal, TWO_THRESHOLDS, claims=claims)
-
-
-def test_unidentified_what_if_figure_matches_any_scenario(eighty_pct_signal):
-    # The sentence names no parameter, so any scenario's result is accepted.
-    text = "In the what-if the strategy would end at 40% exposure."
-    assert validate_answer(text, eighty_pct_signal, TWO_THRESHOLDS) == []
+def test_current_action_must_match_the_signal(panic_signal):
+    assert check("Holding steady.", panic_signal, current_action="reduce")
+    assert parse_current_action({"current_action": "add"}) == ("add", [])
+    assert parse_current_action({"current_action": "not_stated"}) == (None, [])
+    assert parse_current_action({}) == (None, [])
+    action, errors = parse_current_action({"current_action": "buy"})
+    assert action is None and "invalid structured output" in errors[0]
 
 
 def test_validator_rejects_contradictory_direction(panic_signal):
@@ -207,8 +150,9 @@ def test_validator_rejects_contradictory_direction(panic_signal):
 
 def test_hold_signal_ignores_past_tense_history(panic_signal):
     hold = replace(panic_signal, regime="neutral", action="hold", final_position_pct=0.0)
-    history = "Exposure was reduced to 0% in June 2023 and the strategy currently holds 0%."
-    assert validate_answer(history, hold) == []
+    history = ("Exposure was reduced to {floor} in June 2023 and the strategy currently "
+               "holds {current_exposure}.")
+    assert check(history, hold) == []
     assert validate_answer("The strategy is currently adding exposure.", hold)
 
 
@@ -218,110 +162,3 @@ def test_offline_consistency_eval_catches_every_planted_contradiction():
     assert summary["signal_mismatches"] == 0, [r for r in rows if r["signal_mismatches"]]
     assert summary["detection_rate"] == 1.0, [r for r in rows if not r["correct"]]
     assert summary["false_positive_rate"] == 0.0, [r for r in rows if not r["correct"]]
-
-
-# Sentences from the first live DeepSeek run (2026-10-25) that the validator
-# rejected although they agree with the signal.
-@pytest.mark.parametrize("market, as_of, text", [
-    # c07: the applied step, clipped by the cap, stated with "rose".
-    ("QQQ", date(2021, 11, 26), "The latest observation's action was 'add': exposure rose "
-                                "10% from 90% to 100%, reaching the 100% cap."),
-    # c05: the reduce step stated with "removes".
-    ("QQQ", date(2023, 6, 13), "Each further close below 15 removes another 10% of "
-                               "exposure, down to the 0% floor."),
-    # c10: a drawdown that follows an exposure figure.
-    ("QQQ", date(2023, 6, 20), "Buy & Hold returned 14.71% (strategy 5.73%), with 90.3% "
-                               "average exposure and 35.12% max drawdown."),
-    # a10: a return in the next clause after the current exposure.
-    ("QQQ", date(2022, 3, 25), "The QQQ signal panel is background context: Panic Index "
-                               "38.84 (neutral), holding 100% exposure; the strategy "
-                               "returned 4.24% vs. Buy & Hold 11.3%."),
-    # a03: "Buy & Hold" is a benchmark, not a buy action.
-    ("SPX", date(2024, 6, 28), "SPX is currently neutral (Panic Index 29.02), so the "
-                               "standard backtest holds 0% exposure and trails Buy & Hold, "
-                               "3.88% vs 31.16%."),
-])
-def test_live_run_false_positives_are_accepted(market, as_of, text):
-    signal = build_strategy_signal(market, as_of)
-    calls = [backtest_call(average_exposure_pct=90.3)]
-    assert validate_answer(text, signal, calls) == []
-
-
-def test_new_step_verbs_still_catch_a_wrong_step(panic_signal):
-    # panic_signal added 20%; "rose 35%" is neither the step nor the applied change.
-    assert validate_answer("Exposure rose 35% on the latest observation.", panic_signal)
-    assert validate_answer("The rule is now buying more exposure.",
-                           replace(panic_signal, action="hold", regime="neutral"))
-
-
-# Second live DeepSeek run (2026-10-25), fresh answers.
-@pytest.mark.parametrize("market, as_of, text, calls", [
-    # c03: steps stated with "rise" / "fall".
-    ("QQQ", date(2024, 6, 28), "Exposure would rise by 20% for each day the Panic Index "
-                               "closes above 64, and would fall by 10% for each day it "
-                               "closes below 15.", []),
-    # c04: a bracketed average belongs to the clause before the bracket.
-    ("QQQ", date(2024, 8, 5), "The strategy returned 8.01% versus 37.01% for Buy & Hold, so "
-                              "the reduction in average exposure (59.8%) left it behind.",
-     [backtest_call(average_exposure_pct=59.8)]),
-    # c05: a conditional path from the current level to the next one.
-    ("QQQ", date(2023, 6, 13), "Another close below 15 would trigger another 10% reduction, "
-                               "taking exposure from 30% to 20%.", []),
-    # c06: the rule's starting exposure, bracketed, without "at".
-    ("QQQ", date(2025, 3, 4), "Under the position rule (start 50%, add 20% per panic-regime "
-                                "day, reduce 10% per greed-regime day), the next session "
-                                "holds 100%.", []),
-    # a12: "averaged" states an average.
-    ("QQQ", date(2024, 12, 31), "Over 2023-01-03 to 2024-12-31 it averaged just 29.5% "
-                                "exposure.", [backtest_call(average_exposure_pct=29.5)]),
-])
-def test_second_live_run_false_positives_are_accepted(market, as_of, text, calls):
-    assert validate_answer(text, build_strategy_signal(market, as_of), calls) == []
-
-
-def test_unconditional_current_level_is_still_checked(panic_signal):
-    # The conditional skip must not let a plain wrong level through.
-    assert validate_answer("The strategy holds 60% exposure.", panic_signal)
-    assert validate_answer("If you ask me, the rule adds 35% exposure per panic-regime day.",
-                           panic_signal)
-
-
-# Issue #24: malformed structured claims must not weaken validation.
-VALID_CLAIM = {"value": 20, "role": "current", "what_if": False}
-
-
-@pytest.mark.parametrize("data, error", [
-    ({"position_claims": [{"value": 64, "role": "threshold", "what_if": False}]}, "role"),
-    ({"position_claims": [{"value": 64, "what_if": False}]}, "exactly the keys"),
-    ({"position_claims": [{"role": "current", "what_if": False}]}, "exactly the keys"),
-    ({"position_claims": [{"value": "64", "role": "current", "what_if": False}]}, "finite"),
-    ({"position_claims": [{"value": True, "role": "current", "what_if": False}]}, "finite"),
-    ({"position_claims": [{"value": 20, "role": "current", "what_if": "no"}]}, "what_if"),
-    ({"position_claims": [VALID_CLAIM, {"value": 64, "role": "threshold", "what_if": False}]},
-     "role"),
-    ({"position_claims": [{**VALID_CLAIM, "note": "x"}]}, "exactly the keys"),
-    ({"position_claims": {"value": 20}}, "not a list"),
-    ({"position_claims": [], "current_action": "buy"}, "current_action"),
-])
-def test_malformed_structured_output_is_untrusted(data, error):
-    claims, _, errors = parse_structured(data)
-    assert claims is None
-    assert len(errors) == 1 and error in errors[0]
-
-
-def test_well_formed_structured_output_parses():
-    claims, action, errors = parse_structured(
-        {"position_claims": [VALID_CLAIM], "current_action": "add"})
-    assert errors == [] and action == "add"
-    assert claims == [{"value": 20.0, "role": "current", "what_if": False}]
-    assert parse_structured({"current_action": "not_stated"}) == (None, None, [])
-
-
-def test_issue_24_threshold_declared_as_claim_is_rejected(panic_signal):
-    # Current exposure is 20%; 64 is the buy threshold, present in the signal.
-    claims, action, errors = parse_structured(
-        {"position_claims": [{"value": 64, "role": "threshold", "what_if": False}]})
-    assert errors
-    violations = validate_answer("Current exposure is 64%.", panic_signal,
-                                 claims=claims, current_action=action)
-    assert any("64%" in v for v in violations)

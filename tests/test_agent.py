@@ -416,62 +416,60 @@ def test_without_strategy_settings_tool_defaults_apply(make_agent):
 
 
 def test_strategy_signal_is_computed_by_code_and_sent_to_the_model(make_agent):
-    agent, client = make_agent([final_response("The rule holds 20% exposure.")])
+    agent, client = make_agent([final_response("The rule holds {current_exposure} exposure.")])
     result = agent.run("What exposure does the strategy hold?", date(2024, 8, 5), market="QQQ")
 
     assert result.fallback_reason is None
     assert (result.signal.final_position_pct, result.signal.action) == (20.0, "add")
+    assert result.answer == "The rule holds 20% exposure."
+    assert result.raw_answer["answer"] == "The rule holds {current_exposure} exposure."
     first_message = client.requests[0]["messages"][0]["content"]
     assert "final_position_pct: 20" in first_message
-    assert "do not restate it with different numbers" in first_message
+    assert "{current_exposure}" in client.requests[0]["system"]
 
 
-def structured_final(answer, claims=(), action="not_stated", key_reasons=()):
+def structured_final(answer, action="not_stated", key_reasons=(), caveats="none"):
     body = {"answer": answer, "key_reasons": list(key_reasons), "citations": [],
-            "caveats": "none", "position_claims": list(claims), "current_action": action}
+            "caveats": caveats, "current_action": action}
     response = final_response("")
     response["content"][0]["text"] = json.dumps(body)
     return response
 
 
 BAD = "The framework suggests 60% exposure, so it is now reducing exposure."
+GOOD = "The rule added {applied_change} today and now holds {current_exposure} exposure."
 
 
-def test_contradiction_is_sent_back_once_then_falls_back(make_agent):
+def test_raw_figure_is_sent_back_once_then_falls_back(make_agent):
     agent, client = make_agent([final_response(BAD), final_response(BAD)])
     result = agent.run("What exposure does the strategy hold?", date(2024, 8, 5), market="QQQ")
 
     assert result.repairs == 1
-    assert len(result.first_violations) == 2
+    assert any("raw position figure 60%" in v for v in result.first_violations)
+    assert any("contradicts" in v for v in result.first_violations)
     assert result.fallback_reason.startswith("GuardrailViolation")
-    assert len(result.violations) == 2
     assert result.signal.final_position_pct == 20.0  # the code-filled panels still render
     assert "60%" not in result.answer
     repair = client.requests[1]["messages"][-1]
-    assert repair["role"] == "user" and "final_position_pct 20" in repair["content"]
+    assert repair["role"] == "user" and "{current_exposure}" in repair["content"]
 
 
 def test_repaired_answer_is_kept(make_agent):
-    fixed = structured_final("The rule added 20% today and now holds 20% exposure.",
-                             claims=[{"value": 20, "role": "current", "what_if": False},
-                                     {"value": 20, "role": "add_step", "what_if": False}],
-                             action="add")
-    agent, _ = make_agent([final_response(BAD), fixed])
+    agent, _ = make_agent([final_response(BAD), structured_final(GOOD, action="add")])
     result = agent.run("What exposure does the strategy hold?", date(2024, 8, 5), market="QQQ")
 
     assert result.fallback_reason is None
     assert result.repairs == 1 and result.first_violations
     assert result.violations == []
-    assert "now holds 20% exposure" in result.answer
+    assert result.answer == "The rule added 20% today and now holds 20% exposure."
 
 
-def test_declared_claims_are_checked_by_role(make_agent):
-    # 20 is the current exposure; the cap is 100, so this role is wrong.
-    wrong = structured_final("Exposure is 20%.",
-                             claims=[{"value": 20, "role": "cap", "what_if": False}])
-    agent, _ = make_agent([wrong, wrong])
+def test_issue_28_threshold_stated_as_exposure_is_rejected(make_agent):
+    # 64 is the buy threshold and is in the signal; it still cannot be written raw.
+    bad = structured_final("Current exposure is 64%.", action="add")
+    agent, _ = make_agent([bad, bad])
     result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
-    assert any("declared as the exposure cap" in v for v in result.violations)
+    assert any("raw position figure 64%" in v for v in result.violations)
 
 
 def test_declared_action_is_checked(make_agent):
@@ -481,37 +479,54 @@ def test_declared_action_is_checked(make_agent):
     assert any("current_action 'reduce'" in v for v in result.violations)
 
 
-def test_undeclared_tool_figure_next_to_exposure_is_not_a_violation(make_agent):
-    # The live-run false positive: a return beside "exposure". With claims
-    # declared, an undeclared figure fails only if no tool or signal reports it.
-    text = (f"The rule holds 20% exposure; the strategy returned "
-            f"{8.01}% vs. Buy & Hold.")
-    ok = structured_final(text, claims=[{"value": 20, "role": "current", "what_if": False}],
-                          action="add")
-    agent, _ = make_agent([ok])
+def test_returns_in_their_own_clause_are_fine(make_agent):
+    text = "The rule holds {current_exposure} exposure; the strategy returned 8.01% vs. Buy & Hold."
+    agent, _ = make_agent([structured_final(text, action="add")])
     result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
     assert result.violations == [] and result.fallback_reason is None
 
 
-def test_undeclared_fabricated_figure_still_fails(make_agent):
-    lie = structured_final("The rule holds 20% exposure, or 63% exposure in practice.",
-                           claims=[{"value": 20, "role": "current", "what_if": False}])
-    agent, _ = make_agent([lie, lie])
+def test_key_reasons_and_caveats_are_rendered_and_validated(make_agent):
+    ok = structured_final("Panic regime.", key_reasons=["It now holds {current_exposure} exposure."],
+                          caveats="The cap is {cap}.")
+    agent, _ = make_agent([ok])
     result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
-    assert any("63%" in v for v in result.violations)
+    assert result.key_reasons == ["It now holds 20% exposure."]
+    assert result.caveats == "The cap is 100%."
 
 
-def test_key_reasons_are_parsed_and_validated(make_agent):
+def test_raw_figure_in_key_reasons_is_rejected(make_agent):
     bad = structured_final("Panic regime.", key_reasons=["The rule now holds 45% exposure."])
     agent, _ = make_agent([bad, bad])
     result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
     assert result.violations and "45%" in result.violations[0]
 
 
+def test_backtest_results_get_call_ids_for_placeholders(make_agent):
+    what_if = {"market": "QQQ", "as_of": "2024-08-05", "buy_threshold": 70}
+    text = ("In a what-if with a 70 threshold the strategy would end at "
+            "{bt1.final_position_pct} exposure.")
+    agent, client = make_agent([tool_use_response("run_backtest", what_if),
+                                structured_final(text)])
+    result = agent.run("What if the threshold were 70?", date(2024, 8, 5), market="QQQ")
+
+    call = result.tool_calls[0]
+    assert call.call_id == "bt1"
+    assert client.requests[1]["messages"][-1]["content"][0]["content"].startswith(
+        "[call_id: bt1]")
+    assert result.violations == []
+    assert f"{call.result['final_position_pct']:g}%" in result.answer
+
+
+def test_unknown_call_id_is_a_violation(make_agent):
+    bad = structured_final("It would end at {bt4.final_position_pct} exposure.")
+    agent, _ = make_agent([bad, bad])
+    result = agent.run("Why?", date(2024, 8, 5), market="QQQ")
+    assert any("unknown run_backtest call id" in v for v in result.violations)
+
+
 def test_deepseek_repair_turn(make_deepseek_agent):
-    good = json.dumps({"answer": "The rule now holds 20% exposure.", "key_reasons": [],
-                       "citations": [], "caveats": "none",
-                       "position_claims": [{"value": 20, "role": "current", "what_if": False}],
+    good = json.dumps({"answer": GOOD, "key_reasons": [], "citations": [], "caveats": "none",
                        "current_action": "add"})
     agent, client = make_deepseek_agent([ds_final(json.dumps({
         "answer": BAD, "key_reasons": [], "citations": [], "caveats": "none"})),
@@ -519,35 +534,18 @@ def test_deepseek_repair_turn(make_deepseek_agent):
     result = agent.run("What exposure?", date(2024, 8, 5), market="QQQ")
 
     assert result.fallback_reason is None and result.repairs == 1
+    assert result.answer == "The rule added 20% today and now holds 20% exposure."
     sent = client.requests[1]["messages"]
     assert sent[-2]["role"] == "assistant" and sent[-1]["role"] == "user"
-    assert "contradicts the code-computed strategy signal" in sent[-1]["content"]
+    assert "breaks the answer contract" in sent[-1]["content"]
 
 
-def test_malformed_claims_trigger_repair_then_fallback(make_agent, make_deepseek_agent):
-    # Issue #24: the role is invalid, so the claims are untrusted and the
-    # prose figure 64% (the buy threshold) is checked as the current exposure.
-    body = {"answer": "Current exposure is 64%.", "key_reasons": [], "citations": [],
-            "caveats": "none",
-            "position_claims": [{"value": 64, "role": "threshold", "what_if": False}],
-            "current_action": "not_stated"}
+def test_malformed_current_action_triggers_repair(make_deepseek_agent):
+    body = {"answer": GOOD, "key_reasons": [], "citations": [], "caveats": "none",
+            "current_action": "buy"}
     agent, client = make_deepseek_agent([ds_final(json.dumps(body)), ds_final(json.dumps(body))])
     result = agent.run("What exposure?", date(2024, 8, 5), market="QQQ")
 
     assert result.repairs == 1
     assert any("invalid structured output" in v for v in result.first_violations)
-    assert "invalid structured output" in client.requests[1]["messages"][-1]["content"]
     assert result.fallback_reason.startswith("GuardrailViolation")
-    assert any("64%" in v for v in result.violations)
-
-
-def test_malformed_claims_repaired_to_valid_ones_are_kept(make_deepseek_agent):
-    bad = {"answer": "The rule now holds 20% exposure.", "key_reasons": [], "citations": [],
-           "caveats": "none", "position_claims": [{"value": 20, "what_if": False}],
-           "current_action": "add"}
-    good = {**bad, "position_claims": [{"value": 20, "role": "current", "what_if": False}]}
-    agent, _ = make_deepseek_agent([ds_final(json.dumps(bad)), ds_final(json.dumps(good))])
-    result = agent.run("What exposure?", date(2024, 8, 5), market="QQQ")
-
-    assert result.fallback_reason is None and result.repairs == 1
-    assert result.position_claims == [{"value": 20.0, "role": "current", "what_if": False}]

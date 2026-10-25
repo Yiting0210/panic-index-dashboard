@@ -262,10 +262,10 @@ if result is not None:
                 st.markdown(f"- {violation}")
         for violation in result.violations:
             st.markdown(f"- Guardrail: {violation}")
-        if result.position_claims is not None:
-            st.markdown("**Declared position figures:** " + (", ".join(
-                f"{c['value']:g}% {c['role']}" + (" (what-if)" if c["what_if"] else "")
-                for c in result.position_claims) or "none"))
+        rendered = sum(r.count for r in result.rendered)
+        if result.raw_answer:
+            st.markdown(f"**Position figures rendered by code:** {rendered}")
+            st.caption("Model text before rendering: " + result.raw_answer["answer"])
         for call in result.tool_calls:
             label = f"{call.name}({', '.join(f'{k}={v}' for k, v in call.arguments.items())})"
             if call.as_of_clamped:

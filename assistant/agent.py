@@ -36,7 +36,8 @@ from utils.strategy import StrategyParams
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
 from .signal import StrategySignal, build_strategy_signal
-from .validator import ACTIONS, CLAIM_ROLES, parse_structured, validate_answer
+from .render import render
+from .validator import ACTIONS, parse_current_action, validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
@@ -71,28 +72,32 @@ date:
   the user asks what to buy or sell.
 - The question comes with a strategy signal computed by code from a standard
   backtest. The app shows it to the user as the Market Regime and Strategy
-  Signal panels. You explain it; you do not decide it. If you state the
-  current exposure, use final_position_pct exactly (scaled units are fine,
-  e.g. 80% of 10 units is 8 units), and describe the current action only as
-  the signal states it. Do not invent sizing, scaling levels, or a mapping
-  from percentile to position.
+  Signal panels. You explain it; you do not decide it. Describe the current
+  action only as the signal states it. Do not invent sizing, scaling levels,
+  or a mapping from percentile to position.
+- Never write an exposure or position number yourself. Write a placeholder
+  and the app fills in the value:
+  {current_exposure} {previous_exposure} {applied_change} {add_step}
+  {reduce_step} {cap} {floor} {initial_exposure} for the standard signal,
+  and {bt1.final_position_pct}, {bt1.average_exposure_pct},
+  {bt1.time_below_full_exposure_pct} (or any other exposure field) for a
+  run_backtest call, using the call_id shown above its result. Example: "The
+  rule added {applied_change} and now holds {current_exposure} exposure."
+  Do not put any other percentage (a return, drawdown, or win rate) in the
+  same clause as the words exposure, position, allocation, or invested; give
+  it its own clause or sentence. Do not convert exposure to units.
 - For a what-if (other thresholds, start date, or step sizes), call
-  run_backtest with those parameters and label the result as a what-if.
+  run_backtest with those parameters, label the result as a what-if, and use
+  that call's placeholders.
 - If the backtest shows Buy & Hold beating the strategy, say so next to the
   position figure instead of only in the caveats.
 
 When you have what you need, reply with the JSON object the response format
 requires: a concise answer (at most about 150 words), up to four key_reasons
 (one sentence each, grounded in tool results), the citations you used,
-caveats (risks, data limitations, hindsight labels, or "none"), and:
-- position_claims: every exposure or position percentage you state anywhere
-  in the answer, reasons, or caveats (units converted to percent), each with
-  its role (current, previous, add_step, reduce_step, cap, floor, initial,
-  average, time_below_full, past_level) and what_if true when it comes from
-  a what-if run_backtest call. Returns, drawdowns, and index levels are not
-  position claims. Use an empty list if you state none.
-- current_action: the rule's action on the latest observation as you
-  describe it (add, reduce, or hold), or not_stated.
+caveats (risks, data limitations, hindsight labels, or "none"), and
+current_action: the rule's action on the latest observation as you describe
+it (add, reduce, or hold), or not_stated.
 """
 
 FINAL_ANSWER_SCHEMA = {
@@ -113,23 +118,9 @@ FINAL_ANSWER_SCHEMA = {
             },
         },
         "caveats": {"type": "string"},
-        "position_claims": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "value": {"type": "number"},
-                    "role": {"type": "string", "enum": list(CLAIM_ROLES)},
-                    "what_if": {"type": "boolean"},
-                },
-                "required": ["value", "role", "what_if"],
-                "additionalProperties": False,
-            },
-        },
         "current_action": {"type": "string", "enum": [*ACTIONS, "not_stated"]},
     },
-    "required": ["answer", "key_reasons", "citations", "caveats", "position_claims",
-                 "current_action"],
+    "required": ["answer", "key_reasons", "citations", "caveats", "current_action"],
     "additionalProperties": False,
 }
 
@@ -137,21 +128,22 @@ FINAL_ANSWER_SCHEMA = {
 # DeepSeek has JSON mode but no schema enforcement, so the shape is spelled out.
 JSON_ANSWER_INSTRUCTIONS = """
 Reply to finish with only this JSON object and no other text:
-{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>", "position_claims": [{"value": <number>, "role": "<current|previous|add_step|reduce_step|cap|floor|initial|average|time_below_full|past_level>", "what_if": <true|false>}], "current_action": "<add|reduce|hold|not_stated>"}
+{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>", "current_action": "<add|reduce|hold|not_stated>"}
 """
 
 
 def _repair_message(violations, signal):
-    """Ask the model to rewrite a final answer that contradicted the signal."""
+    """Ask the model to rewrite a final answer that broke the format contract."""
     listed = "\n".join(f"- {v}" for v in violations)
+    action = f" The rule's latest action is {signal.action}." if signal else ""
     return (
-        "Your final answer contradicts the code-computed strategy signal:\n"
+        "Your final answer breaks the answer contract:\n"
         f"{listed}\n"
-        f"The signal: final_position_pct {signal.final_position_pct:g}, action "
-        f"{signal.action}, previous_position_pct {signal.previous_position_pct:g}, "
-        f"position_rule: {signal.position_rule}. Rewrite the final JSON so every "
-        "exposure figure matches its field and is listed in position_claims. Only "
-        "fix these problems; keep the rest of the answer."
+        "Rewrite the final JSON. Write every exposure or position figure as a "
+        "placeholder ({current_exposure}, {applied_change}, {bt1.final_position_pct}, "
+        "...), keep other percentages out of clauses that mention exposure or "
+        f"position, and describe the current action as the signal states it.{action} "
+        "Only fix these problems; keep the rest of the answer."
     )
 
 API_ERRORS = (anthropic.AnthropicError, openai.OpenAIError)
@@ -173,6 +165,8 @@ class ToolCall:
     is_error: bool
     latency_ms: float
     as_of_clamped: bool = False
+    # bt1, bt2, ... for run_backtest results, so placeholders can name the call.
+    call_id: Optional[str] = None
 
 
 @dataclass
@@ -196,10 +190,13 @@ class AgentResult:
     strategy: Optional[StrategyParams] = None
     signal: Optional[StrategySignal] = None
     violations: list = field(default_factory=list)
-    position_claims: Optional[list] = None
     current_action: Optional[str] = None
-    # Malformed position_claims / current_action, reported as violations.
+    # A malformed current_action, reported as a violation.
     structured_errors: list = field(default_factory=list)
+    # The model's text with placeholders, and the rendered answer fields
+    # (answer, each key reason, caveats) with their rendered spans.
+    raw_answer: dict = field(default_factory=dict)
+    rendered: list = field(default_factory=list)
     # Repair turns used, and the violations that triggered the first one.
     repairs: int = 0
     first_violations: list = field(default_factory=list)
@@ -359,13 +356,9 @@ class ResearchAgent:
 
     @staticmethod
     def _violations(result):
-        """How the final answer contradicts the code-computed strategy signal."""
-        if result.signal is None:
-            return []
-        text = "\n".join([result.answer, *result.key_reasons, result.caveats])
+        """How the final answer breaks the format contract or the signal."""
         return result.structured_errors + validate_answer(
-            text, result.signal, result.tool_calls, claims=result.position_claims,
-            current_action=result.current_action)
+            result.rendered, result.signal, current_action=result.current_action)
 
     def _needs_repair(self, result):
         """Whether to send the violations back for one more try."""
@@ -496,6 +489,9 @@ class ResearchAgent:
         started = time.perf_counter()
         tool_result = await mcp.call_tool(name, arguments)
         payload = _tool_payload(tool_result)
+        call_id = None
+        if name == "run_backtest" and not tool_result.is_error:
+            call_id = f"bt{sum(c.call_id is not None for c in result.tool_calls) + 1}"
         result.tool_calls.append(ToolCall(
             name=name,
             arguments=arguments,
@@ -503,8 +499,11 @@ class ResearchAgent:
             is_error=tool_result.is_error,
             latency_ms=round((time.perf_counter() - started) * 1000, 1),
             as_of_clamped=clamped,
+            call_id=call_id,
         ))
         text = json.dumps(payload, default=str)
+        if call_id:
+            text = f"[call_id: {call_id}]\n{text}"
         if clamped:
             text = f"[as_of set to session cutoff {as_of.isoformat()}]\n{text}"
         return text, tool_result.is_error
@@ -525,14 +524,21 @@ class ResearchAgent:
         if not isinstance(data.get("answer"), str):
             raise RuntimeError("final answer is missing the 'answer' string")
         citations = data.get("citations") or []
-        result.answer = data["answer"]
-        result.key_reasons = [str(r) for r in data.get("key_reasons") or [] if r]
         result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
-        result.caveats = str(data.get("caveats") or "")
-        # DeepSeek does not enforce the schema, so malformed claims are possible;
-        # they make the whole claims field untrusted and count as violations.
-        (result.position_claims, result.current_action,
-         result.structured_errors) = parse_structured(data)
+        result.raw_answer = {
+            "answer": data["answer"],
+            "key_reasons": [str(r) for r in data.get("key_reasons") or [] if r],
+            "caveats": str(data.get("caveats") or ""),
+        }
+        # Position figures are placeholders; code fills in the values.
+        backtests = {c.call_id: c.result for c in result.tool_calls if c.call_id}
+        raw = result.raw_answer
+        result.rendered = [render(text, result.signal, backtests)
+                           for text in [raw["answer"], *raw["key_reasons"], raw["caveats"]]]
+        result.answer = result.rendered[0].text
+        result.key_reasons = [r.text for r in result.rendered[1:-1]]
+        result.caveats = result.rendered[-1].text
+        result.current_action, result.structured_errors = parse_current_action(data)
 
     @classmethod
     def _parse_final(cls, content, result):

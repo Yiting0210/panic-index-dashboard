@@ -46,13 +46,14 @@ def signal_mismatches(fixture, signal):
 
 def run_offline(fixtures):
     """Fixture scenarios and validator probes; needs no API key."""
-    from assistant import build_strategy_signal, validate_answer
+    from assistant import build_strategy_signal, render, validate_answer
 
     rows = []
     for fixture in fixtures:
         signal = build_strategy_signal(fixture["market"], fixture["as_of"])
         for kind, text in fixture["probes"].items():
-            violations = validate_answer(text, signal)
+            # Probes are written like model output: placeholders, then rendering.
+            violations = validate_answer(render(text, signal), signal)
             should_pass = kind == "consistent"
             rows.append({
                 "id": fixture["id"],
@@ -73,7 +74,9 @@ def run_offline(fixtures):
     return summary, rows
 
 
-async def run_agent(agent, fixtures):
+async def run_agent(agent, fixtures, judge=None):
+    from evals.judge import judge_result, summarize_judgements
+
     rows = []
     for fixture in fixtures:
         result = await agent.arun(fixture["question"], fixture["as_of"],
@@ -86,13 +89,14 @@ async def run_agent(agent, fixtures):
             "violations": result.violations,
             "first_violations": result.first_violations,
             "repairs": result.repairs,
-            "declared_claims": result.position_claims,
+            "placeholders": sum(r.count for r in result.rendered),
             "fallback_reason": None if result.violations else result.fallback_reason,
             "leaked": scored["leaked"],
             "unsupported_numbers": scored["unsupported_numbers"],
             "cost_usd": result.cost_usd,
             "answer": result.answer,
             "key_reasons": result.key_reasons,
+            "judge": judge_result(result, judge) if judge is not None else None,
         })
     answered = [r for r in rows if r["fallback_reason"] is None]
     summary = {
@@ -107,11 +111,13 @@ async def run_agent(agent, fixtures):
         "violation_rate": round(mean(bool(r["violations"]) for r in answered), 3)
         if answered else None,
         "repaired": sum(r["repairs"] > 0 and not r["violations"] for r in answered),
-        "declared_claims": sum(r["declared_claims"] is not None for r in rows),
+        "rendered_placeholders": sum(r["placeholders"] for r in rows),
         "leakage_rate": round(mean(r["leaked"] for r in rows), 3),
         "other_fallbacks": len(rows) - len(answered),
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
     }
+    if judge is not None:
+        summary.update(summarize_judgements([r["judge"] for r in rows]))
     return summary, rows
 
 
@@ -132,6 +138,8 @@ def main():
     parser.add_argument("--mode", choices=["offline", "replay", "record", "live"],
                         default="offline")
     parser.add_argument("--provider", choices=["anthropic", "deepseek"], default="anthropic")
+    parser.add_argument("--judge", action="store_true",
+                        help="label each statement's grounding with a DeepSeek judge")
     args = parser.parse_args()
 
     fixtures = load_fixtures()
@@ -139,7 +147,12 @@ def main():
         summary, rows = run_offline(fixtures)
         out = RESULTS_DIR / "consistency_offline.json"
     else:
-        summary, rows = asyncio.run(run_agent(build_agent(args.mode, args.provider), fixtures))
+        judge = None
+        if args.judge:
+            from evals.judge import DeepSeekJudge
+            judge = DeepSeekJudge()
+        summary, rows = asyncio.run(run_agent(build_agent(args.mode, args.provider), fixtures,
+                                              judge))
         out = RESULTS_DIR / f"consistency_{args.provider}.json"
     print(json.dumps(summary, indent=2))
     RESULTS_DIR.mkdir(exist_ok=True)

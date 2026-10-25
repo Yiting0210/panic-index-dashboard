@@ -1,49 +1,37 @@
-"""Checks the model's prose against the code-computed strategy signal.
+"""Format checks on the model's explanation of the code-computed signal.
 
-The Market Regime and Strategy Signal panels are filled by code, so the model
-only writes explanations. This validator rejects an explanation that
-contradicts the panels:
+Position figures are code-rendered (assistant/render.py): the model writes
+{current_exposure} or {bt1.final_position_pct} and code fills in the value.
+So this module does not try to understand what a number means. It checks
+the format contract and the one structured field:
 
-* fabricated allocation: an exposure / position percentage (or "N of M
-  units") that does not match the field it describes. Each figure gets a
-  role from its clause (current exposure, add or reduce step, cap, floor,
-  initial or previous exposure, a past level, a backtest average) and is
-  compared with that field only, so a made-up current exposure cannot pass
-  because it equals the add step or the cap. Figures labelled as a what-if
-  are compared with the run_backtest calls the model made this turn, never
-  with the signal, and other figures never with those calls;
-* contradictory direction: a sentence about the current action that says
-  add while the rule reduces or holds, or the reverse.
-
-Sentences that are negated or conditional ("would add if...") are skipped by
-the direction check, and levels in conditional sentences ("would take
-exposure from 30% to 20%") by the position check, so describing the rule
-itself is allowed. Step sizes, caps, and what-ifs are checked either way.
+* raw position figure: a percentage the model wrote itself (not produced by
+  a placeholder) in the same clause as a position word (exposure, position,
+  allocation, invested), or any "N of M units". Returns, drawdowns, and
+  index levels are fine as long as they sit in their own clause;
+* current_action: the action the model says it describes must be the
+  signal's action;
+* contradictory direction (backstop): an unhedged sentence about the
+  current action that says add while the rule reduces or holds, or the
+  reverse. Negated or conditional sentences ("would add if...") are skipped.
 """
-import math
 import re
-from dataclasses import dataclass
 
-POSITION_WORDS = r"(?:exposure|position|allocation|invested)"
-PCT = r"(\d+(?:\.\d+)?)\s*(?:%|percent\b)"
-# "exposure of 80%", "position is now 60 percent", "80% exposure", "60% of capital invested".
-PCT_AFTER_WORD_RE = re.compile(POSITION_WORDS + r"\b([^.%\d]{0,40}?)" + PCT, re.IGNORECASE)
-PCT_BEFORE_WORD_RE = re.compile(PCT + r"\s+(?:\w+\s+){0,2}?" + POSITION_WORDS + r"\b",
-                                re.IGNORECASE)
-UNITS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:out of|of|/)\s*(\d+)\s*units?\b", re.IGNORECASE)
-# In "exposure held while the index fell 12%", the figure describes the index.
-OTHER_SUBJECT_RE = re.compile(
-    r"\b(?:index|prices?|returns?|returned|earned|gained|lost|drawdown|vix|volatility|market|"
-    r"qqq|spx|smh|dji|nasdaq|sharpe|calmar|buy (?:&|and) hold)\b", re.IGNORECASE)
-# In "90% average exposure and 35% max drawdown", the noun after the figure
-# says it is not an exposure.
-FIGURE_NOUN_RE = re.compile(
-    r"^\s*(?:max(?:imum)?\s+|annual(?:ized)?\s+|total\s+|cumulative\s+)?"
-    r"(?:returns?|drawdowns?|gains?|loss(?:es)?|declines?|rally|upside|downside|percentile|"
-    r"win rate)\b", re.IGNORECASE)
+from .render import Rendered
+
+ACTIONS = ("add", "reduce", "hold")
+
+POSITION_WORD_RE = re.compile(
+    r"\b(?:exposures?|positions?|allocations?|invested|units?)\b", re.IGNORECASE)
+PCT_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?\s*(?:%|percent\b)", re.IGNORECASE)
+UNITS_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:out of|of|/)\s*\d+\s*units?\b", re.IGNORECASE)
+SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+CLAUSE_BREAK_RE = re.compile(
+    r"[,;:()]|\b(?:and|but|while|so|which|then|whereas|versus|vs\.?|compared)\b",
+    re.IGNORECASE)
+
 # "Buy & Hold" names the benchmark; its "buy" is not an add action.
 BUY_HOLD_RE = re.compile(r"\bbuy[\s-]*(?:&|and)[\s-]*hold\b", re.IGNORECASE)
-
 CURRENT_RE = re.compile(
     r"\b(?:now|currently|today|right now|at present|next session|latest observation|"
     r"this session)\b", re.IGNORECASE)
@@ -63,222 +51,55 @@ ADD_NOW_RE = re.compile(rf"\b(?:{ADD_NOW})\b", re.IGNORECASE)
 ADD_ANY_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST})\b", re.IGNORECASE)
 REDUCE_NOW_RE = re.compile(rf"\b(?:{REDUCE_NOW})\b", re.IGNORECASE)
 REDUCE_ANY_RE = re.compile(rf"\b(?:{REDUCE_NOW}|{REDUCE_PAST})\b", re.IGNORECASE)
-SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
-# "if", but not the "-if" of "what-if" (WHAT_IF_RE handles that).
-CONDITIONAL_RE = re.compile(r"\b(?:would|could|unless|will)\b|(?<!-)\bif\b", re.IGNORECASE)
-
-# Claim roles, read from the figure's own clause.
-CLAUSE_BREAK_RE = re.compile(r"[,;:()]|\b(?:and|but|while|so|which|then|whereas)\b",
-                             re.IGNORECASE)
-WHAT_IF_RE = re.compile(
-    r"\bwhat-?if\b|\bhypothetical|\bwould (?:end|have|finish|hold|sit)\b|"
-    r"\bhad (?:it|the strategy|the backtest) start", re.IGNORECASE)
-# A what-if label reaches forward over commas ("In the what-if, it ends at
-# 70%") but not past a contrast ("80% now, but the what-if ends at 70%").
-CONTRAST_RE = re.compile(
-    r";|\b(?:but|whereas|while|however|versus|vs)\b|\bcompared (?:with|to)\b", re.IGNORECASE)
-# A step verb right before the figure ("added 20%", "reduced exposure by 10%");
-# "reduced to 0%" states a level, not a step.
-STEP_TAIL = r"(?:\s+(?:only|another|a|further|exposure|its|the|position|allocation|by))*\s*$"
-# Verbs that state a step only next to a figure ("exposure rose 10%"); in a
-# sentence about the current action they could describe the index, so the
-# direction check does not use them.
-ADD_STEP_ONLY = r"rise|rose|rises|rising|grew|grows|climbed|climbs|steps? up|stepped up"
-REDUCE_STEP_ONLY = (r"remov(?:e|es|ed|ing)|fall|fell|falls|dropped|drops|steps? down|"
-                    r"stepped down")
-ADD_STEP_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST}|{ADD_STEP_ONLY})\b{STEP_TAIL}",
-                         re.IGNORECASE)
-REDUCE_STEP_RE = re.compile(rf"\b(?:{REDUCE_NOW}|{REDUCE_PAST}|{REDUCE_STEP_ONLY})\b{STEP_TAIL}",
-                            re.IGNORECASE)
-PER_PANIC_RE = re.compile(r"^\W*(?:\w+\s+)?(?:per|each|a)\s+panic", re.IGNORECASE)
-PER_GREED_RE = re.compile(r"^\W*(?:\w+\s+)?(?:per|each|a)\s+greed", re.IGNORECASE)
-# Checked in order after the step patterns; the first match wins, else "current".
-ROLE_RES = (
-    ("average", re.compile(r"\b(?:averag(?:e|es|ed|ing)|avg|mean)\b", re.IGNORECASE)),
-    ("time_below", re.compile(r"\btime below\b|\bbelow full\b", re.IGNORECASE)),
-    ("previous", re.compile(r"\b(?:previous|previously|prior|yesterday|before)\b|\bfrom\W*$",
-                            re.IGNORECASE)),
-    # "starting 2023-01-03" / "starting in 2023" is a start date, not an exposure.
-    ("initial", re.compile(r"\b(?:initial|initially|began|start(?:s|ed|ing)?(?:\s+(?:at|with|from))?)"
-                           r"\b(?!\s+(?:in\s+|on\s+)?\d{4})", re.IGNORECASE)),
-    ("cap", re.compile(r"\b(?:cap|capped|maximum|max|ceiling|upper limit)\b", re.IGNORECASE)),
-    ("floor", re.compile(r"\b(?:floor|minimum|min|lower limit)\b", re.IGNORECASE)),
-    ("history", re.compile(r"\b(?:was|were|had|reached|(?:19|20)\d{2})\b", re.IGNORECASE)),
-)
-ROLE_LABELS = {
-    "current": "the current exposure", "add": "the add step", "reduce": "the reduce step",
-    "cap": "the exposure cap", "floor": "the exposure floor",
-    "initial": "the initial exposure", "previous": "the previous exposure",
-    "history": "a past exposure level", "average": "the average exposure",
-    "time_below": "the time below full exposure",
-}
-# The run_backtest fields a figure with each role may match.
-CALL_FIELDS = {
-    "current": ("final_position_pct",),
-    "add": ("add_pct",),
-    "reduce": ("reduce_pct",),
-    "cap": ("max_position_pct",),
-    "floor": ("min_position_pct",),
-    "initial": ("initial_position_pct",),
-    "previous": ("previous_position_pct",),
-    "history": ("final_position_pct", "previous_position_pct", "initial_position_pct",
-                "max_position_pct", "min_position_pct"),
-    "average": ("average_exposure_pct",),
-    "time_below": ("time_below_full_exposure_pct",),
-}
 
 
-@dataclass(frozen=True)
-class PositionClaim:
-    value: float
-    role: str
-    what_if: bool
-    sentence: str
-    # Where the figure sits in the sentence, so the scenario match can ignore it.
-    span: tuple = (0, 0)
+def _segments(text, pattern):
+    """(start, end) of the pieces of ``text`` between matches of ``pattern``."""
+    start = 0
+    for m in pattern.finditer(text):
+        yield start, m.start()
+        start = m.end()
+    yield start, len(text)
 
 
-def claim_role(before, after):
-    """Role of a figure, from its clause's text before and after it."""
-    clauses = CLAUSE_BREAK_RE.split(before)
-    # "average exposure (59.8%)": a bracketed figure belongs to the clause
-    # before the bracket.
-    if before.rstrip().endswith("(") and len(clauses) > 1 and not clauses[-1].strip():
-        before = clauses[-2]
-    else:
-        before = clauses[-1]
-    after = CLAUSE_BREAK_RE.split(after, maxsplit=1)[0]
-    if ADD_STEP_RE.search(before) or PER_PANIC_RE.search(after):
-        return "add"
-    if REDUCE_STEP_RE.search(before) or PER_GREED_RE.search(after):
-        return "reduce"
-    clause = f"{before} {after}"
-    for role, pattern in ROLE_RES:
-        if pattern.search(before if role == "previous" else clause):
-            return role
-    return "current"
+def raw_position_figures(rendered):
+    """Position figures the model wrote itself instead of using a placeholder."""
+    if isinstance(rendered, str):
+        rendered = Rendered(rendered)
+    text = rendered.text
 
+    def is_rendered(start, end):
+        return any(s <= start and end <= e for s, e in rendered.spans)
 
-def claim_is_what_if(before, after):
-    """Whether a figure is labelled as a what-if, before it or in its own clause."""
-    before = CONTRAST_RE.split(before)[-1]
-    after = CLAUSE_BREAK_RE.split(CONTRAST_RE.split(after, maxsplit=1)[0], maxsplit=1)[0]
-    return bool(WHAT_IF_RE.search(before) or WHAT_IF_RE.search(after))
-
-
-def stated_positions(text):
-    """Exposure figures stated in ``text`` with their roles (units as percent)."""
-    claims = []
-    for sentence in SENTENCE_RE.split(text):
-        sentence = sentence.strip()
-        found = {}  # figure start -> (value, end), so each figure is one claim
-        for m in PCT_AFTER_WORD_RE.finditer(sentence):
-            # A ";" ends the exposure's clause; a figure past it, or one
-            # followed by its own noun ("35% max drawdown"), is something else.
-            if (";" in m.group(1) or OTHER_SUBJECT_RE.search(m.group(1))
-                    or FIGURE_NOUN_RE.search(sentence[m.end():])):
+    found = []
+    for s_start, s_end in _segments(text, SENTENCE_RE):
+        sentence = text[s_start:s_end].strip()
+        for c_start, c_end in _segments(text[s_start:s_end], CLAUSE_BREAK_RE):
+            a, b = s_start + c_start, s_start + c_end
+            if not POSITION_WORD_RE.search(text[a:b]):
                 continue
-            found[m.start(2)] = (float(m.group(2)), m.end(2))
-        for m in PCT_BEFORE_WORD_RE.finditer(sentence):
-            found.setdefault(m.start(1), (float(m.group(1)), m.end(1)))
-        for m in UNITS_RE.finditer(sentence):
-            if float(m.group(2)) > 0:
-                found[m.start(1)] = (float(m.group(1)) / float(m.group(2)) * 100, m.end())
-        for start, (value, end) in sorted(found.items()):
-            before, after = sentence[:start], sentence[end:]
-            claims.append(PositionClaim(value, claim_role(before, after),
-                                        claim_is_what_if(before, after), sentence,
-                                        (start, end)))
-    return claims
+            for m in PCT_RE.finditer(text, a, b):
+                if not is_rendered(m.start(), m.end()):
+                    found.append((m.group(0).strip(), sentence))
+        for m in UNITS_RE.finditer(text, s_start, s_end):
+            found.append((m.group(0), sentence))
+    return found
 
 
-# run_backtest result fields that echo a scenario's parameters.
-SCENARIO_FIELDS = ("buy_threshold", "sell_threshold", "initial_position_pct", "add_pct",
-                   "reduce_pct", "max_position_pct", "min_position_pct", "start_date")
-ISO_DATE_RE = re.compile(r"\b(\d{4})-\d{2}-\d{2}\b")
-NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w])")
+def parse_current_action(data):
+    """(current_action, errors) from a final answer, validated strictly.
 
-
-def backtest_calls(tool_calls):
-    return [call for call in tool_calls
-            if call.name == "run_backtest" and call.result and not call.is_error]
-
-
-def scenario_calls(claim, tool_calls):
-    """The run_backtest calls a figure's sentence identifies by their parameters.
-
-    With several what-if backtests, "with a 60 threshold ... 40%" must be
-    checked against the call whose buy_threshold is 60, not against every
-    call. Only parameters that differ between the calls can identify one; the
-    figure itself is ignored. Dates match the full ISO date or the year.
-    When the sentence names no distinguishing parameter, all calls stay
-    candidates.
+    Missing or "not_stated" gives None; any other value outside add / reduce
+    / hold is an error, so a malformed field never silently skips the check.
     """
-    calls = backtest_calls(tool_calls)
-    if len(calls) < 2:
-        return calls
-    varying = [f for f in SCENARIO_FIELDS
-               if len({str(call.result.get(f)) for call in calls}) > 1]
-    if not varying:
-        return calls
-    start, end = claim.span
-    text = claim.sentence[:start] + " " + claim.sentence[end:]
-    dates = {m.group(0) for m in ISO_DATE_RE.finditer(text)}
-    years = {d[:4] for d in dates}
-    numbers = [float(n) for n in NUMBER_RE.findall(ISO_DATE_RE.sub(" ", text))]
-
-    def matches(call):
-        score = 0
-        for f in varying:
-            value = call.result.get(f)
-            if value is None:
-                continue
-            if f == "start_date":
-                # An exact date outranks a year ("since 2023").
-                iso = str(value)[:10]
-                score += 2 if iso in dates else (
-                    1 if iso[:4] in years or _near(float(iso[:4]), numbers, 0) else 0)
-            else:
-                score += _near(float(value), numbers, 0.01)
-        return score
-
-    scores = [matches(call) for call in calls]
-    best = max(scores)
-    return calls if best == 0 else [c for c, s in zip(calls, scores) if s == best]
-
-
-
-def allowed_positions(signal, tool_calls=(), role="current", what_if=False):
-    """Values a figure with this role may state.
-
-    A what-if figure may match only the run_backtest calls made this turn and
-    any other figure only the standard backtest's signal. Averages always come
-    from run_backtest calls, since the signal does not carry them. Callers
-    narrow ``tool_calls`` to the figure's scenario with scenario_calls.
-    """
-    if what_if or role in ("average", "time_below"):
-        allowed = set()
-        for call in backtest_calls(tool_calls):
-            allowed.update(float(call.result[f]) for f in CALL_FIELDS[role]
-                           if call.result.get(f) is not None)
-            change = call.result.get("latest_position_change_pct")
-            if change and role == ("add" if change > 0 else "reduce"):
-                allowed.add(abs(float(change)))
-        return allowed
-    # The step actually applied, smaller than add_pct / reduce_pct when clipped.
-    change = signal.final_position_pct - signal.previous_position_pct
-    return {
-        "current": {signal.final_position_pct},
-        "add": {signal.add_pct} | ({change} if change > 0 else set()),
-        "reduce": {signal.reduce_pct} | ({-change} if change < 0 else set()),
-        "cap": {signal.max_position_pct},
-        "floor": {signal.min_position_pct},
-        "initial": {signal.initial_position_pct},
-        "previous": {signal.previous_position_pct},
-        "history": {signal.final_position_pct, signal.previous_position_pct,
-                    signal.initial_position_pct, signal.max_position_pct,
-                    signal.min_position_pct},
-    }[role]
+    action = data.get("current_action")
+    if action is None or action == "not_stated":
+        return None, []
+    if action in ACTIONS:
+        return action, []
+    error = (f"invalid structured output: current_action {action!r} is not one of "
+             "add, reduce, hold, not_stated")
+    return None, [error]
 
 
 def stated_actions(text, present_only=False):
@@ -297,164 +118,30 @@ def stated_actions(text, present_only=False):
     return found
 
 
-# Roles the model may declare in position_claims, and the validator role each maps to.
-CLAIM_ROLES = {
-    "current": "current", "previous": "previous", "add_step": "add",
-    "reduce_step": "reduce", "cap": "cap", "floor": "floor", "initial": "initial",
-    "average": "average", "time_below_full": "time_below", "past_level": "history",
-}
-ACTIONS = ("add", "reduce", "hold")
-CLAIM_KEYS = {"value", "role", "what_if"}
+def validate_answer(rendered, signal, current_action=None):
+    """Violations of the format contract and the signal; empty when consistent.
 
-
-def _claim_error(index, claim):
-    """Why one position_claims item is malformed, or None."""
-    if not isinstance(claim, dict):
-        return f"position_claims[{index}] is not an object"
-    if set(claim) != CLAIM_KEYS:
-        return (f"position_claims[{index}] must have exactly the keys value, role, "
-                f"what_if (got {sorted(claim)})")
-    value = claim["value"]
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value)):
-        return f"position_claims[{index}].value {value!r} is not a finite number"
-    if claim["role"] not in CLAIM_ROLES:
-        return (f"position_claims[{index}].role {claim['role']!r} is not one of "
-                f"{', '.join(CLAIM_ROLES)}")
-    if not isinstance(claim["what_if"], bool):
-        return f"position_claims[{index}].what_if {claim['what_if']!r} is not true or false"
-    return None
-
-
-def parse_structured(data):
-    """(claims, current_action, errors) from a final answer, validated strictly.
-
-    Malformed structured output must never weaken validation: if any claim
-    or current_action is malformed, nothing structured is trusted (claims is
-    None, so the prose is checked without the declared-figure relaxation)
-    and the errors are reported as violations, which triggers the repair
-    turn. A missing position_claims field also gives None. current_action
-    may be missing or "not_stated"; any other value outside add / reduce /
-    hold is an error.
+    ``rendered`` is one Rendered text (or a plain string with no rendered
+    figures), or a list of them, one per answer field.
     """
-    errors = []
-    claims = None
-    if "position_claims" in data:
-        raw = data["position_claims"]
-        if not isinstance(raw, list):
-            errors.append(f"position_claims is not a list (got {type(raw).__name__})")
-        else:
-            errors += [e for e in (_claim_error(i, c) for i, c in enumerate(raw)) if e]
-            if not errors:
-                claims = [{"value": float(c["value"]), "role": c["role"],
-                           "what_if": c["what_if"]} for c in raw]
-    action = data.get("current_action")
-    if action is not None and action not in (*ACTIONS, "not_stated"):
-        errors.append(f"current_action {action!r} is not one of add, reduce, hold, not_stated")
-    if errors:
-        # Any malformed field makes the whole structured output untrusted.
-        return None, None, [f"invalid structured output: {e}" for e in errors]
-    return claims, action if action in ACTIONS else None, []
-
-
-def grounded_numbers(signal, tool_calls=()):
-    """Every number in the signal and this turn's tool results."""
-    found = []
-
-    def walk(value):
-        if isinstance(value, bool):
-            return
-        if isinstance(value, (int, float)):
-            found.append(float(value))
-        elif isinstance(value, dict):
-            for item in value.values():
-                walk(item)
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                walk(item)
-
-    walk(vars(signal))
-    for call in tool_calls:
-        if call.result and not call.is_error:
-            walk(call.result)
-    return found
-
-
-def _near(value, candidates, tolerance):
-    return any(abs(value - ok) <= tolerance for ok in candidates)
-
-
-def _violation(value, role, what_if, allowed, sentence, verb):
-    expected = (", ".join(f"{ok:g}%" for ok in sorted(allowed)) if allowed
-                else "a run_backtest call this turn")
-    label = ROLE_LABELS[role] + (" in a what-if" if what_if else "")
-    return f"fabricated position {value:g}% ({verb} {label}; expected {expected}): {sentence}"
-
-
-def check_declared(claims, current_action, signal, tool_calls=(), tolerance=0.51):
-    """Violations among the figures and action the model declared itself.
-
-    The model lists each exposure figure it states with its role, so no
-    prose parsing is needed: each figure is checked against its own field.
-    """
+    parts = rendered if isinstance(rendered, list) else [rendered]
+    parts = [Rendered(p) if isinstance(p, str) else p for p in parts]
     violations = []
-    for claim in claims:
-        role = CLAIM_ROLES[claim["role"]]
-        allowed = allowed_positions(signal, tool_calls, role, claim["what_if"])
-        if not _near(claim["value"], allowed, tolerance):
-            violations.append(_violation(claim["value"], role, claim["what_if"], allowed,
-                                         "position_claims", "declared as"))
-    if current_action in ACTIONS and current_action != signal.action:
+    for part in parts:
+        violations += [f"placeholder error: {e}" for e in part.errors]
+        for figure, sentence in raw_position_figures(part):
+            violations.append(
+                f"raw position figure {figure}: write position figures only as "
+                f"placeholders such as {{current_exposure}}: {sentence}")
+    if signal is None:
+        return violations
+    if current_action is not None and current_action != signal.action:
         violations.append(f"current_action '{current_action}' contradicts the rule's "
                           f"'{signal.action}' ({signal.regime} regime)")
-    return violations
-
-
-def validate_answer(text, signal, tool_calls=(), tolerance=0.51, claims=None,
-                    current_action=None):
-    """Violations of the strategy signal in ``text``; empty when consistent.
-
-    Without ``claims`` the prose is parsed for exposure figures and each is
-    checked against the field its clause suggests. With ``claims`` (the
-    model's declared figures) those are checked by role, and a figure the
-    parser finds in the prose but the model did not declare fails only when
-    it matches nothing in the signal or this turn's tool results, so a
-    return or drawdown next to the word "exposure" is not misread.
-    """
-    structured = claims is not None
-    violations = (check_declared(claims, current_action, signal, tool_calls, tolerance)
-                  if structured else [])
-    declared = [c["value"] for c in claims or ()]
-    grounded = grounded_numbers(signal, tool_calls) if structured else []
-    seen = set()
-    for claim in stated_positions(text):
-        if (claim.value, claim.role, claim.what_if) in seen:
-            continue
-        seen.add((claim.value, claim.role, claim.what_if))
-        from_calls = claim.what_if or claim.role in ("average", "time_below")
-        # Declaring a what-if figure does not say which scenario it belongs to,
-        # so what-if and average figures are always checked against their
-        # sentence's scenario, never waved through as declared or grounded.
-        if structured and not from_calls and _near(claim.value, declared, tolerance):
-            continue
-        # A level in a conditional sentence ("another close below 15 would take
-        # exposure from 30% to 20%") is a hypothetical path, not a claim about
-        # the current or past position; steps, caps, and what-ifs are still checked.
-        if (not claim.what_if and claim.role in ("current", "previous", "history")
-                and CONDITIONAL_RE.search(claim.sentence)):
-            continue
-        calls = scenario_calls(claim, tool_calls) if from_calls else tool_calls
-        allowed = allowed_positions(signal, calls, claim.role, claim.what_if)
-        if _near(claim.value, allowed, tolerance):
-            continue
-        if structured and not from_calls and _near(claim.value, grounded, tolerance):
-            continue
-        violations.append(_violation(claim.value, claim.role, claim.what_if, allowed,
-                                     claim.sentence, "read as"))
+    text = "\n".join(p.text for p in parts)
     for action, sentence in stated_actions(text, present_only=signal.action == "hold"):
         if action != signal.action:
             violations.append(
                 f"direction '{action}' contradicts the rule's '{signal.action}' "
-                f"({signal.regime} regime): {sentence}"
-            )
+                f"({signal.regime} regime): {sentence}")
     return violations
