@@ -4,256 +4,384 @@
     "model": "deepseek-flash",
     "fixtures": 10,
     "answered": 10,
-    "first_pass_violation_rate": 0.2,
+    "first_pass_violation_rate": 0.4,
     "violation_rate": 0,
-    "repaired": 2,
-    "declared_claims": 10,
+    "repaired": 4,
+    "rendered_placeholders": 82,
     "leakage_rate": 0,
     "other_fallbacks": 0,
-    "total_cost_usd": 0.0178
+    "total_cost_usd": 0.0186,
+    "judge_answers": 10,
+    "judge_groundedness": 0.916,
+    "judge_statements": 119,
+    "judge_unsupported": 8,
+    "judge_contradicted": 2,
+    "judge_unjudged": 0,
+    "judge_cost_usd": 0.0127
   },
   "rows": [
     {
       "id": "c01_full_exposure",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [],
-      "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 100.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 62.4,
-          "role": "average",
-          "what_if": false
-        },
-        {
-          "value": 48.1,
-          "role": "time_below_full",
-          "what_if": false
-        }
+      "first_violations": [
+        "raw position figure 0%: write position figures only as placeholders such as {current_exposure}: Final and previous exposure are both at the maximum of the 0%-100% band, leaving 100% held.",
+        "raw position figure -100%: write position figures only as placeholders such as {current_exposure}: Final and previous exposure are both at the maximum of the 0%-100% band, leaving 100% held."
       ],
+      "repairs": 1,
+      "placeholders": 4,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.002094,
-      "answer": "As of 2026-10-22 the QQQ strategy holds 100% exposure, unchanged from the previous observation, so the latest action is hold. The Panic Index is 48.95 (VIX 19.03, CNN Fear & Greed 19.81, 'extreme fear'), which sits between the panic threshold of 64 and the greed threshold of 15, i.e. a neutral regime at the 84.1st percentile of its available history. Neutral days trigger no threshold-driven change, so exposure stays at its 100% cap. Next session it also holds 100% unless the index closes above 64 (then adds 20%) or below 15 (then reduces 10%). Note that over the 2021-05-17 to 2026-10-22 window the strategy returned 84.44% versus 124.25% for Buy & Hold, though with a smaller max drawdown (-29.56% vs -35.12%).",
+      "cost_usd": 0.002679,
+      "answer": "As of 2026-10-22 the rule holds 100% exposure, unchanged from the prior observation \u2014 the action is hold. The Panic Index reads 48.95 (VIX 19.03 and CNN Fear & Greed 19.81, \"extreme fear\"), which sits between the 64 panic threshold and the 15 greed threshold, so the regime is neutral and the rule makes no threshold-driven change. Its percentile of 84.1 is a ranking within available history, not a regime label. No Fed policy commentary is needed for this mechanical question. Note the backtest record: over 2021-05-17 to 2026-10-22 the strategy returned 84.44% versus 124.25% for Buy & Hold, with max drawdown of -29.56% against -35.12%, so Buy & Hold beat the strategy on return here. This is historical research, not investment advice.",
       "key_reasons": [
-        "Panic Index 48.95 is below the 64 panic threshold and above the 15 greed threshold, so the regime is neutral.",
-        "In a neutral regime the rule makes no exposure change, so final_position_pct stays at 100% with latest_position_change_pct 0.0.",
-        "The rule caps exposure at 100%, so 100% is the maximum the strategy can hold.",
-        "Buy & Hold beats the strategy on absolute return (124.25% vs 84.44%) and Sharpe (0.777 vs 0.697), while the strategy has the smaller max drawdown (-29.56% vs -35.12%)."
-      ]
+        "QQQ's Panic Index is 48.95 on 2026-10-22, between the 64 buy threshold and the 15 sell threshold, so the regime is neutral.",
+        "The rule adds only on panic-regime days and reduces only on greed-regime days, so a neutral reading produces no change: latest_action is hold.",
+        "Exposure is already at the top of the rule's band, so the neutral reading leaves 100% held.",
+        "Over the standard window the strategy returned 84.44% versus 124.25% for Buy & Hold, with max drawdown -29.56% versus -35.12%."
+      ],
+      "judge": {
+        "groundedness": 0.929,
+        "supported": 13,
+        "unsupported": 1,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001025,
+        "statements": [
+          {
+            "statement": "As of 2026-10-22 the rule holds 100% exposure, unchanged from the prior observation \u2014 the action is hold.",
+            "verdict": "supported",
+            "reason": "final and previous position 100%, action hold."
+          },
+          {
+            "statement": "The Panic Index reads 48.95 (VIX 19.03 and CNN Fear & Greed 19.81, \"extreme fear\"), which sits between the 64 panic threshold and the 15 greed threshold, so the regime is neutral and the rule makes no threshold-driven change.",
+            "verdict": "supported",
+            "reason": "Evidence matches 48.95, VIX 19.03, F&G 19.81 extreme fear, neutral regime."
+          },
+          {
+            "statement": "Its percentile of 84.1 is a ranking within available history, not a regime label.",
+            "verdict": "supported",
+            "reason": "Percentile 84.1 given; regime labeled neutral, consistent with percentile not being regime label."
+          },
+          {
+            "statement": "No Fed policy commentary is needed for this mechanical question.",
+            "verdict": "supported",
+            "reason": "Generic statement; no Fed commentary required for mechanical rule."
+          },
+          {
+            "statement": "Note the backtest record: over 2021-05-17 to 2026-10-22 the strategy returned 84.44% versus 124.25% for Buy & Hold, with max drawdown of -29.56% against -35.12%, so Buy & Hold beat the strategy on return here.",
+            "verdict": "supported",
+            "reason": "Matches backtest: 84.44% vs 124.25%, drawdowns -29.56% vs -35.12%."
+          },
+          {
+            "statement": "This is historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          },
+          {
+            "statement": "QQQ's Panic Index is 48.95 on 2026-10-22, between the 64 buy threshold and the 15 sell threshold, so the regime is neutral.",
+            "verdict": "supported",
+            "reason": "48.95 between thresholds 64 and 15, neutral regime."
+          },
+          {
+            "statement": "The rule adds only on panic-regime days and reduces only on greed-regime days, so a neutral reading produces no change: latest_action is hold.",
+            "verdict": "supported",
+            "reason": "Rule adds only panic-regime, reduces only greed-regime; neutral yields hold."
+          },
+          {
+            "statement": "Exposure is already at the top of the rule's band, so the neutral reading leaves 100% held.",
+            "verdict": "supported",
+            "reason": "100% is max band; neutral leaves it unchanged."
+          },
+          {
+            "statement": "Over the standard window the strategy returned 84.44% versus 124.25% for Buy & Hold, with max drawdown -29.56% versus -35.12%.",
+            "verdict": "supported",
+            "reason": "Matches backtest figures and window."
+          },
+          {
+            "statement": "Backtest figures are in-sample over 2021-05-17 to 2026-10-22 with hindsight-chosen thresholds; average exposure was 62.4% and the rule sat below full exposure 48.1% of the time.",
+            "verdict": "unsupported",
+            "reason": "Average exposure 62.4% and 48.1% below full are given, but in-sample/hindsight-chosen thresholds are not stated."
+          },
+          {
+            "statement": "Buy & Hold outperformed on return and Sharpe despite the strategy's smaller drawdown.",
+            "verdict": "supported",
+            "reason": "Buy & Hold higher return and Sharpe 0.777 vs 0.697, strategy smaller drawdown."
+          },
+          {
+            "statement": "The percentile is a history rank, not a signal level.",
+            "verdict": "supported",
+            "reason": "Percentile is a history rank; regime is separately labeled neutral."
+          },
+          {
+            "statement": "Not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          }
+        ]
+      }
     },
     {
       "id": "c02_eighty_pct",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [
-        "fabricated position 64% (declared as the exposure floor; expected 0%): position_claims"
-      ],
-      "repairs": 1,
-      "declared_claims": [
-        {
-          "value": 80.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 60.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        }
-      ],
+      "first_violations": [],
+      "repairs": 0,
+      "placeholders": 2,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.003321,
-      "answer": "The signal is long-ish, but the history is mixed rather than clearly attractive. As of 2025-03-03 QQQ sits in the panic regime: Panic Index 64.27 (89.3rd percentile), VIX 22.78, Fear & Greed 12.34 (extreme fear). Historically, panic-regime days (64 threshold, 105 days since 2021-05-17) preceded positive 5- and 21-day returns (mean +0.91% and +2.40%; win rates 64.4% and 66.3%), but 63-day returns were weak (mean -1.00%, win rate 43.3%). So the edge looks short-horizon only. The rule added 20% on the latest observation, taking exposure from 60% to 80%; next session it holds 80%, adds again if the index closes above 64, and trims 10% below 15. Note the standard backtest's Buy & Hold beat the strategy (56.89% vs. 17.25%). This is historical research, not investment advice.",
+      "cost_usd": 0.002296,
+      "answer": "Conditionally, on short horizons only. As of 2025-03-03 QQQ's Panic Index is 64.27 (percentile 89.3), just over the 64 threshold, with VIX 22.78 and CNN Fear & Greed 12.34 (extreme fear). Historically, panic-regime days (105 signal days, 2021-05-17 to 2024-08-07) were followed by positive short-term returns: 64.4% win rate at 5 days (mean +0.91%) and 66.3% at 21 days (mean +2.40%), but the 63-day picture flips to a 43.3% win rate and mean -1.00%. The rule therefore added 20% on the latest observation and holds 80% exposure. Note that the standard backtest's Buy & Hold beat the strategy: 56.89% return versus 17.25%, with Sharpe 0.645 versus 0.315, and the strategy drew the same -35.12% max drawdown. This is historical research, not investment advice.",
       "key_reasons": [
-        "Panic Index 64.27 with percentile 89.3 and Fear & Greed 12.34 ('extreme fear') place QQQ just above the 64 panic threshold.",
-        "Panic-regime days showed 66.3% win rate and +2.40% mean 21-day forward return, but only 43.3% win rate and -1.00% mean at 63 days.",
-        "The rule added 20%, moving exposure from 60% to 80% on the 2025-03-03 observation; the next step is a hold unless the index closes above 64 or below 15.",
-        "In the standard 2021-05-17 to 2025-03-03 backtest Buy & Hold returned 56.89% versus 17.25% for the strategy, with identical -35.12% max drawdown."
-      ]
+        "Panic Index 64.27 sits in the panic regime at the 89.3rd percentile, just above the 64 buy threshold, with Fear & Greed at 12.34 (extreme fear).",
+        "Panic-regime days historically showed 21-day mean forward return of +2.40% with a 66.3% win rate, but 63-day mean of -1.00% and 43.3% win rate.",
+        "The backtest shows Buy & Hold outperforming the strategy on return (56.89% vs 17.25%) and Sharpe (0.645 vs 0.315) over 2021-05-17 to 2025-03-03.",
+        "FOMC risk-management discussions centered on uncertainty about how restrictive policy is and how long it must be maintained, underscoring a data-dependent backdrop."
+      ],
+      "judge": {
+        "groundedness": 0.929,
+        "supported": 13,
+        "unsupported": 0,
+        "contradicted": 1,
+        "unjudged": 0,
+        "cost_usd": 0.001755,
+        "statements": [
+          {
+            "statement": "Conditionally, on short horizons only.",
+            "verdict": "supported",
+            "reason": "Forward returns were positive at 5 and 21 days but negative at 63 days, so short-horizon support is conditional."
+          },
+          {
+            "statement": "As of 2025-03-03 QQQ's Panic Index is 64.27 (percentile 89.3), just over the 64 threshold, with VIX 22.78 and CNN Fear & Greed 12.34 (extreme fear).",
+            "verdict": "supported",
+            "reason": "Evidence gives Panic Index 64.27, percentile 89.3, threshold 64, VIX 22.78, Fear & Greed 12.34 extreme fear."
+          },
+          {
+            "statement": "Historically, panic-regime days (105 signal days, 2021-05-17 to 2024-08-07) were followed by positive short-term returns: 64.4% win rate at 5 days (mean +0.91%) and 66.3% at 21 days (mean +2.40%), but the 63-day picture flips to a 43.3% win rate and mean -1.00%.",
+            "verdict": "supported",
+            "reason": "Evidence shows 105 signal days, 64.4%/0.91% at 5d, 66.3%/2.40% at 21d, 43.3%/-1.00% at 63d, last signal 2024-08-07."
+          },
+          {
+            "statement": "The rule therefore added 20% on the latest observation and holds 80% exposure.",
+            "verdict": "supported",
+            "reason": "Latest action was add 20%, final position 80%."
+          },
+          {
+            "statement": "Note that the standard backtest's Buy & Hold beat the strategy: 56.89% return versus 17.25%, with Sharpe 0.645 versus 0.315, and the strategy drew the same -35.12% max drawdown.",
+            "verdict": "supported",
+            "reason": "Backtest shows 56.89% vs 17.25% return, Sharpe 0.645 vs 0.315, and identical -35.12% max drawdown."
+          },
+          {
+            "statement": "This is historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          },
+          {
+            "statement": "Panic Index 64.27 sits in the panic regime at the 89.3rd percentile, just above the 64 buy threshold, with Fear & Greed at 12.34 (extreme fear).",
+            "verdict": "supported",
+            "reason": "Consistent with evidence: 64.27, panic regime, 89.3 percentile, just above 64 threshold, Fear & Greed 12.34 extreme fear."
+          },
+          {
+            "statement": "Panic-regime days historically showed 21-day mean forward return of +2.40% with a 66.3% win rate, but 63-day mean of -1.00% and 43.3% win rate.",
+            "verdict": "supported",
+            "reason": "Matches forward-returns evidence for 21-day and 63-day horizons."
+          },
+          {
+            "statement": "The backtest shows Buy & Hold outperforming the strategy on return (56.89% vs 17.25%) and Sharpe (0.645 vs 0.315) over 2021-05-17 to 2025-03-03.",
+            "verdict": "supported",
+            "reason": "Matches backtest return and Sharpe figures over the stated window."
+          },
+          {
+            "statement": "FOMC risk-management discussions centered on uncertainty about how restrictive policy is and how long it must be maintained, underscoring a data-dependent backdrop.",
+            "verdict": "supported",
+            "reason": "Fed minutes discuss uncertainty about policy restrictiveness and how long to maintain the stance, indicating data dependence."
+          },
+          {
+            "statement": "Regime days are overlapping exposure days, not independent bottom forecasts, so win rates overstate precision; returns are historical, not guaranteed.",
+            "verdict": "supported",
+            "reason": "Evidence note states overlapping exposure days, not independent forecasts, and historical not guaranteed."
+          },
+          {
+            "statement": "The 63-day horizon was negative.",
+            "verdict": "supported",
+            "reason": "63-day mean return was -1.00% with 43.3% win rate."
+          },
+          {
+            "statement": "Buy & Hold beat the strategy on all metrics in the backtest window, with identical max drawdown, and added exposure carried substantial upside drag.",
+            "verdict": "contradicted",
+            "reason": "The backtest verdict says Buy & Hold outperforms on all metrics, and max drawdown is identical, but upside drag of 168.34pp is stated; however the claim itself aligns, though 'substantial upside drag' is supported\u2014actually supported."
+          },
+          {
+            "statement": "Fed passages cited are from 2024 minutes and do not describe the March 2025 stance.",
+            "verdict": "supported",
+            "reason": "Cited minutes are all from 2024 and predate the March 2025 stance."
+          }
+        ]
+      }
     },
     {
       "id": "c03_after_reduction",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [
-        "fabricated position 64% (declared as the exposure cap; expected 100%): position_claims"
-      ],
-      "repairs": 1,
-      "declared_claims": [
-        {
-          "value": 0.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        }
-      ],
+      "first_violations": [],
+      "repairs": 0,
+      "placeholders": 12,
       "fallback_reason": null,
       "leaked": false,
-      "unsupported_numbers": [],
-      "cost_usd": 0.001947,
-      "answer": "As of 2024-06-28 the QQQ Panic Index is 29.02 (percentile 28.7), squarely neutral, so the rule holds its current 0% exposure with no change. For the rule to move, the Index must close outside the neutral band on a subsequent day: a close above 64 (panic regime) adds 20 percentage points of exposure per such day, and a close below 15 (greed regime) reduces it by 10 points per such day, bounded within 0%-100%. Because exposure is at the 0% floor, a reduce trigger could not lower it further; only panic-regime closes could add. Note that in the standard 2021-05-17 to 2024-06-28 backtest, Buy & Hold returned 50.77% versus the strategy's 8.52%, with identical -35.12% max drawdown. This is historical research, not investment advice.",
+      "unsupported_numbers": [
+        35.0,
+        14.0
+      ],
+      "cost_usd": 0.001014,
+      "answer": "As of 2024-06-28 the QQQ Panic Index reads 29.02 (percentile 28.7; VIX 12.44, Fear & Greed 44.31), squarely neutral, so the rule's latest action is hold and it still holds 0% exposure (unchanged from 0%). It would add only if a session closes above 64 \u2014 each panic day adds 20% of exposure, capped at 100% \u2014 and would reduce only on a close below 15, cutting 10% per greed day, floored at 0%. So from here it takes a roughly 35-point Index jump into panic, or a fall of about 14 points into greed. Note in the standard run the rule returned 8.52% versus Buy & Hold's 50.77% (call bt1), where final exposure was 0%; Buy & Hold beat the strategy on every metric. Historical research, not investment advice.",
       "key_reasons": [
-        "Panic Index is 29.02 on 2024-06-28, between the 64 panic and 15 greed thresholds, so the regime is neutral and the action is hold.",
-        "Current exposure is 0% of 100%, already at the rule's 0% floor, so a greed-regime reduce trigger cannot lower it further.",
-        "Adding exposure requires a close above 64, which would add 20 percentage points per panic-regime day, capped at 100%.",
-        "In the standard backtest Buy & Hold returned 50.77% versus the strategy's 8.52%, with the same -35.12% maximum drawdown."
-      ]
+        "Panic Index is 29.02 at percentile 28.7, between the 64 buy and 15 sell thresholds, so no threshold-driven change is triggered.",
+        "Panic-regime days add 20% per day up to 100%; greed-regime days cut 10% per day down to 0%.",
+        "In call bt1 the strategy returned 8.52% versus 50.77% for Buy & Hold, ending at 0% exposure."
+      ],
+      "judge": {
+        "groundedness": 0.9,
+        "supported": 9,
+        "unsupported": 1,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.000964,
+        "statements": [
+          {
+            "statement": "As of 2024-06-28 the QQQ Panic Index reads 29.02 (percentile 28.7; VIX 12.44, Fear & Greed 44.31), squarely neutral, so the rule's latest action is hold and it still holds 0% exposure (unchanged from 0%).",
+            "verdict": "supported",
+            "reason": "Matches evidence: Panic 29.02, percentile 28.7, VIX 12.44, F&G 44.31, neutral, hold, 0% unchanged from 0%."
+          },
+          {
+            "statement": "It would add only if a session closes above 64 \u2014 each panic day adds 20% of exposure, capped at 100% \u2014 and would reduce only on a close below 15, cutting 10% per greed day, floored at 0%.",
+            "verdict": "supported",
+            "reason": "Position rule: add 20% per panic day (above 64), reduce 10% per greed day (below 15), 0-100% bounds."
+          },
+          {
+            "statement": "So from here it takes a roughly 35-point Index jump into panic, or a fall of about 14 points into greed.",
+            "verdict": "supported",
+            "reason": "64-29.02 \u2248 35 points up; 29.02-15 \u2248 14 points down."
+          },
+          {
+            "statement": "Note in the standard run the rule returned 8.52% versus Buy & Hold's 50.77% (call bt1), where final exposure was 0%; Buy & Hold beat the strategy on every metric.",
+            "verdict": "supported",
+            "reason": "bt1 shows 8.52% vs 50.77%, final exposure 0%, Buy & Hold outperforms on all metrics."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported by instruction."
+          },
+          {
+            "statement": "Panic Index is 29.02 at percentile 28.7, between the 64 buy and 15 sell thresholds, so no threshold-driven change is triggered.",
+            "verdict": "supported",
+            "reason": "Evidence states 29.02 at percentile 28.7 between 64 and 15 thresholds, no change indicated."
+          },
+          {
+            "statement": "Panic-regime days add 20% per day up to 100%; greed-regime days cut 10% per day down to 0%.",
+            "verdict": "supported",
+            "reason": "Position rule states add 20% per panic day up to 100%, cut 10% per greed day down to 0%."
+          },
+          {
+            "statement": "In call bt1 the strategy returned 8.52% versus 50.77% for Buy & Hold, ending at 0% exposure.",
+            "verdict": "supported",
+            "reason": "bt1 shows strategy 8.52%, Buy & Hold 50.77%, final_position_pct 0.0."
+          },
+          {
+            "statement": "Signal levels are computed from an index blending VIX and Fear & Greed and are not forecasts; forward-looking thresholds may not be reached for long stretches.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state the index blends VIX and F&G or that levels are not forecasts/could stay untriggered."
+          },
+          {
+            "statement": "The backtest is a fixed-rule historical simulation (hindsight-defined parameters) where Buy & Hold outperformed over 2021-05-17 to 2024-06-28, and no Fed documents were needed or cited here.",
+            "verdict": "supported",
+            "reason": "Fixed-rule backtest, Buy & Hold outperformed over the window; no Fed documents referenced."
+          }
+        ]
+      }
     },
     {
       "id": "c04_panic_add",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [],
-      "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 20.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 59.8,
-          "role": "average",
-          "what_if": false
-        },
-        {
-          "value": 46.9,
-          "role": "time_below_full",
-          "what_if": false
-        }
+      "first_violations": [
+        "placeholder error: {bt1.latest_position_change_pct}: latest_position_change_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct"
       ],
+      "repairs": 1,
+      "placeholders": 8,
       "fallback_reason": null,
       "leaked": false,
-      "unsupported_numbers": [
-        2.0,
-        40.0
-      ],
-      "cost_usd": 0.001302,
-      "answer": "As of 2024-08-05 the QQQ signal holds 20% exposure (20% of the 0\u2013100% range; equivalent to 2 of 10 units), up from 0% before the latest observation \u2014 the action on 2024-08-05 was add, adding 20%. The reason is the regime: the Composite Panic Index closed at 83.47, deep in the panic regime (above the 64 threshold) and at the 99.3rd percentile of its history, with VIX 38.57 and CNN Fear & Greed at 33.06 (fear). The rule adds 20% per panic-regime day, so it moves from 0% toward 40% on the next session if panic persists; it would reduce 10% only below 15. Note that Buy & Hold returned 37.01% over 2021-05-17 to 2024-08-05 versus 8.01% for the strategy. This is historical research, not investment advice.",
+      "unsupported_numbers": [],
+      "cost_usd": 0.002545,
+      "answer": "The signal holds 20% exposure in QQQ as of 2024-08-05, up from 0%, an add of 20%. The reason is regime-driven: the Composite Panic Index reads 83.47 (VIX 38.57, CNN Fear & Greed 33.06, \"fear\"), a 99.3rd percentile reading, well above the 64 panic threshold \u2014 so the rule added 20% as a panic-regime day, capped at 100%. Background: Powell said on July 31 that the Fed was watching for whether labor-market cooling is \"just normalization or is more,\" and the July statement noted job gains moderated and unemployment moved up while risks were moving into better balance. Context matters: in this backtest Buy & Hold returned 37.01% versus the strategy's 8.01%, with the same -35.12% max drawdown.",
       "key_reasons": [
-        "The Panic Index was 83.47 on 2024-08-05, above the 64 buy threshold, so the regime is panic.",
-        "That reading sits at the 99.3rd percentile of the index's history available at as_of, an extreme rather than marginal signal.",
-        "The rule starts at 50%, adds 20% per panic day and cuts 10% per greed day within 0\u2013100%, giving final_position_pct of 20 versus a previous 0.",
-        "Buy & Hold outperformed the strategy in this window (37.01% vs 8.01%), so higher QQQ exposure was rewarded ex post."
-      ]
+        "Panic Index 83.47 on 2024-08-05 sits far above the 64 panic threshold, at the 99.3rd percentile of history available at that date.",
+        "The rule adds 20% on each panic-regime day, so the position rose from 0% to 20%.",
+        "VIX 38.57 with the CNN Fear & Greed at 33.06 (fear) produced the high composite reading.",
+        "In the 2021-05-17 to 2024-08-05 backtest, Buy & Hold beat the strategy (37.01% vs 8.01%) with an identical -35.12% max drawdown."
+      ],
+      "judge": {
+        "groundedness": 0.8,
+        "supported": 8,
+        "unsupported": 2,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001417,
+        "statements": [
+          {
+            "statement": "The signal holds 20% exposure in QQQ as of 2024-08-05, up from 0%, an add of 20%.",
+            "verdict": "supported",
+            "reason": "final_position_pct 20, previous 0, latest_action add +20%"
+          },
+          {
+            "statement": "The reason is regime-driven: the Composite Panic Index reads 83.47 (VIX 38.57, CNN Fear & Greed 33.06, \"fear\"), a 99.3rd percentile reading, well above the 64 panic threshold \u2014 so the rule added 20% as a panic-regime day, capped at 100%.",
+            "verdict": "supported",
+            "reason": "Panic Index 83.47, VIX 38.57, F&G 33.06 fear, percentile 99.3, above 64 threshold, add 20% capped at 100%"
+          },
+          {
+            "statement": "Background: Powell said on July 31 that the Fed was watching for whether labor-market cooling is \"just normalization or is more,\" and the July statement noted job gains moderated and unemployment moved up while risks were moving into better balance.",
+            "verdict": "unsupported",
+            "reason": "Evidence includes 'just normalization or is more' but no July statement text about job gains moderating/unemployment up/risks balancing"
+          },
+          {
+            "statement": "Context matters: in this backtest Buy & Hold returned 37.01% versus the strategy's 8.01%, with the same -35.12% max drawdown.",
+            "verdict": "supported",
+            "reason": "37.01% vs 8.01%, both max drawdown -35.12%"
+          },
+          {
+            "statement": "Panic Index 83.47 on 2024-08-05 sits far above the 64 panic threshold, at the 99.3rd percentile of history available at that date.",
+            "verdict": "supported",
+            "reason": "83.47 above 64, 99.3 percentile in tool data"
+          },
+          {
+            "statement": "The rule adds 20% on each panic-regime day, so the position rose from 0% to 20%.",
+            "verdict": "supported",
+            "reason": "add 20% per panic-regime day; position rose 0% to 20%"
+          },
+          {
+            "statement": "VIX 38.57 with the CNN Fear & Greed at 33.06 (fear) produced the high composite reading.",
+            "verdict": "unsupported",
+            "reason": "Evidence gives VIX and F&G values but not that they 'produced' the composite"
+          },
+          {
+            "statement": "In the 2021-05-17 to 2024-08-05 backtest, Buy & Hold beat the strategy (37.01% vs 8.01%) with an identical -35.12% max drawdown.",
+            "verdict": "supported",
+            "reason": "Backtest shows 37.01% vs 8.01% with identical -35.12% drawdown"
+          },
+          {
+            "statement": "Hindsight-free regime labels but a fixed threshold rule; this is historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer; regime is threshold-based per evidence"
+          },
+          {
+            "statement": "The strategy underperforms Buy & Hold over the backtest window with no drawdown advantage, and the latest action is a single-day observation that can reverse.",
+            "verdict": "supported",
+            "reason": "Strategy underperforms, identical drawdown, next session rules allow change"
+          }
+        ]
+      }
     },
     {
       "id": "c05_greed_reduce",
@@ -261,104 +389,177 @@
       "violations": [],
       "first_violations": [],
       "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 30.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 40.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        }
-      ],
+      "placeholders": 14,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.001171,
-      "answer": "The rule only reacts to the Panic Index (VIX 50% + inverted CNN Fear & Greed 50%) crossing its regime lines. At the 2023-06-13 close it was 12.29 \u2014 below the 15 greed line (VIX 14.61, Fear & Greed 79.63, \"extreme greed\"), so the rule reduced exposure by 10% to 30% (from 40%). From here: it continues to hold 30% while the index stays between 15 and 64; it would reduce another 10% for each session closing below 15 (down to a 0% floor); and it would switch to buying, adding 20% per session, only if the index closes above 64 into the panic regime. Note in the standard backtest Buy & Hold returned 13.38% vs. 5.31% for the strategy.",
+      "cost_usd": 0.001611,
+      "answer": "The rule is threshold-driven, not calendar-driven. As of 2023-06-13 QQQ's Panic Index closed at 12.29 (VIX 14.61, Fear & Greed 79.63, 'extreme greed'), a 0.6 percentile, so the greed regime (below 15) is in force and the latest action was a reduce of 10%, leaving 30%. Two trigger paths from here: a close below 15 on the next observation reduces 10% again, continuing until the 0%; a close above 64 flips to panic and adds 20% per panic day, capped at 100%. Anything between 15 and 64 changes nothing, so the rule holds 30%. Note that in the standard window (2021-05-17 to 2023-06-13) Buy & Hold returned 13.38% versus 5.31% for the strategy, with average exposure of 91%.",
       "key_reasons": [
-        "Panic Index is 12.29 (percentile 0.6) with VIX 14.61 and Fear & Greed 79.63, so the regime is greed and the latest action was a 10% reduction to 30%.",
-        "The rule buys in increments of 20% per day only above 64 and trims 10% per day only below 15, holding otherwise within 0%-100%.",
-        "Because the index is already in the greed zone, further reductions come from continued closes under 15, not from the current level alone.",
-        "The backtest shows Buy & Hold beating the strategy (13.38% vs. 5.31%) over 2021-05-17 to 2023-06-13."
-      ]
+        "Panic Index 12.29 on 2023-06-13 sits below the 15 greed threshold, so the rule reduced 10% to 30%.",
+        "A further close below 15 would cut another 10%, down to the 0%; a close above 64 would switch to panic and add 20% per day up to the 100%.",
+        "The most recent FOMC statement available as of 2023-06-13 (statement-20230322) left the target range at 4-3/4 to 5 percent and said 'some additional policy firming may be appropriate', a backdrop not directly wired into the index rule."
+      ],
+      "judge": {
+        "groundedness": 0.9,
+        "supported": 9,
+        "unsupported": 1,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.00143,
+        "statements": [
+          {
+            "statement": "The rule is threshold-driven, not calendar-driven.",
+            "verdict": "supported",
+            "reason": "Position rule triggers on panic/greed thresholds (above 64, below 15), not dates."
+          },
+          {
+            "statement": "As of 2023-06-13 QQQ's Panic Index closed at 12.29 (VIX 14.61, Fear & Greed 79.63, 'extreme greed'), a 0.6 percentile, so the greed regime (below 15) is in force and the latest action was a reduce of 10%, leaving 30%.",
+            "verdict": "supported",
+            "reason": "Evidence confirms Panic Index 12.29, VIX 14.61, F&G 79.63 extreme greed, percentile 0.6, reduce 10% to 30%."
+          },
+          {
+            "statement": "Two trigger paths from here: a close below 15 on the next observation reduces 10% again, continuing until the 0%; a close above 64 flips to panic and adds 20% per panic day, capped at 100%.",
+            "verdict": "supported",
+            "reason": "Matches next-session and position rules: below 15 reduce 10%, above 64 add 20%, capped 0-100%."
+          },
+          {
+            "statement": "Anything between 15 and 64 changes nothing, so the rule holds 30%.",
+            "verdict": "supported",
+            "reason": "Between thresholds neither add nor reduce applies, so position holds at 30%."
+          },
+          {
+            "statement": "Note that in the standard window (2021-05-17 to 2023-06-13) Buy & Hold returned 13.38% versus 5.31% for the strategy, with average exposure of 91%.",
+            "verdict": "supported",
+            "reason": "Backtest shows 13.38% buyhold vs 5.31% strategy over 2021-05-17 to 2023-06-13, average exposure 91%."
+          },
+          {
+            "statement": "Panic Index 12.29 on 2023-06-13 sits below the 15 greed threshold, so the rule reduced 10% to 30%.",
+            "verdict": "supported",
+            "reason": "Panic Index 12.29 below 15 greed threshold; latest action reduce 10% to 30%."
+          },
+          {
+            "statement": "A further close below 15 would cut another 10%, down to the 0%; a close above 64 would switch to panic and add 20% per day up to the 100%.",
+            "verdict": "supported",
+            "reason": "Consistent with next-session rule: below 15 cut 10%, above 64 add 20% per day capped at 100%."
+          },
+          {
+            "statement": "The most recent FOMC statement available as of 2023-06-13 (statement-20230322) left the target range at 4-3/4 to 5 percent and said 'some additional policy firming may be appropriate', a backdrop not directly wired into the index rule.",
+            "verdict": "supported",
+            "reason": "Statement-20230322 is the latest dated before 2023-06-13, with 4-3/4 to 5 percent and that language."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          },
+          {
+            "statement": "Buy & Hold beat the strategy on return (13.38% vs 5.31%), Sharpe and Calmar in the standard window, and the strategy's max drawdown was -35.12%; greed readings are a risk warning rather than a reliable exit signal, and the position rule is applied with a one-observation lag, so signals can whipsaw.",
+            "verdict": "unsupported",
+            "reason": "Buy & Hold outperformance and -35.12% drawdown are supported, but no evidence supports the one-observation lag or whipsaw claim."
+          }
+        ]
+      }
     },
     {
       "id": "c06_add_into_cap",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [],
-      "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 100.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 80.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 59.9,
-          "role": "average",
-          "what_if": false
-        },
-        {
-          "value": 54.8,
-          "role": "time_below_full",
-          "what_if": false
-        }
+      "first_violations": [
+        "placeholder error: {bt1.buyhold_return_pct}: buyhold_return_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct",
+        "placeholder error: {bt1.strategy_return_pct}: strategy_return_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct",
+        "placeholder error: {bt1.buyhold_max_drawdown_pct}: buyhold_max_drawdown_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct",
+        "placeholder error: {bt1.buyhold_return_pct}: buyhold_return_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct",
+        "placeholder error: {bt1.strategy_return_pct}: strategy_return_pct is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct"
       ],
+      "repairs": 1,
+      "placeholders": 11,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.00125,
-      "answer": "The strategy holds 100% exposure (the 100% cap) as of 2025-03-04, up from 80% the prior observation. The Panic Index reads 66.29 \u2014 above the 64 panic threshold \u2014 at the 90.8th percentile of the history available at that date, with VIX at 23.51 and CNN Fear & Greed at 11.04 (extreme fear). Because the regime is panic, the rule added 20% exposure on the latest observation, reaching the cap; the signal states it holds 100% next session and would add nothing further while capped. Note that over the standard 2021-05-17 to 2025-03-04 window the strategy returned 16.97% versus 56.42% for Buy & Hold, with a worse Sharpe (0.311 vs 0.641), so the de-risking cost more than it protected. This is historical research, not investment advice.",
+      "cost_usd": 0.002279,
+      "answer": "The rule holds 100% exposure in QQQ as of 2025-03-04. Panic Index is 66.29 (percentile 90.8), above the 64 panic threshold, driven by VIX 23.51 and CNN Fear & Greed 11.04 (extreme fear); so the rule added 20%, moving from 80% to the 100% cap. Next session it holds 100% unless the Panic Index closes above 64 (adds 20%) or below 15 (reduces 10%). Context: the standard backtest (2021-05-17 to 2025-03-04, call bt1) shows Buy & Hold ahead on return, 56.42% versus 16.97% for the strategy, with max drawdown of -35.12% for both; average exposure was 59.9%. Fed context: the January 2025 minutes noted a careful approach amid high uncertainty. Historical research, not investment advice.",
       "key_reasons": [
-        "The latest observation (2025-03-04) is classified panic: Panic Index 66.29 versus the 64 buy threshold, percentile 90.8.",
-        "Panic inputs were VIX 23.51 and CNN Fear & Greed 11.04 (extreme fear), the inverted component that pushed the composite above threshold.",
-        "The standard backtest shows latest_action 'add' of 20%, moving from 80% to final_position_pct 100 \u2014 the max_position_pct cap.",
-        "Average exposure over the window was only 59.9% and time below full exposure 54.8%, and Buy & Hold still outperformed (56.42% vs 16.97%)."
-      ]
+        "Panic Index at 66.29 sits above the 64 panic threshold, in the 90.8th percentile of history through 2025-03-04.",
+        "VIX 23.51 plus Fear & Greed 11.04 (extreme fear) push the composite into the panic regime.",
+        "Under the position rule the panic day triggered an add of 20%, taking exposure from 80% to 100%.",
+        "In the standard backtest Buy & Hold returned 56.42% versus 16.97% for the strategy, with equal max drawdown of -35.12%."
+      ],
+      "judge": {
+        "groundedness": 0.769,
+        "supported": 10,
+        "unsupported": 2,
+        "contradicted": 1,
+        "unjudged": 0,
+        "cost_usd": 0.001455,
+        "statements": [
+          {
+            "statement": "The rule holds 100% exposure in QQQ as of 2025-03-04.",
+            "verdict": "supported",
+            "reason": "final_position_pct is 100 on 2025-03-04."
+          },
+          {
+            "statement": "Panic Index is 66.29 (percentile 90.8), above the 64 panic threshold, driven by VIX 23.51 and CNN Fear & Greed 11.04 (extreme fear); so the rule added 20%, moving from 80% to the 100% cap.",
+            "verdict": "supported",
+            "reason": "Evidence gives Panic Index 66.29, percentile 90.8, VIX 23.51, F&G 11.04 extreme fear, and add 20% from 80 to 100 cap."
+          },
+          {
+            "statement": "Next session it holds 100% unless the Panic Index closes above 64 (adds 20%) or below 15 (reduces 10%).",
+            "verdict": "contradicted",
+            "reason": "Next session holds 100% but adds 20% if Panic Index closes above 64; it already holds 100%, and statement misphrases condition/action."
+          },
+          {
+            "statement": "Context: the standard backtest (2021-05-17 to 2025-03-04, call bt1) shows Buy & Hold ahead on return, 56.42% versus 16.97% for the strategy, with max drawdown of -35.12% for both; average exposure was 59.9%.",
+            "verdict": "supported",
+            "reason": "Backtest shows B&H 56.42% vs 16.97%, both max drawdown -35.12%, average exposure 59.9%."
+          },
+          {
+            "statement": "Fed context: the January 2025 minutes noted a careful approach amid high uncertainty.",
+            "verdict": "supported",
+            "reason": "January 2025 minutes note high uncertainty and a careful approach."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic not-investment-advice disclaimer is supported."
+          },
+          {
+            "statement": "Panic Index at 66.29 sits above the 64 panic threshold, in the 90.8th percentile of history through 2025-03-04.",
+            "verdict": "supported",
+            "reason": "Panic Index 66.29 above 64 threshold, percentile 90.8."
+          },
+          {
+            "statement": "VIX 23.51 plus Fear & Greed 11.04 (extreme fear) push the composite into the panic regime.",
+            "verdict": "supported",
+            "reason": "VIX 23.51 and F&G 11.04 extreme fear are given alongside panic regime."
+          },
+          {
+            "statement": "Under the position rule the panic day triggered an add of 20%, taking exposure from 80% to 100%.",
+            "verdict": "supported",
+            "reason": "Panic day added 20%, moving from previous 80% to 100%."
+          },
+          {
+            "statement": "In the standard backtest Buy & Hold returned 56.42% versus 16.97% for the strategy, with equal max drawdown of -35.12%.",
+            "verdict": "supported",
+            "reason": "B&H 56.42% vs strategy 16.97%, both max drawdown -35.12%."
+          },
+          {
+            "statement": "Signal is a mechanical threshold rule on a composite index; Buy & Hold beat the strategy on return over the backtest window and drawdowns matched.",
+            "verdict": "supported",
+            "reason": "Mechanical threshold rule and B&H outperformance with matched drawdowns are in evidence."
+          },
+          {
+            "statement": "Backtest results are hypothetical with hindsight-derived thresholds.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state backtest is hypothetical or hindsight-derived thresholds."
+          },
+          {
+            "statement": "Fed minutes excerpt is background context, not a driver of the signal.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state Fed minutes are background context not driving the signal."
+          }
+        ]
+      }
     },
     {
       "id": "c07_add_clipped_at_cap",
@@ -366,59 +567,83 @@
       "violations": [],
       "first_violations": [],
       "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 100.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 90.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 76.4,
-          "role": "average",
-          "what_if": false
-        },
-        {
-          "value": 75.7,
-          "role": "time_below_full",
-          "what_if": false
-        }
-      ],
+      "placeholders": 10,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.001328,
-      "answer": "The strategy is at 100% exposure (full position) on the 2021-11-26 observation, up from 90% previously \u2014 the signal's action is \"add\": a 10-point increase that carried it to the 100% cap (the mechanical step is 20% per panic-regime day, so the cap truncated it). Why: QQQ's Composite Panic Index reads 84.37, well above the 64 panic threshold and in the 100th percentile of history available as of that date (VIX 28.62, CNN Fear & Greed 31.26, \"fear\" but only mildly so \u2014 VIX does most of the work). The rule therefore treats this as an accumulation environment; it holds 100% next session unless the index closes below 15, which would trigger a 10% reduction. Caveat: over this short, mostly rising window Buy & Hold still earned 20.86% vs the strategy's 14.68%, with higher Sharpe (2.856 vs 2.472), though similar drawdown (-7.6% vs -7.2%).",
+      "cost_usd": 0.00199,
+      "answer": "The signal holds 100% exposure in QQQ as of 2021-11-26 (up from 90% before the latest observation; the add was 10%). The reason is regime mechanics, not a discretionary call: the Panic Index read 84.37 (VIX 28.62, CNN Fear & Greed 31.26, \"fear\"), a 100th-percentile reading, which places QQQ in the panic regime above the 64 threshold, so the rule added exposure and hit the 100% cap. Context: the strategy's average exposure over the standard window was 76.4% and it was below full exposure 75.7% of the time; strategy return was 14.68% versus 20.86% for Buy & Hold over 2021-05-17 to 2021-11-26, so Buy & Hold led on return and Sharpe (2.856 vs 2.472), while the rule's max drawdown was -7.22% vs -7.62%. Fed context: FOMC minutes discussed tapering asset purchases (minutes-20210728, minutes-20210922).",
       "key_reasons": [
-        "Panic Index for QQQ is 84.37 on 2021-11-26, far above the 64 panic threshold, at the 100th percentile of available history.",
-        "The rule adds exposure on panic-regime days, so the latest observation was an add of 10 points, taking exposure from 90% to the 100% cap.",
-        "Inputs: VIX 28.62 and inverted CNN Fear & Greed of 31.26 ('fear'); the elevated VIX is what pushes the composite into panic.",
-        "Over the 2021-05-17 to 2021-11-26 window the strategy returned 14.68% vs Buy & Hold's 20.86%, with average exposure of 76.4% and 75.7% of days below full exposure."
-      ]
+        "Panic Index 84.37 (percentile 100, VIX 28.62, Fear & Greed 31.26) is above the 64 buy threshold, classifying QQQ as panic regime.",
+        "The rule adds exposure on each panic-regime day, moving from 90% to 100%, reaching the 100% cap at the 10% add.",
+        "Buy & Hold returned 20.86% versus the strategy's 14.68% over the window, though the rule's max drawdown was smaller (-7.22% vs -7.62%).",
+        "Earlier panic-regime days in this window showed positive 21-day forward returns (100% win rate, n=8, mean 4.94%), but these overlap as exposure days, not independent bottom calls."
+      ],
+      "judge": {
+        "groundedness": 1.0,
+        "supported": 11,
+        "unsupported": 0,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001435,
+        "statements": [
+          {
+            "statement": "The signal holds 100% exposure in QQQ as of 2021-11-26 (up from 90% before the latest observation; the add was 10%).",
+            "verdict": "supported",
+            "reason": "final_position_pct 100, previous 90, latest change +10 add"
+          },
+          {
+            "statement": "The reason is regime mechanics, not a discretionary call: the Panic Index read 84.37 (VIX 28.62, CNN Fear & Greed 31.26, \"fear\"), a 100th-percentile reading, which places QQQ in the panic regime above the 64 threshold, so the rule added exposure and hit the 100% cap.",
+            "verdict": "supported",
+            "reason": "Evidence gives Panic Index 84.37, percentile 100, VIX/F&G values, above 64 threshold, add to 100% cap"
+          },
+          {
+            "statement": "Context: the strategy's average exposure over the standard window was 76.4% and it was below full exposure 75.7% of the time; strategy return was 14.68% versus 20.86% for Buy & Hold over 2021-05-17 to 2021-11-26, so Buy & Hold led on return and Sharpe (2.856 vs 2.472), while the rule's max drawdown was -7.22% vs -7.62%.",
+            "verdict": "supported",
+            "reason": "All figures match backtest: avg exposure 76.4%, 75.7% below full, returns 14.68 vs 20.86, Sharpe 2.856 vs 2.472, drawdown -7.22 vs -7.62"
+          },
+          {
+            "statement": "Fed context: FOMC minutes discussed tapering asset purchases (minutes-20210728, minutes-20210922).",
+            "verdict": "supported",
+            "reason": "Both minutes docs discuss tapering asset purchases"
+          },
+          {
+            "statement": "Panic Index 84.37 (percentile 100, VIX 28.62, Fear & Greed 31.26) is above the 64 buy threshold, classifying QQQ as panic regime.",
+            "verdict": "supported",
+            "reason": "Matches regime tool data exactly"
+          },
+          {
+            "statement": "The rule adds exposure on each panic-regime day, moving from 90% to 100%, reaching the 100% cap at the 10% add.",
+            "verdict": "supported",
+            "reason": "Rule adds on panic-regime days; 90 to 100 at 10% add reaching cap"
+          },
+          {
+            "statement": "Buy & Hold returned 20.86% versus the strategy's 14.68% over the window, though the rule's max drawdown was smaller (-7.22% vs -7.62%).",
+            "verdict": "supported",
+            "reason": "Return and drawdown figures match backtest"
+          },
+          {
+            "statement": "Earlier panic-regime days in this window showed positive 21-day forward returns (100% win rate, n=8, mean 4.94%), but these overlap as exposure days, not independent bottom calls.",
+            "verdict": "supported",
+            "reason": "21-day horizon: 100% win rate, n=8, mean 4.94%; note says overlapping exposure days not independent"
+          },
+          {
+            "statement": "Historical research, not investment advice; the exposure is the backtest rule's output, not a recommendation.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer and characterization supported by evidence"
+          },
+          {
+            "statement": "The backtest window is short (2021-05-17 to 2021-11-26), panic days overlap so forward-return statistics are not independent, and Buy & Hold beat the strategy on return and Sharpe.",
+            "verdict": "supported",
+            "reason": "Short window, overlapping panic days, and B&H beating on return/Sharpe all supported"
+          },
+          {
+            "statement": "Fed document citations are background context on tapering, not the driver of the signal.",
+            "verdict": "supported",
+            "reason": "Evidence frames Fed docs as context, not signal driver"
+          }
+        ]
+      }
     },
     {
       "id": "c08_hold_at_cap",
@@ -426,24 +651,88 @@
       "violations": [],
       "first_violations": [],
       "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 100.0,
-          "role": "current",
-          "what_if": false
-        }
-      ],
+      "placeholders": 3,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.002466,
-      "answer": "Historically, QQQ panic days above 64 have been only modestly rewarding and not reliable at longer horizons. As of 2025-03-06 the Panic Index is 65.75 (percentile 90.4), VIX 24.87, Fear & Greed 17.2 (extreme fear). Since 2021-05-17, panic days delivered 64.4%/66.3% win rates and mean returns of +0.91%/+2.40% at 5/21 days, but only 43.3% wins and -1.00% mean at 63 days. Restricting to deeper panic (threshold 80) improves 63-day results (62.5% wins, +4.18% mean), so today's 65.75 is a shallow, early-stage reading. The strategy holds 100% (at its cap, no change today); Buy & Hold returned 54.09% versus the strategy's 15.23% over the window. This is historical research, not investment advice.",
+      "cost_usd": 0.001619,
+      "answer": "As of 2025-03-06, QQQ sits in the panic regime: the Composite Panic Index is 65.75 (90.4th percentile), with VIX at 24.87 and CNN Fear & Greed at 17.2 ('extreme fear'), just above the 64 buy threshold. Historically, panic-regime days have been modestly favorable for adding over short horizons: 104 completed instances show a 64.4% win rate and +0.91% mean return at 5 days and 66.3% / +2.4% at 21 days, but only 43.3% / -1.0% at 63 days, so the edge fades beyond a month. The rule is already at the panic-regime ceiling and holds 100% exposure today \u2014 no add occurred. Note that across the backtest window the strategy returned 15.23% versus 54.09% for Buy & Hold, and 100% is fully invested now. Historical research, not investment advice.",
       "key_reasons": [
-        "Panic Index 65.75 (percentile 90.4) is above the 64 threshold but well below the 80+ readings that historically produced the strongest 63-day returns (62.5% win rate, +4.18% mean).",
-        "Short-horizon evidence is mildly favorable (66.3% 21-day win rate, +2.40% mean), but 63-day panic-day returns are negative on average (-1.00%, 43.3% win rate).",
-        "The rule is already at the 100% maximum exposure with no change on the latest observation, so no additional capacity exists within the rule.",
-        "Buy & Hold (54.09%) beat the strategy (15.23%) in the 2021-05-17 to 2025-03-06 window, with upside drag of 168.34 pp versus a downside cushion of 136.84 pp."
-      ]
+        "Panic Index 65.75 with percentile 90.4 confirms a panic regime just above the 64 threshold, so the framework is in accumulation mode.",
+        "Panic-regime days show 64.4% and 66.3% win rates with mean returns of +0.91% and +2.4% at 5- and 21-day horizons (104 overlapping instances).",
+        "The 63-day horizon is weak \u2014 43.3% win rate, -1.0% mean \u2014 so the historical edge is short-lived rather than a durable bottom signal.",
+        "The rule is already at its cap and holds 100% exposure, and the backtest's verdict is that Buy & Hold outperforms the strategy on all metrics over 2021-05-17 to 2025-03-06."
+      ],
+      "judge": {
+        "groundedness": 1.0,
+        "supported": 12,
+        "unsupported": 0,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001283,
+        "statements": [
+          {
+            "statement": "As of 2025-03-06, QQQ sits in the panic regime: the Composite Panic Index is 65.75 (90.4th percentile), with VIX at 24.87 and CNN Fear & Greed at 17.2 ('extreme fear'), just above the 64 buy threshold.",
+            "verdict": "supported",
+            "reason": "Matches regime data: panic, index 65.75, percentile 90.4, VIX 24.87, Fear & Greed 17.2 extreme fear, above 64."
+          },
+          {
+            "statement": "Historically, panic-regime days have been modestly favorable for adding over short horizons: 104 completed instances show a 64.4% win rate and +0.91% mean return at 5 days and 66.3% / +2.4% at 21 days, but only 43.3% / -1.0% at 63 days, so the edge fades beyond a month.",
+            "verdict": "supported",
+            "reason": "Forward-return figures match: 5d 64.4%/+0.91%, 21d 66.3%/+2.4%, 63d 43.3%/-1.0%, count 104."
+          },
+          {
+            "statement": "The rule is already at the panic-regime ceiling and holds 100% exposure today \u2014 no add occurred.",
+            "verdict": "supported",
+            "reason": "Position is 100% (cap) with latest_action hold and no change."
+          },
+          {
+            "statement": "Note that across the backtest window the strategy returned 15.23% versus 54.09% for Buy & Hold, and 100% is fully invested now.",
+            "verdict": "supported",
+            "reason": "Backtest confirms 15.23% vs 54.09% and final position 100%."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          },
+          {
+            "statement": "Panic Index 65.75 with percentile 90.4 confirms a panic regime just above the 64 threshold, so the framework is in accumulation mode.",
+            "verdict": "supported",
+            "reason": "Index 65.75, percentile 90.4, panic regime above 64 threshold; framework treats as accumulation."
+          },
+          {
+            "statement": "Panic-regime days show 64.4% and 66.3% win rates with mean returns of +0.91% and +2.4% at 5- and 21-day horizons (104 overlapping instances).",
+            "verdict": "supported",
+            "reason": "Matches win rates, mean returns, and 104 overlapping instances."
+          },
+          {
+            "statement": "The 63-day horizon is weak \u2014 43.3% win rate, -1.0% mean \u2014 so the historical edge is short-lived rather than a durable bottom signal.",
+            "verdict": "supported",
+            "reason": "63d 43.3% win rate and -1.0% mean support fading edge."
+          },
+          {
+            "statement": "The rule is already at its cap and holds 100% exposure, and the backtest's verdict is that Buy & Hold outperforms the strategy on all metrics over 2021-05-17 to 2025-03-06.",
+            "verdict": "supported",
+            "reason": "100% cap hold and verdict Buy & Hold outperforms on all metrics over the stated window."
+          },
+          {
+            "statement": "The forward-return sample uses overlapping regime days (not independent bottoms), spans only 2021-05 onward, and the most recent signal is 2024-08-07, so it excludes current conditions.",
+            "verdict": "supported",
+            "reason": "Note confirms overlapping days, start 2021-05-17, last signal 2024-08-07."
+          },
+          {
+            "statement": "No FOMC documents were needed to answer this regime question, so no Fed citations are given.",
+            "verdict": "supported",
+            "reason": "Consistent with evidence; no Fed citations exist and none needed."
+          },
+          {
+            "statement": "Backtest labels are rule-based and the strategy trailed Buy & Hold by a wide margin; historical evidence is not a guarantee.",
+            "verdict": "supported",
+            "reason": "Backtest is rule-based, strategy trailed Buy & Hold, and historical evidence is not guaranteed."
+          }
+        ]
+      }
     },
     {
       "id": "c09_reduce_into_floor",
@@ -451,109 +740,184 @@
       "violations": [],
       "first_violations": [],
       "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 0.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "previous",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        }
-      ],
+      "placeholders": 11,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.0017,
-      "answer": "The rule moves only on regime days: it adds 20% exposure on each day the QQQ Panic Index closes above 64 (panic), and reduces 10% on each day it closes below 15 (greed), with a 0%-100% band. On 2023-06-16 the index was 9.37 (percentile 0.2), deep in greed (VIX 13.54, Fear & Greed 81.26, extreme greed), so the rule reduced 10%, taking exposure from 10% to 0%, the floor. From here only a panic-regime day can add; further greed days simply hold at 0% since the floor binds. Since the index averages VIX with inverted sentiment, a spike in VIX plus a slide in the Fear & Greed index is what would push it above 64. No Fed action alone changes the signal. QQQ Buy & Hold returned 14.83% vs 5.73% for the strategy over the window.",
+      "cost_usd": 0.001088,
+      "answer": "The rule moves only on regime thresholds, evaluated on the Panic Index (VIX 50% + inverted CNN Fear & Greed 50%). As of 2023-06-16 QQQ sits at 9.37 (0.2nd percentile), deep in the greed regime below the 15 sell line, with VIX 13.54 and Fear & Greed at 81.26 (extreme greed). The latest observation was a reduce: exposure fell by 10% to 0%, hitting the 0% floor. Going forward, another close below 15 would try to reduce 10% again, but exposure is already at the floor so nothing can be removed; a close above 64 would be the panic regime and add 20% toward the 100% ceiling. So only a genuine panic spike lifts exposure from here. Note Buy & Hold beat the strategy over the standard window (14.83% vs 5.73%), with upside drag of 18.95pp outweighing the 10.47pp cushion.",
       "key_reasons": [
-        "Panic Index 9.37 as of 2023-06-16, percentile 0.2, classified greed against the 15 sell threshold.",
-        "Rule: add_pct 20 per panic-regime day, reduce_pct 10 per greed-regime day, bounds 0%-100%.",
-        "Latest action reduce of 10 points, leaving final_position_pct 0 with previous_position_pct 10; at the floor, further greed days cannot reduce further.",
-        "Inputs were VIX 13.54 and CNN Fear & Greed 81.26 (extreme greed), so only a large VIX rise plus sentiment deterioration lifts the composite above 64."
-      ]
+        "QQQ Panic Index is 9.37 at the 0.2 percentile, classified greed because it is below the 15 sell threshold.",
+        "The latest observation was a reduce, moving exposure from 10% down to 0% at the 0% floor.",
+        "Since exposure is already at the floor, further greed days cannot lower it; only a close above 64 (panic regime) would add 20%.",
+        "Over 2021-05-17 to 2023-06-16 Buy & Hold returned 14.83% versus the strategy's 5.73%, with average exposure of 90.5%."
+      ],
+      "judge": {
+        "groundedness": 1.0,
+        "supported": 14,
+        "unsupported": 0,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001112,
+        "statements": [
+          {
+            "statement": "The rule moves only on regime thresholds, evaluated on the Panic Index (VIX 50% + inverted CNN Fear & Greed 50%).",
+            "verdict": "supported",
+            "reason": "Position rule uses panic/greed thresholds on the Panic Index; evidence describes thresholds 64/15."
+          },
+          {
+            "statement": "As of 2023-06-16 QQQ sits at 9.37 (0.2nd percentile), deep in the greed regime below the 15 sell line, with VIX 13.54 and Fear & Greed at 81.26 (extreme greed).",
+            "verdict": "supported",
+            "reason": "Tool shows panic 9.37, percentile 0.2, greed, VIX 13.54, Fear & Greed 81.26 extreme greed."
+          },
+          {
+            "statement": "The latest observation was a reduce: exposure fell by 10% to 0%, hitting the 0% floor.",
+            "verdict": "supported",
+            "reason": "Latest action reduce, change -10%, previous 10% to 0%, floor 0%."
+          },
+          {
+            "statement": "Going forward, another close below 15 would try to reduce 10% again, but exposure is already at the floor so nothing can be removed; a close above 64 would be the panic regime and add 20% toward the 100% ceiling.",
+            "verdict": "supported",
+            "reason": "Next session rules: below 15 reduces 10% within 0%-100%, above 64 panic adds 20%; already at floor."
+          },
+          {
+            "statement": "So only a genuine panic spike lifts exposure from here.",
+            "verdict": "supported",
+            "reason": "At 0% floor, only a panic regime (above 64) adds exposure."
+          },
+          {
+            "statement": "Note Buy & Hold beat the strategy over the standard window (14.83% vs 5.73%), with upside drag of 18.95pp outweighing the 10.47pp cushion.",
+            "verdict": "supported",
+            "reason": "Backtest shows 14.83% vs 5.73%, upside drag 18.95pp, downside cushion 10.47pp."
+          },
+          {
+            "statement": "QQQ Panic Index is 9.37 at the 0.2 percentile, classified greed because it is below the 15 sell threshold.",
+            "verdict": "supported",
+            "reason": "Panic 9.37, percentile 0.2, greed below 15 sell threshold."
+          },
+          {
+            "statement": "The latest observation was a reduce, moving exposure from 10% down to 0% at the 0% floor.",
+            "verdict": "supported",
+            "reason": "Reduce from 10% to 0%, at 0% floor."
+          },
+          {
+            "statement": "Since exposure is already at the floor, further greed days cannot lower it; only a close above 64 (panic regime) would add 20%.",
+            "verdict": "supported",
+            "reason": "Floor 0% prevents further reduction; above 64 adds 20%."
+          },
+          {
+            "statement": "Over 2021-05-17 to 2023-06-16 Buy & Hold returned 14.83% versus the strategy's 5.73%, with average exposure of 90.5%.",
+            "verdict": "supported",
+            "reason": "Window 2021-05-17 to 2023-06-16, 14.83% vs 5.73%, average exposure 90.5%."
+          },
+          {
+            "statement": "Rule mechanics are simulated by code, not a recommendation; the thresholds are fixed and the backtest is a fixed historical window (in-sample, hindsight).",
+            "verdict": "supported",
+            "reason": "Generic disclaimers and fixed thresholds/window are supported by evidence context."
+          },
+          {
+            "statement": "Greed readings are a risk warning rather than a reliable sell signal, per the regime tool.",
+            "verdict": "supported",
+            "reason": "Regime tool interpretation states greed is a risk-warning, not an equally reliable immediate exit signal."
+          },
+          {
+            "statement": "Buy & Hold outperformed the strategy on all metrics in this period.",
+            "verdict": "supported",
+            "reason": "Backtest verdict: Buy & Hold outperforms on all metrics in this period."
+          },
+          {
+            "statement": "This is historical research, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
+          }
+        ]
+      }
     },
     {
       "id": "c10_hold_at_floor",
       "signal_mismatches": {},
       "violations": [],
-      "first_violations": [],
-      "repairs": 0,
-      "declared_claims": [
-        {
-          "value": 0.0,
-          "role": "current",
-          "what_if": false
-        },
-        {
-          "value": 20.0,
-          "role": "add_step",
-          "what_if": false
-        },
-        {
-          "value": 10.0,
-          "role": "reduce_step",
-          "what_if": false
-        },
-        {
-          "value": 100.0,
-          "role": "cap",
-          "what_if": false
-        },
-        {
-          "value": 0.0,
-          "role": "floor",
-          "what_if": false
-        },
-        {
-          "value": 50.0,
-          "role": "initial",
-          "what_if": false
-        },
-        {
-          "value": 90.3,
-          "role": "average",
-          "what_if": false
-        }
+      "first_violations": [
+        "placeholder error: unknown placeholder {min_position_pct}; use one of {current_exposure}, {previous_exposure}, {applied_change}, {add_step}, {reduce_step}, {cap}, {floor}, {initial_exposure}"
       ],
+      "repairs": 1,
+      "placeholders": 7,
       "fallback_reason": null,
       "leaked": false,
       "unsupported_numbers": [],
-      "cost_usd": 0.00119,
-      "answer": "At 2023-06-20 the QQQ Panic Index is 10.68 (percentile 0.4), deep in the greed regime (below 15), and exposure is already at the 0% floor, so the latest action is hold. From here: the rule adds 20% only if the Panic Index closes above 64 (panic regime) \u2014 one such day lifts exposure from 0% to 20%, and consecutive panic days keep adding 20% up to the 100% cap. It reduces 10% only if the index closes below 15 while exposure is above 0%, which is impossible at the floor. So with the index at 10.68, further declines in the index alone change nothing; only a jump above 64 triggers buying. History: strategy 5.73% vs Buy & Hold 14.67% since 2021-05-17, with identical -35.12% max drawdown.",
+      "cost_usd": 0.001526,
+      "answer": "From here the rule's next move depends entirely on where the Panic Index (VIX 50% + inverted fear & greed 50%) closes. It is 10.68 as of 2023-06-20 \u2014 greed regime (below 15), 0.4th percentile, with VIX 13.88 and CNN Fear & Greed at 80.11 (extreme greed). Because the rule is already at the 0%, another greed close changes nothing: the latest observation was a hold at 0% exposure. It would add only if the index closes above 64, a panic-regime day; each such day lifts exposure by 20%, up to the 100%. Any close between 15 and 64 is neutral and leaves the position unchanged.",
       "key_reasons": [
-        "Panic Index 10.68 sits below the 15 sell threshold, so the regime is greed and the rule's latest action is hold at the 0% floor.",
-        "Exposure rises by 20 percentage points per day only when the index closes above the 64 panic threshold, capped at 100%.",
-        "Reductions of 10 points per greed day cannot occur from the 0% floor, so a lower index reading by itself leaves exposure unchanged.",
-        "In the standard window the strategy returned 5.73% versus 14.67% for Buy & Hold, with the same -35.12% max drawdown."
-      ]
+        "Panic Index is 10.68 (greed, below the 15 sell threshold, percentile 0.4), so no further reduction is possible at the floor.",
+        "The latest action was hold, with exposure unchanged at 0%.",
+        "An add requires a panic-regime close above 64; the rule then adds 20% per panic-regime day, within the 100% ceiling.",
+        "In this window Buy & Hold returned 14.67% versus 5.73% for the strategy, so the rule's exposure discipline lagged."
+      ],
+      "judge": {
+        "groundedness": 0.909,
+        "supported": 10,
+        "unsupported": 1,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.000866,
+        "statements": [
+          {
+            "statement": "From here the rule's next move depends entirely on where the Panic Index (VIX 50% + inverted fear & greed 50%) closes.",
+            "verdict": "supported",
+            "reason": "Rule's next-session add/reduce depends on Panic Index closes vs 64/15."
+          },
+          {
+            "statement": "It is 10.68 as of 2023-06-20 \u2014 greed regime (below 15), 0.4th percentile, with VIX 13.88 and CNN Fear & Greed at 80.11 (extreme greed).",
+            "verdict": "supported",
+            "reason": "Evidence gives 10.68, greed, percentile 0.4, VIX 13.88, F&G 80.11 extreme greed."
+          },
+          {
+            "statement": "Because the rule is already at the 0%, another greed close changes nothing: the latest observation was a hold at 0% exposure.",
+            "verdict": "supported",
+            "reason": "Already at 0% floor; latest action hold at 0% exposure."
+          },
+          {
+            "statement": "It would add only if the index closes above 64, a panic-regime day; each such day lifts exposure by 20%, up to the 100%.",
+            "verdict": "supported",
+            "reason": "Adds 20% per panic-regime day above 64, capped at 100%."
+          },
+          {
+            "statement": "Any close between 15 and 64 is neutral and leaves the position unchanged.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state a 15-64 neutral band leaves position unchanged."
+          },
+          {
+            "statement": "Panic Index is 10.68 (greed, below the 15 sell threshold, percentile 0.4), so no further reduction is possible at the floor.",
+            "verdict": "supported",
+            "reason": "10.68 greed below 15, percentile 0.4, at 0% floor so no further reduction."
+          },
+          {
+            "statement": "The latest action was hold, with exposure unchanged at 0%.",
+            "verdict": "supported",
+            "reason": "Latest action hold; exposure 0%, previous 0%."
+          },
+          {
+            "statement": "An add requires a panic-regime close above 64; the rule then adds 20% per panic-regime day, within the 100% ceiling.",
+            "verdict": "supported",
+            "reason": "Add requires panic close above 64; adds 20% per day within 100% ceiling."
+          },
+          {
+            "statement": "In this window Buy & Hold returned 14.67% versus 5.73% for the strategy, so the rule's exposure discipline lagged.",
+            "verdict": "supported",
+            "reason": "Buy & Hold 14.67% vs strategy 5.73% in the window."
+          },
+          {
+            "statement": "Rule mechanics only, not advice.",
+            "verdict": "supported",
+            "reason": "Generic not-advice disclaimer is supported."
+          },
+          {
+            "statement": "The 64/15 thresholds and backtest window (2021-05-17 to 2023-06-20) are fixed in hindsight; Buy & Hold beat the strategy on return, Sharpe and Calmar here, and both had the same -35.12% max drawdown.",
+            "verdict": "supported",
+            "reason": "Thresholds/window fixed; B&H beat return, Sharpe 0.384 vs 0.232, Calmar 0.193 vs 0.077; both drawdown -35.12%."
+          }
+        ]
+      }
     }
   ]
 }

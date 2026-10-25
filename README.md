@@ -307,14 +307,14 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 |---|---|---|---|
 | Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
-| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 97.7% numeric faithfulness |
-| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 11/12 task success, 0 leaks |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 91.7% citation precision, 97.7% numeric faithfulness; LLM judge: 90.6% of statements supported |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 10/12 task success, 0 leaks |
 | Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 10 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce, adds and reductions clipped at the cap/floor, holds at the cap/floor) with a consistent answer and planted contradictions (`evals/datasets/consistency.yaml`) | 10/10 scenarios, 24/24 caught, 0 false positives |
-| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 2/10 flagged on the first pass, 0/10 after one repair turn, 0 fallbacks; 0 leaks |
+| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 4/10 broke the placeholder format on the first pass, 0/10 after one repair turn, 0 fallbacks; 0 leaks |
 
 #### Live run (DeepSeek, 2026-10-25)
 
-Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 4.
+Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 5.
 
 The first run exposed false positives in the scoring code, not model errors, so the code was changed **after seeing live answers**:
 
@@ -330,7 +330,8 @@ Each fix has a regression test built from the sentence that triggered it (`tests
 | 2, fresh | fix round 1 | 4/10 | 11/12 | 97.6% | 0 | 1 |
 | 2, re-scored | fix round 2 | 0/10 | 12/12 | 98.9% | 0 | 0 |
 | 3, fresh | fix round 2 | 2/10 | 10/12 | 94.8% | 0 | 0 |
-| **4, fresh: declared figures + repair** | **structured claims** | **2/10 first pass → 0/10 after repair** | **11/12** | **97.7%** | **0** | **0** |
+| 4, fresh: declared figures + repair | structured claims | 2/10 first pass → 0/10 after repair | 11/12 | 97.7% | 0 | 0 |
+| **5, fresh: placeholders** | **code-rendered figures, format check** | **4/10 first pass → 0/10 after repair** | **10/12** | **97.7%** | **0** | **1** |
 
 Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 
@@ -341,6 +342,15 @@ Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 Across the 30 fresh consistency answers of runs 1–3, manual review found no fabricated position and no contradictory direction. The prose-only validator's precision was the weak point: on fresh answers it rejected 2–4 correct answers out of 10, and each rejection replaced a correct explanation with the rule-based summary.
 
 Run 4 added declared figures and the repair turn, with no code changes after seeing its answers. Its first-pass flags (c02, c03 in consistency; a12 in the agent eval) were all bookkeeping errors in `position_claims`: the model listed the 64 panic threshold as an exposure floor or cap, or gave the wrong time-below-full value, while its prose was correct. The repair turn fixed each one, so no answer fell back to the rule-based summary. The one agent miss (a09) mentions the detector's default 5% retreat, which is not in the tool output. The repair turn adds a request when it fires (average steps 2.17 → 2.5, latency 5.7 s → 7.4 s); run 4 cost $0.04.
+
+Run 5 is the placeholder design (`9db66c1`), reported without changes after seeing it, with the LLM judge on ($0.06 including the judge). Consistency: 4/10 answers broke the format on the first pass, all 4 were repaired, 0 fell back, 82 position figures were rendered by code, and leakage was 0. Agent: 10/12 tasks, 100% tool selection, 91.7% citation precision, 97.7% numeric faithfulness, 0 leaks, 3 repair turns, 1 fallback. Judge groundedness: 91.6% of 119 consistency statements and 90.6% of 128 agent statements supported, 3 contradicted. What the failures were, by hand:
+
+- **Format misses (repaired, except a12).** The model wrote placeholders for fields that are not position figures (`{bt1.strategy_return_pct}`, `{bt1.upside_drag_pp}`), used `{min_position_pct}` instead of `{floor}`, or wrote "the 10% reduce step" / "the 0%-100% band" raw. a12 repeated the raw step after its repair and fell back to the rule-based summary, as designed.
+- **Real model errors the judge caught.** a04 again gives 77.56 as the 2025-04-09 Panic Index (the tool says 72.13); c06 says the rule "adds 20%" from the 100% cap. The format check cannot see either; the judge flagged both. The third "contradicted" label (c02) looks like a judge mistake.
+- **a10:** a correct refusal of the trap question, but it cites a minutes document its search did not return, so citation precision is 0 for that question.
+- **A gap in the format rule:** a10 also says "so the rule holds 100%". That clause has no position word, so a raw figure there is not flagged. The value is right here, but a wrong one would pass.
+
+Two follow-ups this run points to, not done here: let placeholders render any numeric tool field (returns, drawdowns, drag), which the model already tries to do and which would remove misquoted figures such as a12's 161.1 / 128.5; and treat "holds N%" / "at N%" next to *rule* or *strategy* as a position clause.
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
