@@ -13,6 +13,7 @@ Usage:
 import argparse
 import asyncio
 import json
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 from statistics import mean
@@ -63,6 +64,9 @@ def score_result(question, result):
     for call in result.tool_calls:
         source_numbers.extend(collect_numbers(call.result))
         source_numbers.extend(collect_numbers(call.arguments))
+    # The code-computed strategy signal is given to the model as facts too.
+    if result.signal is not None:
+        source_numbers.extend(collect_numbers(asdict(result.signal)))
     faithfulness, unsupported = numeric_faithfulness(
         extract_numbers(result.answer), source_numbers
     )

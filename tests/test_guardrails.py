@@ -184,3 +184,69 @@ def test_offline_consistency_eval_catches_every_planted_contradiction():
     assert summary["signal_mismatches"] == 0, [r for r in rows if r["signal_mismatches"]]
     assert summary["detection_rate"] == 1.0, [r for r in rows if not r["correct"]]
     assert summary["false_positive_rate"] == 0.0, [r for r in rows if not r["correct"]]
+
+
+# Sentences from the first live DeepSeek run (2026-10-25) that the validator
+# rejected although they agree with the signal.
+@pytest.mark.parametrize("market, as_of, text", [
+    # c07: the applied step, clipped by the cap, stated with "rose".
+    ("QQQ", date(2021, 11, 26), "The latest observation's action was 'add': exposure rose "
+                                "10% from 90% to 100%, reaching the 100% cap."),
+    # c05: the reduce step stated with "removes".
+    ("QQQ", date(2023, 6, 13), "Each further close below 15 removes another 10% of "
+                               "exposure, down to the 0% floor."),
+    # c10: a drawdown that follows an exposure figure.
+    ("QQQ", date(2023, 6, 20), "Buy & Hold returned 14.71% (strategy 5.73%), with 90.3% "
+                               "average exposure and 35.12% max drawdown."),
+    # a10: a return in the next clause after the current exposure.
+    ("QQQ", date(2022, 3, 25), "The QQQ signal panel is background context: Panic Index "
+                               "38.84 (neutral), holding 100% exposure; the strategy "
+                               "returned 4.24% vs. Buy & Hold 11.3%."),
+    # a03: "Buy & Hold" is a benchmark, not a buy action.
+    ("SPX", date(2024, 6, 28), "SPX is currently neutral (Panic Index 29.02), so the "
+                               "standard backtest holds 0% exposure and trails Buy & Hold, "
+                               "3.88% vs 31.16%."),
+])
+def test_live_run_false_positives_are_accepted(market, as_of, text):
+    signal = build_strategy_signal(market, as_of)
+    calls = [backtest_call(average_exposure_pct=90.3)]
+    assert validate_answer(text, signal, calls) == []
+
+
+def test_new_step_verbs_still_catch_a_wrong_step(panic_signal):
+    # panic_signal added 20%; "rose 35%" is neither the step nor the applied change.
+    assert validate_answer("Exposure rose 35% on the latest observation.", panic_signal)
+    assert validate_answer("The rule is now buying more exposure.",
+                           replace(panic_signal, action="hold", regime="neutral"))
+
+
+# Second live DeepSeek run (2026-10-25), fresh answers.
+@pytest.mark.parametrize("market, as_of, text, calls", [
+    # c03: steps stated with "rise" / "fall".
+    ("QQQ", date(2024, 6, 28), "Exposure would rise by 20% for each day the Panic Index "
+                               "closes above 64, and would fall by 10% for each day it "
+                               "closes below 15.", []),
+    # c04: a bracketed average belongs to the clause before the bracket.
+    ("QQQ", date(2024, 8, 5), "The strategy returned 8.01% versus 37.01% for Buy & Hold, so "
+                              "the reduction in average exposure (59.8%) left it behind.",
+     [backtest_call(average_exposure_pct=59.8)]),
+    # c05: a conditional path from the current level to the next one.
+    ("QQQ", date(2023, 6, 13), "Another close below 15 would trigger another 10% reduction, "
+                               "taking exposure from 30% to 20%.", []),
+    # c06: the rule's starting exposure, bracketed, without "at".
+    ("QQQ", date(2025, 3, 4), "Under the position rule (start 50%, add 20% per panic-regime "
+                                "day, reduce 10% per greed-regime day), the next session "
+                                "holds 100%.", []),
+    # a12: "averaged" states an average.
+    ("QQQ", date(2024, 12, 31), "Over 2023-01-03 to 2024-12-31 it averaged just 29.5% "
+                                "exposure.", [backtest_call(average_exposure_pct=29.5)]),
+])
+def test_second_live_run_false_positives_are_accepted(market, as_of, text, calls):
+    assert validate_answer(text, build_strategy_signal(market, as_of), calls) == []
+
+
+def test_unconditional_current_level_is_still_checked(panic_signal):
+    # The conditional skip must not let a plain wrong level through.
+    assert validate_answer("The strategy holds 60% exposure.", panic_signal)
+    assert validate_answer("If you ask me, the rule adds 35% exposure per panic-regime day.",
+                           panic_signal)

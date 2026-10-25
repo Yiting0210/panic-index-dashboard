@@ -120,3 +120,30 @@ def test_trap_question_flags_answers_that_state_the_future_outcome():
     row = score_result(trap, leaky)
     assert row["leaked"] and row["leaked_phrases"] == ["50 basis"]
     assert not row["success"]
+
+
+# Scoring false positives found in the first live DeepSeek run (2026-10-25).
+def test_month_day_dates_are_not_counted_as_numbers():
+    text = "Peaks on 03-07 and 05-09; realtime fired on 06-15/06-21 at 81.66."
+    assert extract_numbers(text) == [81.66]
+
+
+def test_unit_suffix_keeps_the_whole_decimal():
+    assert extract_numbers("drag +106.04pp vs cushion -83.87pp, 25bp, 1.5x") == \
+        [106.04, -83.87, 25.0, 1.5]
+
+
+def test_signal_numbers_count_as_sources():
+    from assistant import build_strategy_signal
+
+    result = make_result("The signal holds 100% after the latest observation.", [], [])
+    result.as_of = date(2022, 3, 25)
+    question = {**QUESTION, "as_of": date(2022, 3, 25), "expected_tools": []}
+    assert score_result(question, result)["unsupported_numbers"] == [100.0]
+    result.signal = build_strategy_signal("QQQ", date(2022, 3, 25))
+    assert result.signal.final_position_pct == 100.0
+    assert score_result(question, result)["numeric_faithfulness"] == 1.0
+
+
+def test_two_day_meeting_dates_are_not_counted_as_numbers():
+    assert extract_numbers("the March 15–16, 2022 meeting and Jan 25-26 cut 0.25") == [0.25]
