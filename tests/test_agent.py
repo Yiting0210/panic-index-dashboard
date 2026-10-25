@@ -522,3 +522,32 @@ def test_deepseek_repair_turn(make_deepseek_agent):
     sent = client.requests[1]["messages"]
     assert sent[-2]["role"] == "assistant" and sent[-1]["role"] == "user"
     assert "contradicts the code-computed strategy signal" in sent[-1]["content"]
+
+
+def test_malformed_claims_trigger_repair_then_fallback(make_agent, make_deepseek_agent):
+    # Issue #24: the role is invalid, so the claims are untrusted and the
+    # prose figure 64% (the buy threshold) is checked as the current exposure.
+    body = {"answer": "Current exposure is 64%.", "key_reasons": [], "citations": [],
+            "caveats": "none",
+            "position_claims": [{"value": 64, "role": "threshold", "what_if": False}],
+            "current_action": "not_stated"}
+    agent, client = make_deepseek_agent([ds_final(json.dumps(body)), ds_final(json.dumps(body))])
+    result = agent.run("What exposure?", date(2024, 8, 5), market="QQQ")
+
+    assert result.repairs == 1
+    assert any("invalid structured output" in v for v in result.first_violations)
+    assert "invalid structured output" in client.requests[1]["messages"][-1]["content"]
+    assert result.fallback_reason.startswith("GuardrailViolation")
+    assert any("64%" in v for v in result.violations)
+
+
+def test_malformed_claims_repaired_to_valid_ones_are_kept(make_deepseek_agent):
+    bad = {"answer": "The rule now holds 20% exposure.", "key_reasons": [], "citations": [],
+           "caveats": "none", "position_claims": [{"value": 20, "what_if": False}],
+           "current_action": "add"}
+    good = {**bad, "position_claims": [{"value": 20, "role": "current", "what_if": False}]}
+    agent, _ = make_deepseek_agent([ds_final(json.dumps(bad)), ds_final(json.dumps(good))])
+    result = agent.run("What exposure?", date(2024, 8, 5), market="QQQ")
+
+    assert result.fallback_reason is None and result.repairs == 1
+    assert result.position_claims == [{"value": 20.0, "role": "current", "what_if": False}]
