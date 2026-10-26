@@ -8,7 +8,12 @@ the format contract and the one structured field:
 * raw position figure: a percentage the model wrote itself (not produced by
   a placeholder) in the same clause as a position word (exposure, position,
   allocation, invested), or any "N of M units". Returns, drawdowns, and
-  index levels are fine as long as they sit in their own clause;
+  index levels are fine as long as they sit in their own clause. A few fixed
+  strategy-state phrasings count too, without a position word: rule /
+  strategy / framework / signal + (up to two adverbs) + holds [at (the)] /
+  is at / sits at / remains at / stays at + N%. Pronouns ("it holds 64%")
+  and other phrasings are not covered; this is a finite format rule, not
+  language understanding;
 * current_action: the action the model says it describes must be the
   signal's action;
 * contradictory direction (backstop): an unhedged sentence about the
@@ -25,6 +30,17 @@ POSITION_WORD_RE = re.compile(
     r"\b(?:exposures?|positions?|allocations?|invested|units?)\b", re.IGNORECASE)
 PCT_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?\s*(?:%|percent\b)", re.IGNORECASE)
 UNITS_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:out of|of|/)\s*\d+\s*units?\b", re.IGNORECASE)
+# "the rule holds 64%", "the strategy currently holds at the 100%",
+# "the signal is at 64%": strategy-state phrasings that state a position
+# without a position word. Deliberately narrow; no pronouns.
+STATE_SUBJECT = r"\b(?:rule|strategy|framework|signal)(?:'s)?"
+STATE_ADVERB = r"(?:\w+ly|now|still|already|again|also)"
+# "is at", "is still at", "remains at": an adverb may also sit inside the verb.
+STATE_VERB = (rf"(?:holds?(?:\s+at(?:\s+the)?)?|(?:is|sits?|remains?|stays?)\s+"
+              rf"(?:{STATE_ADVERB}\s+){{0,2}}at)")
+STATE_FIGURE_RE = re.compile(
+    rf"{STATE_SUBJECT}\s+(?:{STATE_ADVERB}\s+){{0,2}}{STATE_VERB}\s+"
+    r"(-?\d+(?:\.\d+)?\s*(?:%|percent\b))", re.IGNORECASE)
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 CLAUSE_BREAK_RE = re.compile(
     r"[,;:()]|\b(?:and|but|while|so|which|then|whereas|versus|vs\.?|compared)\b",
@@ -74,13 +90,18 @@ def raw_position_figures(rendered):
     found = []
     for s_start, s_end in _segments(text, SENTENCE_RE):
         sentence = text[s_start:s_end].strip()
+        figures = {}  # start -> figure, so a figure both rules catch counts once
         for c_start, c_end in _segments(text[s_start:s_end], CLAUSE_BREAK_RE):
             a, b = s_start + c_start, s_start + c_end
             if not POSITION_WORD_RE.search(text[a:b]):
                 continue
             for m in PCT_RE.finditer(text, a, b):
-                if not is_rendered(m.start(), m.end()):
-                    found.append((m.group(0).strip(), sentence))
+                figures[m.start()] = (m.end(), m.group(0).strip())
+        for m in STATE_FIGURE_RE.finditer(text, s_start, s_end):
+            figures[m.start(1)] = (m.end(1), m.group(1).strip())
+        for start, (end, figure) in sorted(figures.items()):
+            if not is_rendered(start, end):
+                found.append((figure, sentence))
         for m in UNITS_RE.finditer(text, s_start, s_end):
             found.append((m.group(0), sentence))
     return found

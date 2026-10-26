@@ -83,9 +83,17 @@ date:
   {bt1.time_below_full_exposure_pct} (or any other exposure field) for a
   run_backtest call, using the call_id shown above its result. Example: "The
   rule added {applied_change} and now holds {current_exposure} exposure."
-  Do not put any other percentage (a return, drawdown, or win rate) in the
-  same clause as the words exposure, position, allocation, or invested; give
-  it its own clause or sentence. Do not convert exposure to units.
+  The same applies to "the rule / strategy / signal holds N%" or "is at N%".
+- Prefer placeholders for a run_backtest call's other metrics too; the app
+  adds the unit: {bt1.strategy_return_pct} {bt1.buyhold_return_pct}
+  {bt1.strategy_max_drawdown_pct} {bt1.buyhold_max_drawdown_pct} (percent),
+  {bt1.upside_drag_pp} {bt1.downside_cushion_pp} (percentage points),
+  {bt1.strategy_sharpe} {bt1.buyhold_sharpe} {bt1.strategy_calmar}
+  {bt1.buyhold_calmar} (ratios). Other figures, including the strategy
+  signal's own returns, are copied as text.
+- Do not put any other raw percentage (a return, drawdown, or win rate) in
+  the same clause as the words exposure, position, allocation, or invested;
+  give it its own clause or sentence. Do not convert exposure to units.
 - For a what-if (other thresholds, start date, or step sizes), call
   run_backtest with those parameters, label the result as a what-if, and use
   that call's placeholders.

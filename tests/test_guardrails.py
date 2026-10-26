@@ -79,7 +79,7 @@ def test_backtest_placeholders_render_from_the_named_call(panic_signal):
 @pytest.mark.parametrize("text, error", [
     ("Now {current_position}.", "unknown placeholder"),
     ("Ends at {bt3.final_position_pct}.", "unknown run_backtest call id"),
-    ("Ends at {bt1.strategy_return_pct}.", "is not one of"),
+    ("Ends at {bt1.verdict}.", "is not one of"),  # text field, not a display scalar
     ("Ends at {bt1.previous_position_pct}.", "has no value"),
 ])
 def test_bad_placeholders_are_errors(panic_signal, text, error):
@@ -128,6 +128,78 @@ def test_raw_position_figures_are_rejected(panic_signal, text):
 ])
 def test_placeholder_answers_pass(panic_signal, text, backtests):
     assert check(text, panic_signal, backtests, current_action="add") == []
+
+
+# Issue #31 A: strategy-state phrasings without a position word.
+@pytest.mark.parametrize("text", [
+    "The rule holds 64%.",
+    "The strategy currently holds 64%.",
+    "The signal is at 64%.",
+    "The framework remains at 20%.",
+    "The strategy is still at 64%.",
+    "The signal holds at the 100% cap.",
+    # Live run 5, a10: no position word in the clause.
+    "QQQ remains neutral (Panic Index 38.84), so the rule holds 100%; a close above 64 "
+    "would add.",
+])
+def test_strategy_state_phrasings_need_placeholders(panic_signal, text):
+    violations = check(text, panic_signal)
+    assert any("raw position figure" in v for v in violations), violations
+
+
+@pytest.mark.parametrize("text", [
+    "The rule holds {current_exposure}.",
+    "The strategy currently holds {current_exposure}.",
+    "The signal is at {current_exposure}.",
+    "The framework remains at {floor}.",
+    "The signal holds at the {cap} cap.",
+])
+def test_strategy_state_phrasings_with_placeholders_pass(panic_signal, text):
+    assert check(text, panic_signal, current_action="add") == []
+
+
+@pytest.mark.parametrize("text", [
+    "It holds 64%.",                          # pronouns are not covered (documented)
+    "The strategy returned 64% over the window.",
+    "The strategy is at a 35% drawdown.",
+    "The Panic Index is at 64%.",
+])
+def test_strategy_state_rule_stays_narrow(panic_signal, text):
+    assert not any("raw position figure" in v for v in check(text, panic_signal))
+
+
+# Issue #31 B: run_backtest numeric placeholders with explicit units.
+A12_BACKTEST = {"bt1": {"strategy_return_pct": 42.19, "buyhold_return_pct": 95.79,
+                        "strategy_max_drawdown_pct": -4.24, "buyhold_max_drawdown_pct": -13.56,
+                        "upside_drag_pp": 167.66, "downside_cushion_pp": 133.15,
+                        "strategy_sharpe": 2.138, "buyhold_sharpe": 1.973,
+                        "strategy_calmar": 9.95, "buyhold_calmar": 7.06,
+                        "average_exposure_pct": 29.5, "time_below_full_exposure_pct": 100.0,
+                        "reduce_pct": 10.0}}
+
+
+def test_backtest_metric_placeholders_render_with_their_units(panic_signal):
+    out = render("Returned {bt1.strategy_return_pct} vs {bt1.buyhold_return_pct}; drawdown "
+                 "{bt1.strategy_max_drawdown_pct}; drag {bt1.upside_drag_pp} vs cushion "
+                 "{bt1.downside_cushion_pp}; Sharpe {bt1.strategy_sharpe}, Calmar "
+                 "{bt1.buyhold_calmar}.", panic_signal, A12_BACKTEST)
+    assert out.errors == []
+    assert out.text == ("Returned 42.19% vs 95.79%; drawdown -4.24%; drag 167.66pp vs cushion "
+                        "133.15pp; Sharpe 2.138, Calmar 7.06.")
+
+
+def test_a12_attribution_renders_but_a_raw_step_is_still_rejected(panic_signal):
+    # Live run 5, a12: the attribution placeholders were rejected as unsupported
+    # fields; now they render. Its raw "10%" reduce step is still a violation.
+    rendered = ("Upside drag was {bt1.upside_drag_pp} against a downside cushion of "
+                "{bt1.downside_cushion_pp}, with average exposure of "
+                "{bt1.average_exposure_pct}.")
+    assert check(rendered, panic_signal, A12_BACKTEST, current_action="add") == []
+    raw_step = "Each greed day trimmed exposure by 10%."
+    assert any("raw position figure 10%" in v
+               for v in check(raw_step, panic_signal, A12_BACKTEST))
+    assert check("Each greed day trimmed exposure by {bt1.reduce_pct}.", panic_signal,
+                 A12_BACKTEST) == []
 
 
 def test_current_action_must_match_the_signal(panic_signal):
