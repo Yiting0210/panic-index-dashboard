@@ -70,23 +70,27 @@ questions:
     as_of: 2024-12-31
     market: QQQ
     expected_tools: [run_backtest]
-  # The user's own position (#33). On 2025-03-06 the strategy path holds at
-  # the 100% cap, so a right answer must not present that 100% as the user's
-  # target: from 0% the rule adds. user_positions are the plan_position calls
-  # a correct run makes; the answer must state them with {ppN...} placeholders.
+  # The user's own position (#33, #35). On 2025-03-06 the strategy path holds
+  # at the 100% cap, so presenting that 100% as the user's target is wrong:
+  # from 0% the rule adds. current_position_pct is the page input; code turns
+  # it into the decision, and expect_decision is that decision, so the score
+  # checks the code-owned decision object, not the prose. user_positions are
+  # comparison scenarios the planner must compute with plan_position.
   - id: a13
     question: I have no position in QQQ. What would the rule do today?
     as_of: 2025-03-06
     market: QQQ
-    expected_tools: [plan_position]
-    user_positions: [0]
+    expected_tools: []
+    current_position_pct: 0
+    expect_decision: {action: add, applied_change_pct: 20.0, target_position_pct: 20.0}
   - id: a14
     # Greed regime: the path reduced 10% -> 0%; from 50% the rule reduces to 40%.
     question: I'm already 50% invested in QQQ. What happens now under the rule?
     as_of: 2023-06-16
     market: QQQ
-    expected_tools: [plan_position]
-    user_positions: [50]
+    expected_tools: []
+    current_position_pct: 50
+    expect_decision: {action: reduce, applied_change_pct: -10.0, target_position_pct: 40.0}
   - id: a15
     question: Compare what the rule does today from 0%, 20%, 50%, 80%, and 100% starting exposure in QQQ.
     as_of: 2025-03-06

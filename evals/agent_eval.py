@@ -48,31 +48,33 @@ def retrieved_docs(result):
     return docs
 
 
-def user_position_problems(question, result):
-    """How an answer about the user's own position breaks the plan contract (#33).
+def decision_problems(question, result):
+    """Where the code-owned decision differs from the expected one (#35).
 
-    For a question with ``user_positions``: each position must go through a
-    plan_position call, the answer must state it with {ppN...} placeholders,
-    and no clause about "your" position may use the strategy path's
-    {current_exposure} as the user's target (a separate clause that contrasts
-    the two, "...down to {current_exposure}; not a target for your account",
-    is fine).
+    ``expect_decision`` checks the your-position decision built from the
+    page input (``current_position_pct``); ``user_positions`` checks that
+    every comparison scenario was computed with plan_position, so its input
+    position is visible in the scenario table. The prose is not scored here:
+    the runtime contract and the judge cover it.
     """
-    from assistant.validator import CLAUSE_BREAK_RE, SENTENCE_RE, YOUR_RE, _segments
-
-    planned = {round(float(c.arguments.get("current_position_pct", -1)), 1)
-               for c in result.tool_calls if c.name == "plan_position" and not c.is_error}
-    problems = [f"no plan_position call for {p:g}%" for p in question["user_positions"]
-                if round(float(p), 1) not in planned]
-    raw = result.raw_answer or {}
-    texts = [raw.get("answer", ""), *raw.get("key_reasons", []), raw.get("caveats", "")]
-    if not any("{pp" in t for t in texts):
-        problems.append("no {ppN...} placeholder in the answer")
-    for text in texts:
-        for sentence in SENTENCE_RE.split(text):
-            clauses = [sentence[a:b] for a, b in _segments(sentence, CLAUSE_BREAK_RE)]
-            if any(YOUR_RE.search(c) and "{current_exposure}" in c for c in clauses):
-                problems.append(f"strategy path exposure stated as your position: {sentence.strip()}")
+    problems = []
+    expected = question.get("expect_decision")
+    if expected:
+        plan = result.decision.plan if result.decision else None
+        if plan is None:
+            problems.append("no your-position decision")
+        else:
+            if plan.current_position_pct != float(question["current_position_pct"]):
+                problems.append(f"decision used {plan.current_position_pct:g}%, not the page "
+                                f"input {question['current_position_pct']}%")
+            for name, value in expected.items():
+                if getattr(plan, name) != value:
+                    problems.append(f"{name} {getattr(plan, name)!r}, expected {value!r}")
+    if "user_positions" in question:
+        planned = {round(float(c.arguments.get("current_position_pct", -1)), 1)
+                   for c in result.tool_calls if c.name == "plan_position" and not c.is_error}
+        problems += [f"no plan_position scenario for {p:g}%" for p in question["user_positions"]
+                     if round(float(p), 1) not in planned]
     return problems
 
 
@@ -95,6 +97,8 @@ def score_result(question, result):
     # The code-computed strategy signal is given to the model as facts too.
     if result.signal is not None:
         source_numbers.extend(collect_numbers(asdict(result.signal)))
+    if result.decision is not None:
+        source_numbers.extend(collect_numbers(result.decision.as_dict()))
     faithfulness, unsupported = numeric_faithfulness(
         extract_numbers(result.answer), source_numbers
     )
@@ -114,8 +118,7 @@ def score_result(question, result):
     leaked = bool(leaked_dates or leaked_tool_data or leaked_citations or leaked_phrases)
 
     tool_selection = expected <= called
-    position_problems = (user_position_problems(question, result)
-                         if "user_positions" in question else [])
+    position_problems = decision_problems(question, result)
     success = (
         not position_problems
         and not result.used_fallback
@@ -137,7 +140,8 @@ def score_result(question, result):
         "leaked": leaked,
         "leaked_dates": [d.isoformat() for d in leaked_dates],
         "leaked_phrases": leaked_phrases,
-        "user_position_problems": position_problems,
+        "decision_problems": position_problems,
+        "contract_fallback": bool(result.violations),
         "as_of_clamped_calls": sum(c.as_of_clamped for c in result.tool_calls),
         "steps": result.steps,
         "latency_ms": result.latency_ms,
@@ -153,7 +157,8 @@ def score_result(question, result):
 
 
 def summarize(rows, questions=None):
-    position_ids = {q["id"] for q in questions or [] if "user_positions" in q}
+    position_ids = {q["id"] for q in questions or []
+                    if "user_positions" in q or "expect_decision" in q}
     position_rows = [r for r in rows if r["id"] in position_ids]
     return {
         "questions": len(rows),
@@ -171,9 +176,9 @@ def summarize(rows, questions=None):
                                      (r["fallback_reason"] or "").startswith("Guardrail")
                                      for r in rows),
         "rendered_placeholders": sum(r["placeholders"] for r in rows),
-        "user_position_questions": len(position_rows),
-        "user_position_correct": sum(not r["user_position_problems"] and r["fallback_reason"] is None
-                                     for r in position_rows),
+        "contract_fallbacks": sum(r["contract_fallback"] for r in rows),
+        "decision_questions": len(position_rows),
+        "decision_correct": sum(not r["decision_problems"] for r in position_rows),
     }
 
 
@@ -183,7 +188,8 @@ async def run_eval(agent, questions, judge=None):
 
     rows = []
     for q in questions:
-        result = await agent.arun(q["question"], q["as_of"], market=q.get("market"))
+        result = await agent.arun(q["question"], q["as_of"], market=q.get("market"),
+                                  current_position_pct=q.get("current_position_pct"))
         row = score_result(q, result)
         if judge is not None:
             row["judge"] = judge_result(result, judge)

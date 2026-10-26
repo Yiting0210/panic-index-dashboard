@@ -5,6 +5,7 @@ from .cache import CacheMiss, ResponseCache, request_hash
 from .ledger import PRICING, BudgetExceeded, UsageLedger, cost_usd
 from .signal import (COMPARISON_POSITIONS, STANDARD_BACKTEST_START, StrategySignal,
                      build_strategy_signal, position_plans)
+from .presentation import DecisionFacts, boundary_state, build_decision
 from .render import render
 from .validator import validate_answer
 
@@ -12,6 +13,7 @@ __all__ = [
     "AgentResult",
     "BudgetExceeded",
     "COMPARISON_POSITIONS",
+    "DecisionFacts",
     "CacheMiss",
     "DEEPSEEK_DEFAULT_MODEL",
     "DEFAULT_MODEL",
@@ -26,6 +28,8 @@ __all__ = [
     "StrategySignal",
     "ToolCall",
     "UsageLedger",
+    "boundary_state",
+    "build_decision",
     "build_strategy_signal",
     "cost_usd",
     "position_plans",

@@ -11,11 +11,13 @@ client sees. Three guardrails sit around the model:
 * graceful degradation: on API errors, refusals, or an exhausted budget the
   agent returns the deterministic rule-based summary instead.
 
-Position sizing is not left to the model: the strategy signal (regime,
-final_position_pct, and the rule's action) comes from one standard backtest
-computed in code, a user's own position goes through plan_position, and the
-validator rejects an answer whose prose contradicts them, falling back to the
-rule-based summary.
+Decisions are not left to the model: the decision facts (the strategy path
+from one standard backtest, and the rule's step from the position the user
+entered on the page) are computed in code (assistant/presentation.py),
+rendered by the page, and given to the model as read-only context. The model
+writes the explanation; a contract check (assistant/validator.py) blocks
+restated position figures, placeholder errors, and bad citations, with one
+repair turn and then the rule-based summary.
 """
 import asyncio
 import json
@@ -36,9 +38,10 @@ from utils.strategy import StrategyParams
 
 from .cache import ResponseCache, request_hash
 from .ledger import BudgetExceeded, UsageLedger
-from .signal import StrategySignal, build_strategy_signal
+from .presentation import DecisionFacts, build_decision
 from .render import render
-from .validator import ACTIONS, parse_current_action, validate_answer
+from .signal import StrategySignal
+from .validator import validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.getenv("PANIC_LLM_EFFORT", "medium")
@@ -71,66 +74,54 @@ date:
 - If the tools cannot answer the question, say so instead of guessing.
 - This is historical research, not investment advice; say so briefly when
   the user asks what to buy or sell.
-- The question comes with a strategy signal computed by code from a standard
-  backtest. The app shows it to the user as the Market Regime and Strategy
-  Signal panels. You explain it; you do not decide it. Describe the current
-  action only as the signal states it. Do not invent sizing, scaling levels,
-  or a mapping from percentile to position.
-- Never write an exposure or position number yourself. Write a placeholder
-  and the app fills in the value:
-  {current_exposure} {previous_exposure} {applied_change} {add_step}
-  {reduce_step} {cap} {floor} {initial_exposure} for the standard signal,
-  and {bt1.final_position_pct}, {bt1.average_exposure_pct},
-  {bt1.time_below_full_exposure_pct} (or any other exposure field) for a
-  run_backtest call, using the call_id shown above its result. Example: "The
-  rule added {applied_change} and now holds {current_exposure} exposure."
-  The same applies to "the rule / strategy / signal holds N%" or "is at N%".
-- Prefer placeholders for a run_backtest call's other metrics too; the app
-  adds the unit: {bt1.strategy_return_pct} {bt1.buyhold_return_pct}
+- The question comes with decision facts computed by code: the strategy
+  path (one standard backtest) and, when the user entered a position on the
+  page, the rule's step from that position. The app shows them to the user
+  above your answer. They are authoritative: explain why they are what they
+  are, and do not recalculate, reinterpret, override, or restate them. Do
+  not write the strategy path exposure, the user's position, the rule's
+  action, the applied change, or the resulting position; the app shows them.
+- The strategy path exposure is where the rule stands after following it
+  since the standard backtest start. It is not a target for someone who
+  holds a different position; never present it as the user's position.
+- Research values from the tools are fine when useful: Panic Index, VIX,
+  Fear & Greed, percentiles, forward returns, win rates, drawdowns, FOMC
+  dates. Do not put a raw percentage in the same clause as the words
+  exposure, position, allocation, or invested; give it its own clause.
+- Do not invent sizing, scaling levels, or a mapping from percentile to
+  position.
+- For a what-if (other thresholds, start date, or step sizes), call
+  run_backtest with those parameters, label the result as a what-if, and
+  write its figures as placeholders with the call_id shown above its result;
+  the app fills in the value and unit: {bt1.final_position_pct}
+  {bt1.average_exposure_pct} {bt1.time_below_full_exposure_pct}
+  {bt1.strategy_return_pct} {bt1.buyhold_return_pct}
   {bt1.strategy_max_drawdown_pct} {bt1.buyhold_max_drawdown_pct} (percent),
   {bt1.upside_drag_pp} {bt1.downside_cushion_pp} (percentage points),
   {bt1.strategy_sharpe} {bt1.buyhold_sharpe} {bt1.strategy_calmar}
-  {bt1.buyhold_calmar} (ratios). Other figures, including the strategy
-  signal's own returns, are copied as text.
-- Do not put any other raw percentage (a return, drawdown, or win rate) in
-  the same clause as the words exposure, position, allocation, or invested;
-  give it its own clause or sentence. Do not convert exposure to units.
-- For a what-if (other thresholds, start date, or step sizes), call
-  run_backtest with those parameters, label the result as a what-if, and use
-  that call's placeholders.
-- {current_exposure} is the strategy path exposure: where the rule stands
-  after following it continuously since the standard backtest start. It is
-  not a target for someone who holds a different position today; never
-  present it as "your" position or as where the user should move.
-- When the user states their own position ("I have no position", "I am 50%
-  invested"), or asks to compare starting positions, call plan_position once
-  per position (in the same step). It applies today's regime once to that
-  position. Use that call's placeholders: {pp1.current_position_pct},
-  {pp1.applied_change_pct}, {pp1.target_position_pct}, using the call_id
-  shown above its result. {pp1.applied_change_pct} renders without a sign,
-  so write the action verb yourself: "the rule reduces your position by
-  {pp1.applied_change_pct} to {pp1.target_position_pct}". Do not use run_backtest's initial_position_pct for
-  this: that is the position at the start of the whole backtest window. Keep
-  "your position" sentences separate from strategy path sentences, and put
-  that call's {ppN...} figure in every sentence that says what the rule does
-  from the user's position.
-- If the backtest shows Buy & Hold beating the strategy, say so next to the
-  position figure instead of only in the caveats.
+  {bt1.buyhold_calmar} (ratios).
+- To compare starting positions ("from 0%, 50%, and 100%"), call
+  plan_position once per position. The app shows each call as a table row
+  with its input position; explain the pattern instead of the rows' numbers.
+  Do not use run_backtest's initial_position_pct for this: that is the
+  position at the start of the whole backtest window.
+- If the backtest shows Buy & Hold beating the strategy, say so.
 
 When you have what you need, reply with the JSON object the response format
-requires: a concise answer (at most about 150 words), up to four key_reasons
-(one sentence each, grounded in tool results), the citations you used,
-caveats (risks, data limitations, hindsight labels, or "none"), and
-current_action: the strategy path's action on the latest observation as you
-describe it (add, reduce, or hold; the signal's action, not the action from
-a plan_position call), or not_stated.
+requires: summary (at most about 120 words), why (up to four sentences on
+why the decision facts are what they are, each grounded in tool results),
+historical_context (one short paragraph, or "" if not relevant), risks (a
+list of risks, data limitations, or hindsight labels), and the citations you
+used.
 """
 
 FINAL_ANSWER_SCHEMA = {
     "type": "object",
     "properties": {
-        "answer": {"type": "string"},
-        "key_reasons": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"},
+        "why": {"type": "array", "items": {"type": "string"}},
+        "historical_context": {"type": "string"},
+        "risks": {"type": "array", "items": {"type": "string"}},
         "citations": {
             "type": "array",
             "items": {
@@ -143,40 +134,57 @@ FINAL_ANSWER_SCHEMA = {
                 "additionalProperties": False,
             },
         },
-        "caveats": {"type": "string"},
-        "current_action": {"type": "string", "enum": [*ACTIONS, "not_stated"]},
     },
-    "required": ["answer", "key_reasons", "citations", "caveats", "current_action"],
+    "required": ["summary", "why", "historical_context", "risks", "citations"],
     "additionalProperties": False,
 }
+ANSWER_FIELDS = ("summary", "why", "historical_context", "risks", "citations")
 
 
 # DeepSeek has JSON mode but no schema enforcement, so the shape is spelled out.
 JSON_ANSWER_INSTRUCTIONS = """
 Reply to finish with only this JSON object and no other text:
-{"answer": "<string>", "key_reasons": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}], "caveats": "<string>", "current_action": "<add|reduce|hold|not_stated>"}
+{"summary": "<string>", "why": ["<string>"], "historical_context": "<string>", "risks": ["<string>"], "citations": [{"doc_id": "<string>", "published_at": "YYYY-MM-DD"}]}
 """
 
 
-def _repair_message(violations, signal):
-    """Ask the model to rewrite a final answer that broke the format contract."""
+def _repair_message(violations):
+    """Ask the model to rewrite a final answer that broke the contract."""
     listed = "\n".join(f"- {v}" for v in violations)
-    action = f" The rule's latest action is {signal.action}." if signal else ""
     return (
         "Your final answer breaks the answer contract:\n"
         f"{listed}\n"
-        "Rewrite the final JSON. Write every exposure or position figure as a "
-        "placeholder ({current_exposure}, {applied_change}, {bt1.final_position_pct}, "
-        "{pp1.target_position_pct}, ...), keep other percentages out of clauses that mention exposure or "
-        f"position, and describe the current action as the signal states it.{action} "
-        "Only fix these problems; keep the rest of the answer."
+        "Rewrite the final JSON. Leave position and action facts to the app (do not "
+        "restate them), write what-if figures as {btN...} placeholders, keep other "
+        "percentages out of clauses that mention exposure or position, and cite only "
+        "doc_ids that search_fed_docs returned. Only fix these problems; keep the rest "
+        "of the answer."
     )
+
+
+def _schema_errors(data):
+    """Type errors in the final JSON, reported as violations so a repair fires."""
+    errors = []
+    for name in ("summary", "historical_context"):
+        if not isinstance(data.get(name, ""), str):
+            errors.append(f"invalid structured output: {name} must be a string")
+    for name in ("why", "risks"):
+        value = data.get(name, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            errors.append(f"invalid structured output: {name} must be a list of strings")
+    citations = data.get("citations", [])
+    if not isinstance(citations, list) or not all(
+            isinstance(c, dict) and isinstance(c.get("doc_id"), str) for c in citations):
+        errors.append("invalid structured output: citations must be a list of "
+                      "{doc_id, published_at} objects")
+    return errors
+
 
 API_ERRORS = (anthropic.AnthropicError, openai.OpenAIError)
 
 
 class GuardrailViolation(RuntimeError):
-    """The answer contradicted the code-computed strategy signal."""
+    """The explanation still broke the answer contract after the repair turn."""
 
     def __init__(self, violations):
         super().__init__("; ".join(violations))
@@ -200,10 +208,13 @@ class ToolCall:
 class AgentResult:
     question: str
     as_of: date
+    # The model's explanation, rendered: answer is its summary, key_reasons
+    # its "why" sentences.
     answer: str
     key_reasons: list = field(default_factory=list)
+    historical_context: str = ""
+    risks: list = field(default_factory=list)
     citations: list = field(default_factory=list)
-    caveats: str = ""
     tool_calls: list = field(default_factory=list)
     steps: int = 0
     model: str = ""
@@ -215,13 +226,15 @@ class AgentResult:
     cached_responses: int = 0
     fallback_reason: Optional[str] = None
     strategy: Optional[StrategyParams] = None
+    # Code-owned decision facts; signal is decision.signal.
+    decision: Optional[DecisionFacts] = None
     signal: Optional[StrategySignal] = None
     violations: list = field(default_factory=list)
-    current_action: Optional[str] = None
-    # A malformed current_action, reported as a violation.
+    # Type errors in the final JSON, reported as violations.
     structured_errors: list = field(default_factory=list)
     # The model's text with placeholders, and the rendered answer fields
-    # (answer, each key reason, caveats) with their rendered spans.
+    # (summary, each why sentence, historical_context, each risk) with their
+    # rendered spans.
     raw_answer: dict = field(default_factory=dict)
     rendered: list = field(default_factory=list)
     # Repair turns used, and the violations that triggered the first one.
@@ -297,12 +310,12 @@ def _apply_strategy(name, arguments, strategy):
     return {**filled, **arguments}
 
 
-def _first_message(question, as_of, strategy, signal=None):
+def _first_message(question, as_of, strategy, decision=None):
     content = f"as_of: {as_of.isoformat()}\n\n"
     if strategy is not None:
         content += f"Strategy settings: {strategy.describe()}.\n\n"
-    if signal is not None:
-        content += signal.prompt_block() + "\n\n"
+    if decision is not None:
+        content += decision.prompt_block() + "\n\n"
     return {"role": "user", "content": content + f"Question: {question}"}
 
 
@@ -345,24 +358,30 @@ class ResearchAgent:
             self._client = anthropic.Anthropic()
         return self._client
 
-    def run(self, question, as_of, market=None, strategy=None):
-        return asyncio.run(self.arun(question, as_of, market=market, strategy=strategy))
+    def run(self, question, as_of, market=None, strategy=None, current_position_pct=None):
+        return asyncio.run(self.arun(question, as_of, market=market, strategy=strategy,
+                                     current_position_pct=current_position_pct))
 
-    async def arun(self, question, as_of, market=None, strategy=None):
+    async def arun(self, question, as_of, market=None, strategy=None,
+                   current_position_pct=None):
         """Answer ``question`` as of ``as_of``.
 
         ``strategy`` (StrategyParams) carries the dashboard's threshold and
         position-sizing settings; tool calls that omit them use these values.
+        ``current_position_pct`` is the user's own exposure from the page
+        input; code turns it into the your-position decision, so the model
+        never supplies it.
         """
         as_of = to_date(as_of)
         started = time.perf_counter()
         result = AgentResult(question=question, as_of=as_of, answer="", model=self.model,
                              strategy=strategy)
         try:
-            result.signal = build_strategy_signal(market or self.fallback_market, as_of,
-                                                  strategy)
+            result.decision = build_decision(market or self.fallback_market, as_of,
+                                             strategy, current_position_pct)
+            result.signal = result.decision.signal
         except ToolInputError:
-            result.signal = None
+            result.decision = result.signal = None
         try:
             await self._loop(question, as_of, result)
             self._validate(result)
@@ -377,22 +396,27 @@ class ResearchAgent:
             result.answer = rule_based_summary(market or self.fallback_market, as_of,
                                                **thresholds)
             result.key_reasons = []
+            result.historical_context = ""
             result.citations = []
-            result.caveats = (
+            result.risks = [
                 "LLM path unavailable; showing the deterministic rule-based "
                 "summary for the selected market."
-            )
+            ]
         result.latency_ms = round((time.perf_counter() - started) * 1000, 1)
         result.cost_usd = round(result.cost_usd, 6)
         return result
 
     @staticmethod
     def _violations(result):
-        """How the final answer breaks the format contract or the signal."""
-        plans = {c.call_id: c.result for c in result.tool_calls
-                 if c.call_id and c.name == "plan_position"}
+        """How the final answer breaks the answer contract."""
+        retrieved = {}
+        for call in result.tool_calls:
+            if call.name == "search_fed_docs" and call.result and not call.is_error:
+                for hit in call.result.get("results", []):
+                    retrieved[hit["doc_id"]] = hit["published_at"]
         return result.structured_errors + validate_answer(
-            result.rendered, result.signal, current_action=result.current_action, plans=plans)
+            result.rendered, citations=result.citations, retrieved=retrieved,
+            as_of=result.as_of)
 
     def _needs_repair(self, result):
         """Whether to send the violations back for one more try."""
@@ -402,10 +426,10 @@ class ResearchAgent:
         if not result.first_violations:
             result.first_violations = violations
         result.repairs += 1
-        return _repair_message(violations, result.signal)
+        return _repair_message(violations)
 
     def _validate(self, result):
-        """Reject a final answer that still contradicts the signal."""
+        """Reject a final answer that still breaks the contract."""
         violations = self._violations(result)
         if violations:
             raise GuardrailViolation(violations)
@@ -483,7 +507,7 @@ class ResearchAgent:
         listed = await mcp.list_tools()
         tools = sorted((_mcp_tool_to_anthropic(t) for t in listed.tools),
                        key=lambda t: t["name"])
-        messages = [_first_message(question, as_of, result.strategy, result.signal)]
+        messages = [_first_message(question, as_of, result.strategy, result.decision)]
         for _ in range(self.max_steps):
             response = self._create(self._request_params(tools, messages), result)
             result.steps += 1
@@ -557,24 +581,32 @@ class ResearchAgent:
 
     @staticmethod
     def _apply_final(data, result):
-        if not isinstance(data.get("answer"), str):
-            raise RuntimeError("final answer is missing the 'answer' string")
-        citations = data.get("citations") or []
-        result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")]
-        result.raw_answer = {
-            "answer": data["answer"],
-            "key_reasons": [str(r) for r in data.get("key_reasons") or [] if r],
-            "caveats": str(data.get("caveats") or ""),
+        if not isinstance(data.get("summary"), str):
+            raise RuntimeError("final answer is missing the 'summary' string")
+        result.structured_errors = _schema_errors(data)
+        citations = data.get("citations")
+        result.citations = [c for c in citations if isinstance(c, dict) and c.get("doc_id")] \
+            if isinstance(citations, list) else []
+
+        def strings(value):
+            return [str(v) for v in value if v] if isinstance(value, list) else []
+
+        raw = {
+            "summary": data["summary"],
+            "why": strings(data.get("why")),
+            "historical_context": str(data.get("historical_context") or ""),
+            "risks": strings(data.get("risks")),
         }
-        # Position figures are placeholders; code fills in the values.
+        result.raw_answer = raw
+        # What-if figures are placeholders; code fills in the values.
         calls = {c.call_id: c.result for c in result.tool_calls if c.call_id}
-        raw = result.raw_answer
-        result.rendered = [render(text, result.signal, calls)
-                           for text in [raw["answer"], *raw["key_reasons"], raw["caveats"]]]
+        texts = [raw["summary"], *raw["why"], raw["historical_context"], *raw["risks"]]
+        result.rendered = [render(text, result.signal, calls) for text in texts]
+        n_why = len(raw["why"])
         result.answer = result.rendered[0].text
-        result.key_reasons = [r.text for r in result.rendered[1:-1]]
-        result.caveats = result.rendered[-1].text
-        result.current_action, result.structured_errors = parse_current_action(data)
+        result.key_reasons = [r.text for r in result.rendered[1:1 + n_why]]
+        result.historical_context = result.rendered[1 + n_why].text
+        result.risks = [r.text for r in result.rendered[2 + n_why:]]
 
     @classmethod
     def _parse_final(cls, content, result):
@@ -650,7 +682,7 @@ class DeepSeekAgent(ResearchAgent):
              for t in listed.tools),
             key=lambda t: t["function"]["name"],
         )
-        messages = [_first_message(question, as_of, result.strategy, result.signal)]
+        messages = [_first_message(question, as_of, result.strategy, result.decision)]
         for _ in range(self.max_steps):
             message = self._next_message(self._request_params(tools, messages), result)
             calls = message.get("tool_calls") or []

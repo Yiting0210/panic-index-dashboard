@@ -2,9 +2,11 @@
   "summary": {
     "fixtures": 10,
     "signal_mismatches": 0,
-    "planted_contradictions": 24,
+    "planted_restatements": 14,
     "detection_rate": 1,
-    "false_positive_rate": 0
+    "false_positive_rate": 0,
+    "direction_probes_not_blocked": 10,
+    "direction_probes": 10
   },
   "rows": [
     {
@@ -20,8 +22,8 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 60%: write position figures only as placeholders such as {current_exposure}: With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units.",
-        "raw position figure 6 out of 10 units: write position figures only as placeholders such as {current_exposure}: With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units."
+        "raw position figure 60%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units.",
+        "raw position figure 6 out of 10 units: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units."
       ]
     },
     {
@@ -29,9 +31,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'add' contradicts the rule's 'hold' (neutral regime): The rule is currently adding exposure because sentiment is improving."
-      ]
+      "violations": []
     },
     {
       "id": "c02_eighty_pct",
@@ -46,7 +46,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 65%: write position figures only as placeholders such as {current_exposure}: Given the panic reading, the strategy now holds 65% exposure."
+        "raw position figure 65%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): Given the panic reading, the strategy now holds 65% exposure."
       ]
     },
     {
@@ -54,9 +54,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'reduce' contradicts the rule's 'add' (panic regime): Because the market is in panic, the rule is now reducing exposure."
-      ]
+      "violations": []
     },
     {
       "id": "c02_eighty_pct",
@@ -64,7 +62,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 20%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 20% exposure."
+        "raw position figure 20%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 20% exposure."
       ]
     },
     {
@@ -80,7 +78,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 35%: write position figures only as placeholders such as {current_exposure}: The strategy is currently 35% invested while it waits for a panic signal."
+        "raw position figure 35%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy is currently 35% invested while it waits for a panic signal."
       ]
     },
     {
@@ -88,9 +86,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'add' contradicts the rule's 'hold' (neutral regime): The framework is buying back exposure today as sentiment normalizes."
-      ]
+      "violations": []
     },
     {
       "id": "c04_panic_add",
@@ -105,7 +101,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 40%: write position figures only as placeholders such as {current_exposure}: After the panic reading the rule now holds 40% exposure."
+        "raw position figure 40%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): After the panic reading the rule now holds 40% exposure."
       ]
     },
     {
@@ -113,9 +109,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'reduce' contradicts the rule's 'add' (panic regime): The strategy is currently trimming exposure because the market is in panic."
-      ]
+      "violations": []
     },
     {
       "id": "c04_panic_add",
@@ -123,7 +117,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 100%: write position figures only as placeholders such as {current_exposure}: The current position is 100%."
+        "raw position figure 100%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The current position is 100%."
       ]
     },
     {
@@ -139,7 +133,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 75%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 75% exposure."
+        "raw position figure 75%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 75% exposure."
       ]
     },
     {
@@ -147,9 +141,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'add' contradicts the rule's 'reduce' (greed regime): Greed is high, so the rule is now adding exposure to ride the momentum."
-      ]
+      "violations": []
     },
     {
       "id": "c05_greed_reduce",
@@ -157,7 +149,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: The current exposure is 10%."
+        "raw position figure 10%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The current exposure is 10%."
       ]
     },
     {
@@ -173,7 +165,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 90%: write position figures only as placeholders such as {current_exposure}: After the panic reading the strategy now holds 90% exposure."
+        "raw position figure 90%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): After the panic reading the strategy now holds 90% exposure."
       ]
     },
     {
@@ -181,9 +173,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'reduce' contradicts the rule's 'add' (panic regime): The strategy is now reducing exposure as the panic deepens."
-      ]
+      "violations": []
     },
     {
       "id": "c07_add_clipped_at_cap",
@@ -198,7 +188,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 120%: write position figures only as placeholders such as {current_exposure}: The rule now holds 120% exposure after the panic reading."
+        "raw position figure 120%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The rule now holds 120% exposure after the panic reading."
       ]
     },
     {
@@ -206,9 +196,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'reduce' contradicts the rule's 'add' (panic regime): The framework is currently trimming exposure because of the panic."
-      ]
+      "violations": []
     },
     {
       "id": "c08_hold_at_cap",
@@ -223,7 +211,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 70%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 70% exposure while panic persists."
+        "raw position figure 70%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 70% exposure while panic persists."
       ]
     },
     {
@@ -231,9 +219,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'add' contradicts the rule's 'hold' (panic regime): The rule is adding exposure now because of the panic reading."
-      ]
+      "violations": []
     },
     {
       "id": "c09_reduce_into_floor",
@@ -248,7 +234,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 25%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 25% exposure."
+        "raw position figure 25%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 25% exposure."
       ]
     },
     {
@@ -256,9 +242,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'add' contradicts the rule's 'reduce' (greed regime): Greed is extreme, so the rule is now adding exposure."
-      ]
+      "violations": []
     },
     {
       "id": "c10_hold_at_floor",
@@ -273,7 +257,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 35%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 35% exposure."
+        "raw position figure 35%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 35% exposure."
       ]
     },
     {
@@ -281,9 +265,7 @@
       "probe": "contradictory_direction",
       "signal_mismatches": {},
       "correct": true,
-      "violations": [
-        "direction 'reduce' contradicts the rule's 'hold' (greed regime): The rule is currently reducing exposure further."
-      ]
+      "violations": []
     },
     {
       "id": "c10_hold_at_floor",
@@ -291,7 +273,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "raw position figure 50%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 50% exposure."
+        "raw position figure 50%: position and action facts are shown by the app; do not restate them (what-if figures use {btN...} placeholders): The strategy currently holds 50% exposure."
       ]
     }
   ]
