@@ -1,4 +1,4 @@
-"""Code-rendered position figures.
+"""Code-rendered figures.
 
 The model never writes an exposure or position number. It writes a
 placeholder that names the field, and code fills in the value:
@@ -7,11 +7,18 @@ placeholder that names the field, and code fills in the value:
   {applied_change}, {add_step}, {reduce_step}, {cap}, {floor},
   {initial_exposure};
 * a run_backtest call made this turn, by the call id its result was labelled
-  with: {bt1.final_position_pct}, {bt2.average_exposure_pct}, ...
+  with: {bt1.final_position_pct}, {bt2.average_exposure_pct}, and also its
+  return, drawdown, ratio, and attribution metrics ({bt1.strategy_return_pct},
+  {bt1.strategy_sharpe}, {bt1.upside_drag_pp}, ...).
 
-So a position figure is correct by construction, and a what-if figure is
-tied to the exact call it came from. An unknown placeholder, call id, or
-field is reported as an error and left in the text unrendered.
+Each field has an explicit unit: percent fields render with "%",
+attribution fields in percentage points with "pp", and ratios bare. So a
+figure is correct by construction, and a what-if figure is tied to the
+exact call it came from. An unknown placeholder, call id, or field is
+reported as an error and left in the text unrendered.
+
+The standard backtest's own metrics (the Strategy Signal panel's returns
+and drawdowns) have no placeholders; the model copies them as text.
 """
 import re
 from dataclasses import dataclass, field
@@ -28,10 +35,46 @@ SIGNAL_PLACEHOLDERS = {
     "floor": lambda s: s.min_position_pct,
     "initial_exposure": lambda s: s.initial_position_pct,
 }
-# run_backtest result fields that state an exposure level or step.
-CALL_FIELDS = ("final_position_pct", "previous_position_pct", "initial_position_pct",
-               "add_pct", "reduce_pct", "max_position_pct", "min_position_pct",
-               "average_exposure_pct", "time_below_full_exposure_pct")
+
+
+def format_pct(value):
+    return f"{float(value):g}%"
+
+
+def format_pp(value):
+    return f"{float(value):g}pp"
+
+
+def format_ratio(value):
+    return f"{float(value):g}"
+
+
+# Display-safe scalar run_backtest fields and how each renders.
+CALL_FIELDS = {
+    # exposure levels and steps
+    "final_position_pct": format_pct,
+    "previous_position_pct": format_pct,
+    "initial_position_pct": format_pct,
+    "add_pct": format_pct,
+    "reduce_pct": format_pct,
+    "max_position_pct": format_pct,
+    "min_position_pct": format_pct,
+    "average_exposure_pct": format_pct,
+    "time_below_full_exposure_pct": format_pct,
+    # returns and drawdowns
+    "strategy_return_pct": format_pct,
+    "buyhold_return_pct": format_pct,
+    "strategy_max_drawdown_pct": format_pct,
+    "buyhold_max_drawdown_pct": format_pct,
+    # attribution, in percentage points
+    "upside_drag_pp": format_pp,
+    "downside_cushion_pp": format_pp,
+    # unitless ratios
+    "strategy_sharpe": format_ratio,
+    "buyhold_sharpe": format_ratio,
+    "strategy_calmar": format_ratio,
+    "buyhold_calmar": format_ratio,
+}
 
 
 @dataclass
@@ -40,10 +83,6 @@ class Rendered:
     spans: list = field(default_factory=list)  # (start, end) of each rendered value
     errors: list = field(default_factory=list)
     count: int = 0
-
-
-def format_pct(value):
-    return f"{float(value):g}%"
 
 
 def render(text, signal=None, backtests=None):
@@ -56,7 +95,7 @@ def render(text, signal=None, backtests=None):
     length = 0
     for m in PLACEHOLDER_RE.finditer(text):
         name, attr = m.group(1), m.group(2)
-        value = None
+        value, formatter = None, format_pct
         if attr is None:
             if name not in SIGNAL_PLACEHOLDERS:
                 errors.append(f"unknown placeholder {m.group(0)}; use one of "
@@ -74,11 +113,11 @@ def render(text, signal=None, backtests=None):
         elif backtests[name].get(attr) is None:
             errors.append(f"{m.group(0)}: call {name} has no value for {attr}")
         else:
-            value = backtests[name][attr]
+            value, formatter = backtests[name][attr], CALL_FIELDS[attr]
         piece = text[last:m.start()]
         out.append(piece)
         length += len(piece)
-        rendered = m.group(0) if value is None else format_pct(value)
+        rendered = m.group(0) if value is None else formatter(value)
         if value is not None:
             spans.append((length, length + len(rendered)))
         out.append(rendered)
