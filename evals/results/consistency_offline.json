@@ -20,7 +20,8 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 60% (read as the current exposure; expected 100%): With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units."
+        "raw position figure 60%: write position figures only as placeholders such as {current_exposure}: With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units.",
+        "raw position figure 6 out of 10 units: write position figures only as placeholders such as {current_exposure}: With sentiment in the middle of its range, the framework suggests 60% exposure, or 6 out of 10 units."
       ]
     },
     {
@@ -45,7 +46,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 65% (read as the current exposure; expected 80%): Given the panic reading, the strategy now holds 65% exposure."
+        "raw position figure 65%: write position figures only as placeholders such as {current_exposure}: Given the panic reading, the strategy now holds 65% exposure."
       ]
     },
     {
@@ -63,7 +64,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 20% (read as the current exposure; expected 80%): The strategy currently holds 20% exposure."
+        "raw position figure 20%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 20% exposure."
       ]
     },
     {
@@ -79,7 +80,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 35% (read as the current exposure; expected 0%): The strategy is currently 35% invested while it waits for a panic signal."
+        "raw position figure 35%: write position figures only as placeholders such as {current_exposure}: The strategy is currently 35% invested while it waits for a panic signal."
       ]
     },
     {
@@ -104,7 +105,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 40% (read as the current exposure; expected 20%): After the panic reading the rule now holds 40% exposure."
+        "raw position figure 40%: write position figures only as placeholders such as {current_exposure}: After the panic reading the rule now holds 40% exposure."
       ]
     },
     {
@@ -122,7 +123,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 100% (read as the current exposure; expected 20%): The current position is 100%."
+        "raw position figure 100%: write position figures only as placeholders such as {current_exposure}: The current position is 100%."
       ]
     },
     {
@@ -138,7 +139,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 75% (read as the current exposure; expected 30%): The strategy currently holds 75% exposure."
+        "raw position figure 75%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 75% exposure."
       ]
     },
     {
@@ -156,7 +157,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 10% (read as the current exposure; expected 30%): The current exposure is 10%."
+        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: The current exposure is 10%."
       ]
     },
     {
@@ -172,7 +173,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 90% (read as the current exposure; expected 100%): After the panic reading the strategy now holds 90% exposure."
+        "raw position figure 90%: write position figures only as placeholders such as {current_exposure}: After the panic reading the strategy now holds 90% exposure."
       ]
     },
     {
@@ -197,7 +198,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 120% (read as the current exposure; expected 100%): The rule now holds 120% exposure after the panic reading."
+        "raw position figure 120%: write position figures only as placeholders such as {current_exposure}: The rule now holds 120% exposure after the panic reading."
       ]
     },
     {
@@ -222,7 +223,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 70% (read as the current exposure; expected 100%): The strategy currently holds 70% exposure while panic persists."
+        "raw position figure 70%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 70% exposure while panic persists."
       ]
     },
     {
@@ -247,7 +248,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 25% (read as the current exposure; expected 0%): The strategy currently holds 25% exposure."
+        "raw position figure 25%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 25% exposure."
       ]
     },
     {
@@ -272,7 +273,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 35% (read as the current exposure; expected 0%): The strategy currently holds 35% exposure."
+        "raw position figure 35%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 35% exposure."
       ]
     },
     {
@@ -290,7 +291,7 @@
       "signal_mismatches": {},
       "correct": true,
       "violations": [
-        "fabricated position 50% (read as the current exposure; expected 0%): The strategy currently holds 50% exposure."
+        "raw position figure 50%: write position figures only as placeholders such as {current_exposure}: The strategy currently holds 50% exposure."
       ]
     }
   ]

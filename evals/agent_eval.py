@@ -115,6 +115,7 @@ def score_result(question, result):
         "fallback_reason": result.fallback_reason,
         "repairs": result.repairs,
         "first_violations": result.first_violations,
+        "placeholders": sum(r.count for r in result.rendered),
         "answer": result.answer,
     }
 
@@ -132,15 +133,28 @@ def summarize(rows):
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
         "fallbacks": sum(r["fallback_reason"] is not None for r in rows),
         "repair_turns": sum(r["repairs"] for r in rows),
+        "first_pass_violations": sum(bool(r["first_violations"]) or
+                                     (r["fallback_reason"] or "").startswith("Guardrail")
+                                     for r in rows),
+        "rendered_placeholders": sum(r["placeholders"] for r in rows),
     }
 
 
-async def run_eval(agent, questions):
+async def run_eval(agent, questions, judge=None):
+    """Score each question; with a judge, also label each statement's grounding."""
+    from evals.judge import judge_result, summarize_judgements
+
     rows = []
     for q in questions:
         result = await agent.arun(q["question"], q["as_of"], market=q.get("market"))
-        rows.append(score_result(q, result))
-    return summarize(rows), rows
+        row = score_result(q, result)
+        if judge is not None:
+            row["judge"] = judge_result(result, judge)
+        rows.append(row)
+    summary = summarize(rows)
+    if judge is not None:
+        summary.update(summarize_judgements([r["judge"] for r in rows]))
+    return summary, rows
 
 
 def build_agent(mode, provider="anthropic"):
@@ -159,10 +173,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["replay", "record", "live"], default="replay")
     parser.add_argument("--provider", choices=["anthropic", "deepseek"], default="anthropic")
+    parser.add_argument("--judge", action="store_true",
+                        help="label each statement's grounding with a DeepSeek judge")
     args = parser.parse_args()
 
     agent = build_agent(args.mode, args.provider)
-    summary, rows = asyncio.run(run_eval(agent, load_questions()))
+    judge = None
+    if args.judge:
+        from evals.judge import DeepSeekJudge
+        judge = DeepSeekJudge()
+    summary, rows = asyncio.run(run_eval(agent, load_questions(), judge))
     summary = {"provider": agent.provider, "model": agent.model, **summary}
     print(json.dumps(summary, indent=2))
     RESULTS_DIR.mkdir(exist_ok=True)
