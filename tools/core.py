@@ -18,12 +18,12 @@ from utils.backtest import run_backtest as _run_backtest
 from utils.metrics import build_performance_metrics
 from utils.narrative import build_threshold_research_summary
 from utils.peak_detection import detect_peaks_realtime, detect_peaks_scipy
-from utils.strategy import DEFAULT_STRATEGY, StrategyParams
+from utils.strategy import DEFAULT_STRATEGY, StrategyParams, apply_rule_once
 
 from .market import MARKETS, ToolInputError, get_store, to_date
 from .schemas import (BacktestResult, FedDocSearchResult, ForwardReturnsResult,
                       HorizonStats, Market, PeakEvent, PeaksResult,
-                      RegimeResult)
+                      PositionPlanResult, RegimeResult)
 
 AsOf = Annotated[date, Field(
     description=(
@@ -192,6 +192,80 @@ def run_backtest(
     )
 
 
+def _next_rule(position, params):
+    """The next observation's add / reduce trigger from ``position``."""
+    add = min(params.add_pct, params.max_position_pct - position)
+    reduce = min(params.reduce_pct, position - params.min_position_pct)
+    add_text = (f"add {add:g}% if the Panic Index closes above {params.buy_threshold:g}"
+                if add > 0 else f"already at the {params.max_position_pct:g}% cap, so a "
+                f"close above {params.buy_threshold:g} adds nothing")
+    reduce_text = (f"reduce {reduce:g}% if it closes below {params.sell_threshold:g}"
+                   if reduce > 0 else f"already at the {params.min_position_pct:g}% floor, "
+                   f"so a close below {params.sell_threshold:g} reduces nothing")
+    return f"from {position:g}%: {add_text}; {reduce_text}; otherwise hold"
+
+
+def plan_position(
+    market: MarketArg,
+    as_of: AsOf,
+    current_position_pct: Annotated[float, Field(
+        ge=0, le=100, description="The caller's own exposure today (0-100), not a backtest start.")],
+    buy_threshold: BuyThreshold = DEFAULT_BUY_THRESHOLD,
+    sell_threshold: SellThreshold = DEFAULT_SELL_THRESHOLD,
+    add_pct: Annotated[float, Field(ge=0, le=100, description="Exposure added per panic-regime day.")] = DEFAULT_STRATEGY.add_pct,
+    reduce_pct: Annotated[float, Field(ge=0, le=100, description="Exposure removed per greed-regime day.")] = DEFAULT_STRATEGY.reduce_pct,
+    max_position_pct: PositionPct = DEFAULT_STRATEGY.max_position_pct,
+    min_position_pct: PositionPct = DEFAULT_STRATEGY.min_position_pct,
+) -> PositionPlanResult:
+    """Apply the threshold rule once to a position the caller holds today.
+
+    Takes the latest observation's regime as of as_of and applies one step
+    of the same rule run_backtest uses (add add_pct in the panic regime,
+    reduce reduce_pct in the greed regime, hold otherwise, within
+    min/max_position_pct) to current_position_pct. No history is replayed,
+    so the result does not depend on a backtest start date. Use it for "I
+    hold X% today, what does the rule do?"; call it once per position to
+    compare several. run_backtest's final_position_pct is where the strategy
+    path stands, not a target for someone starting from a different position.
+    """
+    if min_position_pct > max_position_pct:
+        raise ToolInputError("min_position_pct cannot exceed max_position_pct.")
+    if not min_position_pct <= current_position_pct <= max_position_pct:
+        raise ToolInputError(
+            f"current_position_pct {current_position_pct:g} is outside the rule's "
+            f"{min_position_pct:g}%-{max_position_pct:g}% range.")
+    params = StrategyParams(
+        buy_threshold=buy_threshold, sell_threshold=sell_threshold, add_pct=add_pct,
+        reduce_pct=reduce_pct, max_position_pct=max_position_pct,
+        min_position_pct=min_position_pct,
+    )
+    df, _, as_of = _frame(market, as_of)
+    latest = df.iloc[-1]
+    regime = _classify(latest['panic_index'], buy_threshold, sell_threshold)[0]
+    current = round(current_position_pct, 1)
+    action, change, target = apply_rule_once(current, regime, params)
+    observation_date = latest['date_dt'].date()
+    return PositionPlanResult(
+        market=market,
+        as_of=as_of,
+        data_through=observation_date,
+        observation_date=observation_date,
+        panic_index=_num(latest['panic_index'], 2),
+        regime=regime,
+        current_position_pct=current,
+        action=action,
+        applied_change_pct=change,
+        target_position_pct=target,
+        buy_threshold=buy_threshold,
+        sell_threshold=sell_threshold,
+        add_pct=add_pct,
+        reduce_pct=reduce_pct,
+        max_position_pct=max_position_pct,
+        min_position_pct=min_position_pct,
+        next_rule=_next_rule(target, params),
+    )
+
+
 def get_forward_returns(
     market: MarketArg,
     as_of: AsOf,
@@ -345,6 +419,7 @@ def rule_based_summary(market, as_of, start_date=None,
     )
 
 
-RESEARCH_TOOLS = [get_regime, run_backtest, get_forward_returns, detect_peaks, search_fed_docs]
+RESEARCH_TOOLS = [get_regime, run_backtest, plan_position, get_forward_returns, detect_peaks,
+                  search_fed_docs]
 
 __all__ = [fn.__name__ for fn in RESEARCH_TOOLS] + ["RESEARCH_TOOLS", "rule_based_summary"]

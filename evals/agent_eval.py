@@ -48,6 +48,34 @@ def retrieved_docs(result):
     return docs
 
 
+def user_position_problems(question, result):
+    """How an answer about the user's own position breaks the plan contract (#33).
+
+    For a question with ``user_positions``: each position must go through a
+    plan_position call, the answer must state it with {ppN...} placeholders,
+    and no clause about "your" position may use the strategy path's
+    {current_exposure} as the user's target (a separate clause that contrasts
+    the two, "...down to {current_exposure}; not a target for your account",
+    is fine).
+    """
+    from assistant.validator import CLAUSE_BREAK_RE, SENTENCE_RE, YOUR_RE, _segments
+
+    planned = {round(float(c.arguments.get("current_position_pct", -1)), 1)
+               for c in result.tool_calls if c.name == "plan_position" and not c.is_error}
+    problems = [f"no plan_position call for {p:g}%" for p in question["user_positions"]
+                if round(float(p), 1) not in planned]
+    raw = result.raw_answer or {}
+    texts = [raw.get("answer", ""), *raw.get("key_reasons", []), raw.get("caveats", "")]
+    if not any("{pp" in t for t in texts):
+        problems.append("no {ppN...} placeholder in the answer")
+    for text in texts:
+        for sentence in SENTENCE_RE.split(text):
+            clauses = [sentence[a:b] for a, b in _segments(sentence, CLAUSE_BREAK_RE)]
+            if any(YOUR_RE.search(c) and "{current_exposure}" in c for c in clauses):
+                problems.append(f"strategy path exposure stated as your position: {sentence.strip()}")
+    return problems
+
+
 def score_result(question, result):
     as_of = question["as_of"]
     expected = set(question["expected_tools"])
@@ -86,8 +114,11 @@ def score_result(question, result):
     leaked = bool(leaked_dates or leaked_tool_data or leaked_citations or leaked_phrases)
 
     tool_selection = expected <= called
+    position_problems = (user_position_problems(question, result)
+                         if "user_positions" in question else [])
     success = (
-        not result.used_fallback
+        not position_problems
+        and not result.used_fallback
         and bool(result.answer.strip())
         and tool_selection
         and citation_precision == 1.0
@@ -106,6 +137,7 @@ def score_result(question, result):
         "leaked": leaked,
         "leaked_dates": [d.isoformat() for d in leaked_dates],
         "leaked_phrases": leaked_phrases,
+        "user_position_problems": position_problems,
         "as_of_clamped_calls": sum(c.as_of_clamped for c in result.tool_calls),
         "steps": result.steps,
         "latency_ms": result.latency_ms,
@@ -120,7 +152,9 @@ def score_result(question, result):
     }
 
 
-def summarize(rows):
+def summarize(rows, questions=None):
+    position_ids = {q["id"] for q in questions or [] if "user_positions" in q}
+    position_rows = [r for r in rows if r["id"] in position_ids]
     return {
         "questions": len(rows),
         "task_success_rate": round(mean(r["success"] for r in rows), 3),
@@ -137,6 +171,9 @@ def summarize(rows):
                                      (r["fallback_reason"] or "").startswith("Guardrail")
                                      for r in rows),
         "rendered_placeholders": sum(r["placeholders"] for r in rows),
+        "user_position_questions": len(position_rows),
+        "user_position_correct": sum(not r["user_position_problems"] and r["fallback_reason"] is None
+                                     for r in position_rows),
     }
 
 
@@ -151,7 +188,7 @@ async def run_eval(agent, questions, judge=None):
         if judge is not None:
             row["judge"] = judge_result(result, judge)
         rows.append(row)
-    summary = summarize(rows)
+    summary = summarize(rows, questions)
     if judge is not None:
         summary.update(summarize_judgements([r["judge"] for r in rows]))
     return summary, rows

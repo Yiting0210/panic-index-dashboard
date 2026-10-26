@@ -70,3 +70,26 @@ questions:
     as_of: 2024-12-31
     market: QQQ
     expected_tools: [run_backtest]
+  # The user's own position (#33). On 2025-03-06 the strategy path holds at
+  # the 100% cap, so a right answer must not present that 100% as the user's
+  # target: from 0% the rule adds. user_positions are the plan_position calls
+  # a correct run makes; the answer must state them with {ppN...} placeholders.
+  - id: a13
+    question: I have no position in QQQ. What would the rule do today?
+    as_of: 2025-03-06
+    market: QQQ
+    expected_tools: [plan_position]
+    user_positions: [0]
+  - id: a14
+    # Greed regime: the path reduced 10% -> 0%; from 50% the rule reduces to 40%.
+    question: I'm already 50% invested in QQQ. What happens now under the rule?
+    as_of: 2023-06-16
+    market: QQQ
+    expected_tools: [plan_position]
+    user_positions: [50]
+  - id: a15
+    question: Compare what the rule does today from 0%, 20%, 50%, 80%, and 100% starting exposure in QQQ.
+    as_of: 2025-03-06
+    market: QQQ
+    expected_tools: [plan_position]
+    user_positions: [0, 20, 50, 80, 100]

@@ -3,13 +3,15 @@ from .agent import (DEEPSEEK_DEFAULT_MODEL, DEFAULT_MODEL, FINAL_ANSWER_SCHEMA,
                     ResearchAgent, ToolCall)
 from .cache import CacheMiss, ResponseCache, request_hash
 from .ledger import PRICING, BudgetExceeded, UsageLedger, cost_usd
-from .signal import STANDARD_BACKTEST_START, StrategySignal, build_strategy_signal
+from .signal import (COMPARISON_POSITIONS, STANDARD_BACKTEST_START, StrategySignal,
+                     build_strategy_signal, position_plans)
 from .render import render
 from .validator import validate_answer
 
 __all__ = [
     "AgentResult",
     "BudgetExceeded",
+    "COMPARISON_POSITIONS",
     "CacheMiss",
     "DEEPSEEK_DEFAULT_MODEL",
     "DEFAULT_MODEL",
@@ -26,6 +28,7 @@ __all__ = [
     "UsageLedger",
     "build_strategy_signal",
     "cost_usd",
+    "position_plans",
     "request_hash",
     "render",
     "validate_answer",

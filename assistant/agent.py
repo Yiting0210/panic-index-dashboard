@@ -13,8 +13,9 @@ client sees. Three guardrails sit around the model:
 
 Position sizing is not left to the model: the strategy signal (regime,
 final_position_pct, and the rule's action) comes from one standard backtest
-computed in code, and the validator rejects an answer whose prose contradicts
-it, falling back to the rule-based summary.
+computed in code, a user's own position goes through plan_position, and the
+validator rejects an answer whose prose contradicts them, falling back to the
+rule-based summary.
 """
 import asyncio
 import json
@@ -97,6 +98,22 @@ date:
 - For a what-if (other thresholds, start date, or step sizes), call
   run_backtest with those parameters, label the result as a what-if, and use
   that call's placeholders.
+- {current_exposure} is the strategy path exposure: where the rule stands
+  after following it continuously since the standard backtest start. It is
+  not a target for someone who holds a different position today; never
+  present it as "your" position or as where the user should move.
+- When the user states their own position ("I have no position", "I am 50%
+  invested"), or asks to compare starting positions, call plan_position once
+  per position (in the same step). It applies today's regime once to that
+  position. Use that call's placeholders: {pp1.current_position_pct},
+  {pp1.applied_change_pct}, {pp1.target_position_pct}, using the call_id
+  shown above its result. {pp1.applied_change_pct} renders without a sign,
+  so write the action verb yourself: "the rule reduces your position by
+  {pp1.applied_change_pct} to {pp1.target_position_pct}". Do not use run_backtest's initial_position_pct for
+  this: that is the position at the start of the whole backtest window. Keep
+  "your position" sentences separate from strategy path sentences, and put
+  that call's {ppN...} figure in every sentence that says what the rule does
+  from the user's position.
 - If the backtest shows Buy & Hold beating the strategy, say so next to the
   position figure instead of only in the caveats.
 
@@ -104,8 +121,9 @@ When you have what you need, reply with the JSON object the response format
 requires: a concise answer (at most about 150 words), up to four key_reasons
 (one sentence each, grounded in tool results), the citations you used,
 caveats (risks, data limitations, hindsight labels, or "none"), and
-current_action: the rule's action on the latest observation as you describe
-it (add, reduce, or hold), or not_stated.
+current_action: the strategy path's action on the latest observation as you
+describe it (add, reduce, or hold; the signal's action, not the action from
+a plan_position call), or not_stated.
 """
 
 FINAL_ANSWER_SCHEMA = {
@@ -149,7 +167,7 @@ def _repair_message(violations, signal):
         f"{listed}\n"
         "Rewrite the final JSON. Write every exposure or position figure as a "
         "placeholder ({current_exposure}, {applied_change}, {bt1.final_position_pct}, "
-        "...), keep other percentages out of clauses that mention exposure or "
+        "{pp1.target_position_pct}, ...), keep other percentages out of clauses that mention exposure or "
         f"position, and describe the current action as the signal states it.{action} "
         "Only fix these problems; keep the rest of the answer."
     )
@@ -173,7 +191,8 @@ class ToolCall:
     is_error: bool
     latency_ms: float
     as_of_clamped: bool = False
-    # bt1, bt2, ... for run_backtest results, so placeholders can name the call.
+    # bt1, bt2, ... for run_backtest and pp1, pp2, ... for plan_position
+    # results, so placeholders can name the call.
     call_id: Optional[str] = None
 
 
@@ -255,7 +274,12 @@ STRATEGY_ARGUMENTS = {
     "run_backtest": ("buy_threshold", "sell_threshold", "initial_position_pct", "add_pct",
                      "reduce_pct", "max_position_pct", "min_position_pct"),
     "get_regime": ("buy_threshold", "sell_threshold"),
+    "plan_position": ("buy_threshold", "sell_threshold", "add_pct", "reduce_pct",
+                      "max_position_pct", "min_position_pct"),
 }
+
+# Call-id prefix for tools whose results placeholders can name.
+CALL_ID_PREFIXES = {"run_backtest": "bt", "plan_position": "pp"}
 
 
 def _apply_strategy(name, arguments, strategy):
@@ -365,8 +389,10 @@ class ResearchAgent:
     @staticmethod
     def _violations(result):
         """How the final answer breaks the format contract or the signal."""
+        plans = {c.call_id: c.result for c in result.tool_calls
+                 if c.call_id and c.name == "plan_position"}
         return result.structured_errors + validate_answer(
-            result.rendered, result.signal, current_action=result.current_action)
+            result.rendered, result.signal, current_action=result.current_action, plans=plans)
 
     def _needs_repair(self, result):
         """Whether to send the violations back for one more try."""
@@ -498,8 +524,10 @@ class ResearchAgent:
         tool_result = await mcp.call_tool(name, arguments)
         payload = _tool_payload(tool_result)
         call_id = None
-        if name == "run_backtest" and not tool_result.is_error:
-            call_id = f"bt{sum(c.call_id is not None for c in result.tool_calls) + 1}"
+        prefix = CALL_ID_PREFIXES.get(name)
+        if prefix and not tool_result.is_error:
+            count = sum(c.name == name and c.call_id is not None for c in result.tool_calls)
+            call_id = f"{prefix}{count + 1}"
         result.tool_calls.append(ToolCall(
             name=name,
             arguments=arguments,
@@ -539,9 +567,9 @@ class ResearchAgent:
             "caveats": str(data.get("caveats") or ""),
         }
         # Position figures are placeholders; code fills in the values.
-        backtests = {c.call_id: c.result for c in result.tool_calls if c.call_id}
+        calls = {c.call_id: c.result for c in result.tool_calls if c.call_id}
         raw = result.raw_answer
-        result.rendered = [render(text, result.signal, backtests)
+        result.rendered = [render(text, result.signal, calls)
                            for text in [raw["answer"], *raw["key_reasons"], raw["caveats"]]]
         result.answer = result.rendered[0].text
         result.key_reasons = [r.text for r in result.rendered[1:-1]]

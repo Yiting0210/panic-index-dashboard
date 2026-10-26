@@ -9,13 +9,14 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from tools import (MarketStore, detect_peaks, get_forward_returns, get_regime,
-                   run_backtest, set_store)
+                   plan_position, run_backtest, set_store)
 from utils.data_loader import CSV_PATH, compute_panic_index, read_market_data
 
 AS_OF_DATES = [date(2022, 3, 18), date(2022, 10, 13), date(2023, 12, 29), date(2025, 4, 9)]
 MARKET_TOOLS = [
     lambda as_of: get_regime("QQQ", as_of),
     lambda as_of: run_backtest("SMH", as_of),
+    lambda as_of: plan_position("QQQ", as_of, current_position_pct=50),
     lambda as_of: get_forward_returns("SPX", as_of, horizons=[5, 21, 63]),
     lambda as_of: detect_peaks("DJI", as_of, method="realtime", entry_threshold=60),
     lambda as_of: detect_peaks("QQQ", as_of, method="scipy"),

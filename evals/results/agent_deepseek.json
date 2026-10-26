@@ -2,26 +2,28 @@
   "summary": {
     "provider": "deepseek",
     "model": "deepseek-flash",
-    "questions": 12,
-    "task_success_rate": 0.917,
+    "questions": 15,
+    "task_success_rate": 1,
     "tool_selection_accuracy": 1,
     "citation_precision": 1.0,
-    "numeric_faithfulness": 0.991,
+    "numeric_faithfulness": 1.0,
     "leakage_rate": 0,
-    "avg_steps": 2.58,
-    "avg_latency_ms": 7216.9,
-    "total_cost_usd": 0.0225,
+    "avg_steps": 2.6,
+    "avg_latency_ms": 7299.9,
+    "total_cost_usd": 0.0286,
     "fallbacks": 0,
-    "repair_turns": 3,
-    "first_pass_violations": 3,
-    "rendered_placeholders": 56,
-    "judge_answers": 12,
-    "judge_groundedness": 0.838,
-    "judge_statements": 136,
-    "judge_unsupported": 20,
-    "judge_contradicted": 2,
+    "repair_turns": 7,
+    "first_pass_violations": 7,
+    "rendered_placeholders": 78,
+    "user_position_questions": 3,
+    "user_position_correct": 3,
+    "judge_answers": 15,
+    "judge_groundedness": 0.917,
+    "judge_statements": 169,
+    "judge_unsupported": 13,
+    "judge_contradicted": 1,
     "judge_unjudged": 0,
-    "judge_cost_usd": 0.0167
+    "judge_cost_usd": 0.0182
   },
   "rows": [
     {
@@ -40,79 +42,88 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
-      "steps": 2,
-      "latency_ms": 5332.4,
-      "cost_usd": 0.000784,
-      "input_tokens": 747,
-      "output_tokens": 431,
+      "steps": 3,
+      "latency_ms": 8556.4,
+      "cost_usd": 0.002414,
+      "input_tokens": 4492,
+      "output_tokens": 833,
       "fallback_reason": null,
-      "repairs": 0,
-      "first_violations": [],
+      "repairs": 1,
+      "first_violations": [
+        "placeholder error: {bt1.strategy_return_pct} names an unknown run_backtest call id (this turn: none)",
+        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: none)"
+      ],
       "placeholders": 4,
-      "answer": "As of 2022-10-13, QQQ is in the panic regime: the Composite Panic Index reads 79.8, above the 64 buy threshold, with VIX at 31.94 and CNN Fear & Greed at 19.37 (extreme fear). That print sits at the 92.7th percentile of the history available as of that date, i.e. more panicked than roughly 93% of prior observations \u2014 an extreme reading. The signal therefore holds 100% exposure (unchanged from 100%), already at the 100% cap, and would add 20% if the index closes above 64 again. Note the standard backtest window (2021-05-17 to 2022-10-13) shows the strategy at -21.73% versus Buy & Hold at -16.43%, so Buy & Hold beat the rule; this is historical research, not investment advice.",
+      "answer": "QQQ is in the panic regime as of 2022-10-13: the Composite Panic Index reads 79.8, well above the 64 threshold, with a percentile of 92.7 \u2014 higher than roughly 93% of its own history up to that date, so the reading sits near the extreme end of the distribution. Components: VIX at 31.94 and CNN Fear & Greed at 19.37 ('extreme fear'). Under the signal's rule, the strategy path is already at its cap, so the latest action is hold; next session it holds 100%, adds 20% if the index closes above 64, and reduces 10% if it closes below 15. Note that over the standard backtest window Buy & Hold returned -16.43% versus -21.73% for the strategy, so Buy & Hold has outperformed. The signal path's exposure of 100% is not a target for other starting positions.",
       "judge": {
-        "groundedness": 1.0,
-        "supported": 11,
-        "unsupported": 0,
+        "groundedness": 0.75,
+        "supported": 9,
+        "unsupported": 3,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.000769,
+        "cost_usd": 0.000811,
         "statements": [
           {
-            "statement": "As of 2022-10-13, QQQ is in the panic regime: the Composite Panic Index reads 79.8, above the 64 buy threshold, with VIX at 31.94 and CNN Fear & Greed at 19.37 (extreme fear).",
+            "statement": "QQQ is in the panic regime as of 2022-10-13: the Composite Panic Index reads 79.8, well above the 64 threshold, with a percentile of 92.7 \u2014 higher than roughly 93% of its own history up to that date, so the reading sits near the extreme end of the distribution.",
             "verdict": "supported",
-            "reason": "Evidence gives panic regime, Panic Index 79.8 > 64, VIX 31.94, Fear & Greed 19.37 extreme fear."
+            "reason": "Evidence states panic regime, index 79.8 above 64, percentile 92.7."
           },
           {
-            "statement": "That print sits at the 92.7th percentile of the history available as of that date, i.e.",
+            "statement": "Components: VIX at 31.94 and CNN Fear & Greed at 19.37 ('extreme fear').",
             "verdict": "supported",
-            "reason": "Panic index percentile is 92.7 per evidence."
+            "reason": "Tool shows VIX 31.94, Fear & Greed 19.37, extreme fear."
           },
           {
-            "statement": "more panicked than roughly 93% of prior observations \u2014 an extreme reading.",
+            "statement": "Under the signal's rule, the strategy path is already at its cap, so the latest action is hold; next session it holds 100%, adds 20% if the index closes above 64, and reduces 10% if it closes below 15.",
             "verdict": "supported",
-            "reason": "92.7th percentile directly implies more panicked than roughly 93% of prior observations."
+            "reason": "Evidence states already at 100% cap, hold, and next-session rules match."
           },
           {
-            "statement": "The signal therefore holds 100% exposure (unchanged from 100%), already at the 100% cap, and would add 20% if the index closes above 64 again.",
+            "statement": "Note that over the standard backtest window Buy & Hold returned -16.43% versus -21.73% for the strategy, so Buy & Hold has outperformed.",
             "verdict": "supported",
-            "reason": "Position 100% unchanged, at cap, adds 20% if above 64 per evidence."
+            "reason": "Backtest shows strategy -21.73% vs Buy & Hold -16.43%, so B&H outperformed."
           },
           {
-            "statement": "Note the standard backtest window (2021-05-17 to 2022-10-13) shows the strategy at -21.73% versus Buy & Hold at -16.43%, so Buy & Hold beat the rule; this is historical research, not investment advice.",
+            "statement": "The signal path's exposure of 100% is not a target for other starting positions.",
             "verdict": "supported",
-            "reason": "Backtest -21.73% vs -16.43%, Buy & Hold beat rule; disclaimer supported."
+            "reason": "Evidence notes 100% is not a target for different positions."
           },
           {
-            "statement": "Panic index 79.8 exceeds the 64 buy threshold, so the regime is classified as panic.",
+            "statement": "The Panic Index is 79.8, above the 64 panic threshold, so QQQ is classified in the panic regime.",
             "verdict": "supported",
-            "reason": "79.8 exceeds 64 threshold, regime panic per evidence."
+            "reason": "Index 79.8 above 64 threshold implies panic regime per tool."
           },
           {
-            "statement": "The 92.7th percentile places the reading near the top of its historical distribution as of that date.",
+            "statement": "Its percentile of 92.7 places the reading above roughly 93% of prior observations, an unusually extreme level.",
             "verdict": "supported",
-            "reason": "92.7th percentile indicates near top of historical distribution."
+            "reason": "Percentile 92.7 is above roughly 93% of history per evidence."
           },
           {
-            "statement": "Components confirm stress: VIX 31.94 and Fear & Greed 19.37 (extreme fear).",
+            "statement": "The components agree: VIX 31.94 and Fear & Greed 19.37 with an 'extreme fear' rating.",
             "verdict": "supported",
-            "reason": "VIX 31.94 and Fear & Greed 19.37 extreme fear confirmed by evidence."
+            "reason": "VIX 31.94 and Fear & Greed 19.37 extreme fear match evidence."
           },
           {
-            "statement": "The rule is already at its maximum, so the latest action is a hold with no further addition available.",
+            "statement": "The rule is already at its maximum exposure, so the latest action is hold, not an add, and Buy & Hold has beaten the strategy over the standard window.",
             "verdict": "supported",
-            "reason": "At 100% cap, action is hold with no addition available."
+            "reason": "Hold at max exposure and B&H outperformance both supported."
           },
           {
-            "statement": "No Fed documents were needed or cited; the percentile derives from the history available at as_of and would shift with a longer sample.",
-            "verdict": "supported",
-            "reason": "Generic statement; percentile from history at as_of, consistent with evidence."
+            "statement": "Historical research, not investment advice.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state historical research or not investment advice."
           },
           {
-            "statement": "Buy & Hold outperformed the strategy over the window shown, and this is historical research, not investment advice.",
-            "verdict": "supported",
-            "reason": "Buy & Hold -16.43% beat strategy -21.73%; disclaimer supported."
+            "statement": "The Panic Index is a composite of VIX and Fear & Greed, and the percentile is measured only against history available at as_of.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state Panic Index composition or percentile history basis."
+          },
+          {
+            "statement": "Backtest figures are in-sample and hindsight-dependent.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not address in-sample or hindsight dependence."
           }
         ]
       }
@@ -123,7 +134,9 @@
       "tool_selection_correct": true,
       "tools_called": [
         "run_backtest",
-        "get_regime"
+        "get_regime",
+        "get_forward_returns",
+        "search_fed_docs"
       ],
       "expected_tools": [
         "run_backtest"
@@ -134,79 +147,78 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
-      "steps": 3,
-      "latency_ms": 7776.6,
-      "cost_usd": 0.001772,
-      "input_tokens": 1428,
-      "output_tokens": 1059,
+      "steps": 2,
+      "latency_ms": 9565.8,
+      "cost_usd": 0.001864,
+      "input_tokens": 2817,
+      "output_tokens": 803,
       "fallback_reason": null,
-      "repairs": 1,
-      "first_violations": [
-        "raw position figure 0%: write position figures only as placeholders such as {current_exposure}: Today's regime is greed (Panic Index 10.42, 0.6th percentile), so the signal holds 0% exposure\u2014already at the 0% floor\u2014while Buy & Hold outperforms the strategy here."
-      ],
-      "placeholders": 19,
-      "answer": "Over the 2021-05-17 to 2023-12-29 window on SMH, Buy & Hold clearly beat the threshold strategy: it returned 55.05% versus 26.69% for the rule. Drawdowns were identical at -45.3% for both, so the reduced exposure gave no drawdown relief here. Risk-adjusted, Buy & Hold also wins: Sharpe 0.668 vs 0.445 and Calmar 0.403 vs 0.209. The rule averaged 74.6% exposure and sat below full exposure on 34.2% of days, with 106.04pp of upside drag versus 83.87pp of downside cushion. Today's regime is greed (Panic Index 10.42, 0.6th percentile), so the signal holds 0% exposure\u2014already at the 0% floor\u2014while Buy & Hold outperforms the strategy here.",
+      "repairs": 0,
+      "first_violations": [],
+      "placeholders": 15,
+      "answer": "Over the 2021-05-17 to 2023-12-29 window the threshold strategy on SMH returned 26.69% versus 55.05% for Buy & Hold, so Buy & Hold beat the strategy on return here; say so plainly since it is the headline comparison. Drawdown was identical at -45.3% for both, and the strategy averaged 74.6% exposure, sitting below full exposure 34.2% of the time. Reduced exposure produced 106.04pp of upside drag against 83.87pp of downside cushion, and the strategy's Sharpe of 0.445 trailed Buy & Hold's 0.668. The latest observation is greed (Panic Index 10.42, percentile 0.6), so the strategy path holds at the floor with no change on 2023-12-29; it would add 20% only on a close above 64.",
       "judge": {
         "groundedness": 0.818,
         "supported": 9,
         "unsupported": 2,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.00086,
+        "cost_usd": 0.001467,
         "statements": [
           {
-            "statement": "Over the 2021-05-17 to 2023-12-29 window on SMH, Buy & Hold clearly beat the threshold strategy: it returned 55.05% versus 26.69% for the rule.",
+            "statement": "Over the 2021-05-17 to 2023-12-29 window the threshold strategy on SMH returned 26.69% versus 55.05% for Buy & Hold, so Buy & Hold beat the strategy on return here; say so plainly since it is the headline comparison.",
             "verdict": "supported",
-            "reason": "Matches strategy 26.69% vs Buy & Hold 55.05% over stated window."
+            "reason": "Matches backtest: 26.69% vs 55.05%."
           },
           {
-            "statement": "Drawdowns were identical at -45.3% for both, so the reduced exposure gave no drawdown relief here.",
+            "statement": "Drawdown was identical at -45.3% for both, and the strategy averaged 74.6% exposure, sitting below full exposure 34.2% of the time.",
             "verdict": "supported",
-            "reason": "Both max drawdowns listed as -45.3%."
+            "reason": "Drawdown -45.3% both, avg exposure 74.6%, below full 34.2%."
           },
           {
-            "statement": "Risk-adjusted, Buy & Hold also wins: Sharpe 0.668 vs 0.445 and Calmar 0.403 vs 0.209.",
+            "statement": "Reduced exposure produced 106.04pp of upside drag against 83.87pp of downside cushion, and the strategy's Sharpe of 0.445 trailed Buy & Hold's 0.668.",
             "verdict": "supported",
-            "reason": "Sharpe and Calmar values match the backtest output."
+            "reason": "Upside drag 106.04pp, cushion 83.87pp, Sharpe 0.445 vs 0.668."
           },
           {
-            "statement": "The rule averaged 74.6% exposure and sat below full exposure on 34.2% of days, with 106.04pp of upside drag versus 83.87pp of downside cushion.",
+            "statement": "The latest observation is greed (Panic Index 10.42, percentile 0.6), so the strategy path holds at the floor with no change on 2023-12-29; it would add 20% only on a close above 64.",
             "verdict": "supported",
-            "reason": "Average exposure, time below full exposure, upside drag, and downside cushion all match."
+            "reason": "Latest greed, Panic 10.42 pct 0.6, hold at 0%, add 20% above 64."
           },
           {
-            "statement": "Today's regime is greed (Panic Index 10.42, 0.6th percentile), so the signal holds 0% exposure\u2014already at the 0% floor\u2014while Buy & Hold outperforms the strategy here.",
+            "statement": "Buy & Hold outperformed: 26.69% vs 55.05% for the strategy",
             "verdict": "supported",
-            "reason": "Greed at 10.42/0.6th percentile, holds 0% at floor, and Buy & Hold outperformed."
+            "reason": "Backtest shows 26.69% strategy vs 55.05% buy-hold; Buy & Hold higher."
           },
           {
-            "statement": "Buy & Hold returned 55.05% versus 26.69% for the threshold rule over the window.",
+            "statement": "Maximum drawdown matched at -45.3%, so the strategy's light averaging of 74.6% did not cut the worst-case loss",
             "verdict": "supported",
-            "reason": "Return figures match the evidence."
+            "reason": "Identical -45.3% drawdowns with avg exposure 74.6% stated."
           },
           {
-            "statement": "Max drawdown was identical at -45.3% for both, so the rule's de-risking did not reduce drawdown.",
+            "statement": "Upside drag of 106.04pp outweighed the 83.87pp downside cushion",
             "verdict": "supported",
-            "reason": "Drawdowns identical at -45.3%."
+            "reason": "Upside drag 106.04pp vs downside cushion 83.87pp."
           },
           {
-            "statement": "Upside drag (106.04pp) exceeded downside cushion (83.87pp), explaining the return gap.",
+            "statement": "The latest regime is greed at Panic Index 10.42 (percentile 0.6), so the signal path stays at the floor and holds",
+            "verdict": "supported",
+            "reason": "Greed, Panic 10.42 pct 0.6, hold at floor."
+          },
+          {
+            "statement": "Historical backtest with hindsight-labeled regimes; forward returns after greed days are overlapping observations (only 25 complete 63-day windows, all negative, min -14.36%, max -2.71%), not independent evidence.",
             "verdict": "unsupported",
-            "reason": "Figures match, but 'explaining the return gap' is an inference not stated in the evidence."
+            "reason": "Evidence does not state hindsight-labeled regimes; forward return counts include 63-day (25 windows, min -14.36, max -2.71) but not the hindsight characterization."
           },
           {
-            "statement": "Latest observation (2023-12-29) is greed at a Panic Index of 10.42 (0.6th percentile), so the rule holds 0% at its floor.",
-            "verdict": "supported",
-            "reason": "Matches latest observation details and 0% floor hold."
-          },
-          {
-            "statement": "Hindsight backtest on one ticker and one window; identical drawdowns suggest the de-risking hit late rather than avoided the decline.",
+            "statement": "Drawdowns identical is likely because the drawdown occurred while exposed.",
             "verdict": "unsupported",
-            "reason": "The 'hit late rather than avoided' interpretation is not in the evidence."
+            "reason": "No evidence about when the drawdown occurred or its cause."
           },
           {
-            "statement": "Historical research only, not investment advice.",
+            "statement": "Not investment advice.",
             "verdict": "supported",
             "reason": "Generic disclaimer is supported."
           }
@@ -230,89 +242,95 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 2,
-      "latency_ms": 4866.0,
-      "cost_usd": 0.001034,
-      "input_tokens": 929,
-      "output_tokens": 592,
+      "latency_ms": 5466.9,
+      "cost_usd": 0.001202,
+      "input_tokens": 1023,
+      "output_tokens": 699,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
-      "placeholders": 2,
-      "answer": "Since the start of the standard data window (2021-05-17), SPX had 111 panic-regime days (Panic Index above 64), the last on 2023-03-17. The 1-month (21-trading-day) forward return after those days averaged 2.86% (median 4.32%), with a win rate of 73.0% and a range of -10.32% to 12.92%. The 3-month (63-day) horizon averaged only 0.47% (median -0.04%), with a win rate of 48.6% and a range of -13.03% to 12.59%; the 5-day average was 0.86%. So the edge was concentrated at the one-month horizon and faded by three months. Today's SPX reading is 29.02, neutral (percentile 28.7), so the signal holds 0%, with no change on the latest observation.",
+      "placeholders": 3,
+      "answer": "Using the data available through 2024-06-28 (backtest window 2021-05-17 onward), the SPX Panic Index flagged 111 panic-regime days (index above 64); the most recent was 2023-03-17. One month later (21 trading days) the mean forward return was 2.86% with a 73.0% win rate and a 4.32% median, ranging from -10.32% to 12.92%. Three months later (63 trading days) the edge largely disappeared: mean 0.47%, median -0.04%, win rate 48.6%, range -13.03% to 12.59%. For reference, the 5-day mean was 0.86%. Today's regime is neutral (Panic Index 29.02, percentile 28.7), so the strategy path holds 0% with no change. Historical research only, not investment advice.",
       "judge": {
-        "groundedness": 1.0,
+        "groundedness": 0.929,
         "supported": 13,
-        "unsupported": 0,
+        "unsupported": 1,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.000954,
+        "cost_usd": 0.001066,
         "statements": [
           {
-            "statement": "Since the start of the standard data window (2021-05-17), SPX had 111 panic-regime days (Panic Index above 64), the last on 2023-03-17.",
+            "statement": "Using the data available through 2024-06-28 (backtest window 2021-05-17 onward), the SPX Panic Index flagged 111 panic-regime days (index above 64); the most recent was 2023-03-17.",
             "verdict": "supported",
-            "reason": "Evidence shows 111 signal days, threshold 64, last signal 2023-03-17 within the window."
+            "reason": "Forward-returns tool reports signal_days 111 and last_signal_date 2023-03-17."
           },
           {
-            "statement": "The 1-month (21-trading-day) forward return after those days averaged 2.86% (median 4.32%), with a win rate of 73.0% and a range of -10.32% to 12.92%.",
+            "statement": "One month later (21 trading days) the mean forward return was 2.86% with a 73.0% win rate and a 4.32% median, ranging from -10.32% to 12.92%.",
             "verdict": "supported",
-            "reason": "21-day stats match: mean 2.86%, median 4.32%, win 73.0%, range -10.32 to 12.92."
+            "reason": "21-day stats match: mean 2.86, win 73.0, median 4.32, range -10.32 to 12.92."
           },
           {
-            "statement": "The 3-month (63-day) horizon averaged only 0.47% (median -0.04%), with a win rate of 48.6% and a range of -13.03% to 12.59%; the 5-day average was 0.86%.",
+            "statement": "Three months later (63 trading days) the edge largely disappeared: mean 0.47%, median -0.04%, win rate 48.6%, range -13.03% to 12.59%.",
             "verdict": "supported",
-            "reason": "63-day stats and 5-day mean 0.86% match the evidence."
+            "reason": "63-day stats match: mean 0.47, median -0.04, win 48.6, range -13.03 to 12.59."
           },
           {
-            "statement": "So the edge was concentrated at the one-month horizon and faded by three months.",
+            "statement": "For reference, the 5-day mean was 0.86%.",
             "verdict": "supported",
-            "reason": "Directly follows from stronger 21-day vs weaker 63-day figures."
+            "reason": "5-day mean_return_pct is 0.86."
           },
           {
-            "statement": "Today's SPX reading is 29.02, neutral (percentile 28.7), so the signal holds 0%, with no change on the latest observation.",
+            "statement": "Today's regime is neutral (Panic Index 29.02, percentile 28.7), so the strategy path holds 0% with no change.",
             "verdict": "supported",
-            "reason": "Panic Index 29.02, neutral, percentile 28.7, holds 0% and no change."
+            "reason": "Regime neutral, Panic 29.02, percentile 28.7, path holds 0%, action hold."
           },
           {
-            "statement": "111 panic-regime days (threshold 64) occurred in the 2021-05-17 to 2024-06-28 window, last on 2023-03-17.",
+            "statement": "Historical research only, not investment advice.",
             "verdict": "supported",
-            "reason": "Matches the tool output exactly."
+            "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "21-day forward mean was 2.86% with 73.0% win rate and median 4.32%.",
+            "statement": "Of 111 SPX panic-regime days, the 21-day mean forward return was 2.86% with a 73.0% win rate and 4.32% median.",
             "verdict": "supported",
-            "reason": "Matches 21-day figures."
+            "reason": "Matches 111 signal days and 21-day stats."
           },
           {
-            "statement": "63-day forward mean was 0.47% with 48.6% win rate and median -0.04%.",
+            "statement": "The 63-day mean forward return was only 0.47% with a 48.6% win rate and -0.04% median, so the signal's edge fades at three months.",
             "verdict": "supported",
-            "reason": "Matches 63-day figures."
+            "reason": "63-day stats match; fade interpretation follows directly."
           },
           {
-            "statement": "The latest SPX Panic Index is 29.02, a neutral regime, so the rule makes no change and holds 0%.",
+            "statement": "Dispersion was wide at both horizons (-10.32% to 12.92% at 21 days; -13.03% to 12.59% at 63 days), and the last panic day was 2023-03-17.",
             "verdict": "supported",
-            "reason": "Matches regime and position data."
+            "reason": "Both ranges and last signal date match the evidence."
           },
           {
-            "statement": "Counts are overlapping regime days, not independent bottom forecasts; a single episode can dominate the sample.",
+            "statement": "SPX is currently neutral (Panic Index 29.02, percentile 28.7), so the signal holds 0% on the latest observation.",
             "verdict": "supported",
-            "reason": "Consistent with the note on overlapping regime days and the general caveat."
+            "reason": "Neutral regime with Panic 29.02 and path holding 0%."
           },
           {
-            "statement": "Only windows that closed on or before 2024-06-28 are counted, and the last signal is over a year old.",
+            "statement": "Panic-regime days are overlapping exposure days, not independent bottom forecasts, so sample statistics are autocorrelated; only complete forward windows ending on or before 2024-06-28 are counted and no panic days occurred after 2023-03-17.",
             "verdict": "supported",
-            "reason": "Data through 2024-06-28 and last signal 2023-03-17, over a year old."
+            "reason": "Tool note states overlapping exposure days and last_signal_date 2023-03-17; data through 2024-06-28."
           },
           {
-            "statement": "Historical evidence, not guaranteed returns; not investment advice.",
-            "verdict": "supported",
-            "reason": "Matches the note and generic disclaimer."
+            "statement": "Hindsight-selected thresholds and a short 2021-2024 window limit inference.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not address hindsight-selected thresholds or inference limitations."
           },
           {
-            "statement": "The standard backtest also trails Buy & Hold over the window.",
+            "statement": "The strategy's 3.88% return trailed Buy & Hold's 31.16% over the standard backtest, and its path currently holds 0%.",
             "verdict": "supported",
-            "reason": "Backtest shows 3.88% vs Buy & Hold 31.16%."
+            "reason": "Backtest 3.88% vs 31.16% and path holds 0%."
+          },
+          {
+            "statement": "Not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
           }
         ]
       }
@@ -334,69 +352,85 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 2,
-      "latency_ms": 4722.5,
-      "cost_usd": 0.000934,
-      "input_tokens": 858,
-      "output_tokens": 527,
+      "latency_ms": 4974.3,
+      "cost_usd": 0.001012,
+      "input_tokens": 813,
+      "output_tokens": 593,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
-      "placeholders": 1,
-      "answer": "Yes. The causal (no look-ahead) realtime detector fired twice for QQQ during the April 2025 selloff: 2025-04-09 (Panic Index 72.13, price 452.21) and 2025-04-11 (Panic Index 77.56, price 452.21\u2192 wait, price 452.21 on 4/11). Both are confirmed reversal dates using only information available on the day, not hindsight labels. As of 2025-05-30 the index has cooled to 27.33 (percentile 31.3; VIX 18.57, Fear & Greed 61.91), a neutral regime, so the strategy signal holds 100% with no change on the latest observation.",
+      "placeholders": 2,
+      "answer": "Yes. The causal (no look-ahead) panic-reversal detector fired twice for QQQ in the April 2025 selloff: on 2025-04-09 (Panic Index 72.13, QQQ price 463.76) and on 2025-04-11 (Panic Index 77.56, QQQ price 452.21). Each date marks when the reversal was confirmed using only data available up to that day. After that, the index fell back: as of 2025-05-30 the Composite Panic Index is 27.33 (percentile 31.3), a neutral regime, so the standard strategy signal holds its exposure at 100% and made no change on the latest observation. Note the strategy path's return of 34.97% over 2021-05-17 to 2025-05-30 trailed Buy & Hold at 64.1%.",
       "judge": {
-        "groundedness": 0.556,
-        "supported": 5,
-        "unsupported": 3,
+        "groundedness": 0.833,
+        "supported": 10,
+        "unsupported": 1,
         "contradicted": 1,
         "unjudged": 0,
-        "cost_usd": 0.000743,
+        "cost_usd": 0.000918,
         "statements": [
           {
             "statement": "Yes.",
             "verdict": "unsupported",
-            "reason": "The evidence does not contain a statement 'Yes' or any content that this statement responds to."
+            "reason": "Bare 'Yes' has no evidence basis; no question is addressed in evidence."
           },
           {
-            "statement": "The causal (no look-ahead) realtime detector fired twice for QQQ during the April 2025 selloff: 2025-04-09 (Panic Index 72.13, price 452.21) and 2025-04-11 (Panic Index 77.56, price 452.21\u2192 wait, price 452.21 on 4/11).",
+            "statement": "The causal (no look-ahead) panic-reversal detector fired twice for QQQ in the April 2025 selloff: on 2025-04-09 (Panic Index 72.13, QQQ price 463.76) and on 2025-04-11 (Panic Index 77.56, QQQ price 452.21).",
+            "verdict": "supported",
+            "reason": "Detector events match: 2025-04-09 panic 72.13 price 463.76 and 2025-04-11 panic 77.56 price 452.21."
+          },
+          {
+            "statement": "Each date marks when the reversal was confirmed using only data available up to that day.",
+            "verdict": "supported",
+            "reason": "Detector note states causal signals use no later data, each date when reversal confirmed."
+          },
+          {
+            "statement": "After that, the index fell back: as of 2025-05-30 the Composite Panic Index is 27.33 (percentile 31.3), a neutral regime, so the standard strategy signal holds its exposure at 100% and made no change on the latest observation.",
+            "verdict": "supported",
+            "reason": "Regime data confirms 27.33, percentile 31.3, neutral, hold, exposure 100."
+          },
+          {
+            "statement": "Note the strategy path's return of 34.97% over 2021-05-17 to 2025-05-30 trailed Buy & Hold at 64.1%.",
+            "verdict": "supported",
+            "reason": "Strategy return 34.97% vs Buy & Hold 64.1% over stated window."
+          },
+          {
+            "statement": "The realtime detector returned two causal events for QQQ in spring 2025: 2025-04-09 (77.56 before retreat; 72.13 at confirmation) and 2025-04-11 (77.56, price 452.21).",
             "verdict": "contradicted",
-            "reason": "The evidence shows 2025-04-09 price 463.76, not 452.21; 452.21 is the 2025-04-11 price."
+            "reason": "Evidence lists 2025-04-09 panic as 72.13, not 77.56."
           },
           {
-            "statement": "Both are confirmed reversal dates using only information available on the day, not hindsight labels.",
+            "statement": "The detector notes these are confirmation dates using no later data, so they are not hindsight labels.",
             "verdict": "supported",
-            "reason": "The detector note states events are causal signals confirmed with no later data."
+            "reason": "Detector note confirms causal confirmation dates, no hindsight."
           },
           {
-            "statement": "As of 2025-05-30 the index has cooled to 27.33 (percentile 31.3; VIX 18.57, Fear & Greed 61.91), a neutral regime, so the strategy signal holds 100% with no change on the latest observation.",
+            "statement": "By 2025-05-30 the Panic Index had fallen to 27.33 (31.3rd percentile), a neutral regime requiring no threshold action.",
             "verdict": "supported",
-            "reason": "Evidence confirms panic index 27.33, percentile 31.3, VIX 18.57, Fear & Greed 61.91, neutral regime, and hold at 100%."
+            "reason": "Panic 27.33, percentile 31.3, neutral regime, no threshold action."
           },
           {
-            "statement": "Realtime detector (causal, hindsight=false) returned two QQQ events in the window starting 2025-03-03: 2025-04-09 at Panic Index 72.13 and 2025-04-11 at 77.56.",
+            "statement": "The strategy path remains at 100% exposure, but its 34.97% return over the backtest window was below Buy & Hold's 64.1%.",
             "verdict": "supported",
-            "reason": "The realtime detector returned data starting 2025-03-03 with the two dates and Panic Index values 72.13 and 77.56."
+            "reason": "Exposure 100% and return 34.97% below Buy & Hold 64.1%."
           },
           {
-            "statement": "Those peaks were first confirmed on 2025-04-09, at the second step, with the deeper high on 2025-04-11 confirming the 77.56 peak.",
-            "verdict": "unsupported",
-            "reason": "The evidence does not describe first confirmation timing or a 'second step' for the peaks."
-          },
-          {
-            "statement": "By 2025-05-30 the composite index is 27.33 (percentile 31.3), a neutral regime between the 64 panic and 15 greed thresholds.",
+            "statement": "Detector output is index-based, not a trade recommendation; the signal's 34.97% return vs.",
             "verdict": "supported",
-            "reason": "Evidence confirms 27.33, percentile 31.3, neutral regime, with thresholds 64 and 15."
+            "reason": "Detector is causal index-based; return figures match evidence."
           },
           {
-            "statement": "Panic-reversal dates are mechanical detections with a 5% fall-back rule and 80 entry threshold, not judgment calls; the neutral reading now is not a forecast.",
-            "verdict": "unsupported",
-            "reason": "The evidence does not mention a 5% fall-back rule or an 80 entry threshold."
-          },
-          {
-            "statement": "Historical research, not investment advice.",
+            "statement": "64.1% for Buy & Hold shows the rule lagged in this window.",
             "verdict": "supported",
-            "reason": "Generic disclaimer that this is not investment advice is supported."
+            "reason": "64.1% Buy & Hold exceeds 34.97% strategy, indicating lag."
+          },
+          {
+            "statement": "Historical research only, not investment advice.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer 'not investment advice' is supported."
           }
         ]
       }
@@ -408,7 +442,6 @@
       "tools_called": [
         "get_regime",
         "search_fed_docs",
-        "search_fed_docs",
         "search_fed_docs"
       ],
       "expected_tools": [
@@ -421,74 +454,80 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
-      "steps": 3,
-      "latency_ms": 10861.3,
-      "cost_usd": 0.002775,
-      "input_tokens": 5706,
-      "output_tokens": 821,
+      "steps": 2,
+      "latency_ms": 5840.7,
+      "cost_usd": 0.002206,
+      "input_tokens": 4116,
+      "output_tokens": 762,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
       "placeholders": 3,
-      "answer": "At its June 15, 2022 meeting \u2014 the most recent as of 2022-06-17 \u2014 the FOMC raised the target range for the federal funds rate to 1-1/2 to 1-3/4 percent and said ongoing increases will be appropriate, while continuing to reduce Treasury and agency MBS holdings per the May balance-sheet plans. Chair Powell called the 75 basis point increase unusually large and said moves of that size should not be common, with 50 or 75 bp most likely next. Yes, SPX is in a panic regime: the Composite Panic Index is 79.13 (92.4th percentile), with VIX 31.13 and Fear & Greed 16.93 (extreme fear). The signal holds 100% exposure at the 100%.",
+      "answer": "At its June 15, 2022 meeting, the FOMC raised the target range for the federal funds rate to 1-1/2 to 1-3/4 percent and said ongoing increases will be appropriate, while continuing to shrink its Treasury and agency MBS holdings per the May balance-sheet plans (statement-20220615). In his press conference, Chair Powell said the Committee raised the policy rate by 3/4 percentage point and framed the decision as part of a strong commitment to restoring price stability (press_conference-20220615). Yes, the SPX is in the panic regime: the Composite Panic Index is 79.13 (percentile 92.4), with VIX 31.13 and CNN Fear & Greed 16.93 (extreme fear). The strategy path already sits at 100% exposure, so the latest observation's action is hold at the 100% cap; the standard backtest shows the strategy return at -13.78% versus Buy & Hold -11.73%.",
       "judge": {
-        "groundedness": 0.9,
-        "supported": 9,
+        "groundedness": 0.909,
+        "supported": 10,
         "unsupported": 1,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.002112,
+        "cost_usd": 0.00174,
         "statements": [
           {
-            "statement": "At its June 15, 2022 meeting \u2014 the most recent as of 2022-06-17 \u2014 the FOMC raised the target range for the federal funds rate to 1-1/2 to 1-3/4 percent and said ongoing increases will be appropriate, while continuing to reduce Treasury and agency MBS holdings per the May balance-sheet plans.",
+            "statement": "At its June 15, 2022 meeting, the FOMC raised the target range for the federal funds rate to 1-1/2 to 1-3/4 percent and said ongoing increases will be appropriate, while continuing to shrink its Treasury and agency MBS holdings per the May balance-sheet plans (statement-20220615).",
             "verdict": "supported",
-            "reason": "June 15 statement raised range to 1-1/2 to 1-3/4 percent, said ongoing increases appropriate, and continued reducing Treasury/agency MBS per May plans."
+            "reason": "Evidence June 15 2022 statement matches: 1-1/2 to 1-3/4 percent, ongoing increases, balance-sheet reduction per May plans."
           },
           {
-            "statement": "Chair Powell called the 75 basis point increase unusually large and said moves of that size should not be common, with 50 or 75 bp most likely next.",
+            "statement": "In his press conference, Chair Powell said the Committee raised the policy rate by 3/4 percentage point and framed the decision as part of a strong commitment to restoring price stability (press_conference-20220615).",
             "verdict": "supported",
-            "reason": "Powell called the 75 bp increase unusually large, said such moves not common, and 50 or 75 bp most likely next."
+            "reason": "June 15 press conference states 3/4 point hike and commitment to restoring price stability."
           },
           {
-            "statement": "Yes, SPX is in a panic regime: the Composite Panic Index is 79.13 (92.4th percentile), with VIX 31.13 and Fear & Greed 16.93 (extreme fear).",
+            "statement": "Yes, the SPX is in the panic regime: the Composite Panic Index is 79.13 (percentile 92.4), with VIX 31.13 and CNN Fear & Greed 16.93 (extreme fear).",
             "verdict": "supported",
-            "reason": "Evidence shows panic regime, Panic Index 79.13 (92.4 percentile), VIX 31.13, Fear & Greed 16.93 extreme fear."
+            "reason": "Regime tool shows panic, 79.13, percentile 92.4, VIX 31.13, Fear & Greed 16.93 extreme fear."
           },
           {
-            "statement": "The signal holds 100% exposure at the 100%.",
+            "statement": "The strategy path already sits at 100% exposure, so the latest observation's action is hold at the 100% cap; the standard backtest shows the strategy return at -13.78% versus Buy & Hold -11.73%.",
             "verdict": "supported",
-            "reason": "final_position_pct is 100 and signal holds 100%."
+            "reason": "Evidence confirms 100% exposure, hold action, and -13.78% vs -11.73% returns."
           },
           {
-            "statement": "The June 15 statement raised the target range to 1-1/2 to 1-3/4 percent and kept balance-sheet runoff under way.",
+            "statement": "The June 15, 2022 statement raised the target range to 1-1/2 to 1-3/4 percent and anticipated ongoing increases (statement-20220615).",
             "verdict": "supported",
-            "reason": "June 15 statement raised range to 1-1/2 to 1-3/4 percent and balance-sheet reduction continues."
+            "reason": "statement-20220615 confirms range and anticipated ongoing increases."
           },
           {
-            "statement": "Powell described the 75 bp increase as unusually large and not expected to be common, with 50 or 75 bp most likely next.",
+            "statement": "Powell said the FOMC raised the policy rate by 3/4 percentage point and is continuing to reduce the balance sheet (press_conference-20220615).",
             "verdict": "supported",
-            "reason": "Matches Powell's press conference remarks."
+            "reason": "press_conference-20220615 confirms 3/4 point raise and continued balance-sheet reduction."
           },
           {
-            "statement": "The Panic Index at 79.13 is far above the 64 panic threshold, in the 92.4th percentile of history.",
+            "statement": "The SPX Composite Panic Index is 79.13, above the 64 panic threshold, at the 92.4th percentile.",
             "verdict": "supported",
-            "reason": "Panic Index 79.13 vs buy threshold 64.0, percentile 92.4."
+            "reason": "Panic Index 79.13 above 64, percentile 92.4 per regime tool."
           },
           {
-            "statement": "The signal's latest action on 2022-06-17 was hold, since exposure was already at the 100%.",
+            "statement": "The signal held at the 100% cap because the market is already in the panic regime at maximum exposure.",
             "verdict": "supported",
-            "reason": "Action was hold because already at 100% cap."
+            "reason": "Evidence states panic regime and already at 100% cap, action hold."
           },
           {
             "statement": "Historical research, not investment advice.",
-            "verdict": "unsupported",
-            "reason": "Historical research framing and investment-advice disclaimer not in evidence; only generic disclaimers are supported, this statement asserts research nature."
+            "verdict": "supported",
+            "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "The June 2022 meeting minutes were not yet public as of 2022-06-17, so Committee views rely on the May minutes; the standard backtest window shows the strategy slightly behind Buy & Hold.",
+            "statement": "The Panic Index blends VIX and CNN Fear & Greed and can flip quickly; over the standard window Buy & Hold outperformed the strategy, so the accumulation rule has lagged.",
             "verdict": "supported",
-            "reason": "June minutes not in evidence (latest minutes are May 4), and backtest shows strategy -13.78% vs B&H -11.73%, slightly behind."
+            "reason": "Blend noted generally; Buy & Hold -11.73% outperformed strategy -13.78%, so accumulation rule lagged over window."
+          },
+          {
+            "statement": "June 2022 meeting minutes were not yet public as of 2022-06-17.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not address availability of June 2022 meeting minutes."
           }
         ]
       }
@@ -498,9 +537,8 @@
       "success": true,
       "tool_selection_correct": true,
       "tools_called": [
-        "get_regime",
         "search_fed_docs",
-        "search_fed_docs"
+        "get_regime"
       ],
       "expected_tools": [
         "search_fed_docs"
@@ -511,79 +549,75 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
-      "steps": 3,
-      "latency_ms": 7027.6,
-      "cost_usd": 0.001997,
-      "input_tokens": 3612,
-      "output_tokens": 698,
+      "steps": 2,
+      "latency_ms": 4588.3,
+      "cost_usd": 0.001263,
+      "input_tokens": 1873,
+      "output_tokens": 538,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
-      "placeholders": 1,
-      "answer": "First, note the dashboard's own data does not show extreme fear: as of 2023-03-24 the SPX Panic Index is 46.84 (percentile 55.8), a neutral regime, so the rule holds 100% exposure with no change. The latest FOMC statement (March 22, 2023) said: \"The U.S. banking system is sound and resilient,\" and added that recent developments \"are likely to result in tighter credit conditions for households and businesses and to weigh on economic activity, hiring, and inflation,\" with the extent of these effects uncertain and the Committee highly attentive to inflation risks. Chair Powell's press conference echoed that the system is sound and resilient, with strong capital and liquidity, that all depositors' savings and the banking system are safe, and that deposit flows have stabilized over the last week. SPX at 3970.99.",
+      "placeholders": 2,
+      "answer": "The March 22, 2023 FOMC statement (doc statement-20230322) said: \"The U.S. banking system is sound and resilient,\" and that \"recent developments are likely to result in tighter credit conditions for households and businesses and to weigh on economic activity, hiring, and inflation,\" adding that \"the extent of these effects is uncertain\" and the Committee \"remains highly attentive to inflation risks.\" One correction: on this dashboard's index, fear is not extreme \u2014 the Panic Index is 46.84 (percentile 55.8), a neutral rather than panic regime (VIX 21.74; CNN Fear & Greed 37.71, 'fear'). The signal therefore holds its strategy-path exposure at 100% on the latest observation, rather than adding or reducing. This is historical research, not investment advice.",
       "judge": {
-        "groundedness": 0.909,
+        "groundedness": 1.0,
         "supported": 10,
-        "unsupported": 1,
+        "unsupported": 0,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.001576,
+        "cost_usd": 0.001087,
         "statements": [
           {
-            "statement": "First, note the dashboard's own data does not show extreme fear: as of 2023-03-24 the SPX Panic Index is 46.84 (percentile 55.8), a neutral regime, so the rule holds 100% exposure with no change.",
+            "statement": "The March 22, 2023 FOMC statement (doc statement-20230322) said: \"The U.S.",
             "verdict": "supported",
-            "reason": "Evidence shows Panic Index 46.84, percentile 55.8, neutral regime, hold 100%."
+            "reason": "Evidence quote matches March 22 statement: banking system sound and resilient; tighter credit conditions weighing on activity, hiring, inflation; effects uncertain."
           },
           {
-            "statement": "The latest FOMC statement (March 22, 2023) said: \"The U.S.",
+            "statement": "banking system is sound and resilient,\" and that \"recent developments are likely to result in tighter credit conditions for households and businesses and to weigh on economic activity, hiring, and inflation,\" adding that \"the extent of these effects is uncertain\" and the Committee \"remains highly attentive to inflation risks.\" One correction: on this dashboard's index, fear is not extreme \u2014 the Panic Index is 46.84 (percentile 55.8), a neutral rather than panic regime (VIX 21.74; CNN Fear & Greed 37.71, 'fear').",
             "verdict": "supported",
-            "reason": "March 22, 2023 FOMC statement contains this phrase."
+            "reason": "Statement quotes match, and regime data shows Panic Index 46.84, percentile 55.8, neutral, VIX 21.74, Fear & Greed 37.71 'fear'."
           },
           {
-            "statement": "banking system is sound and resilient,\" and added that recent developments \"are likely to result in tighter credit conditions for households and businesses and to weigh on economic activity, hiring, and inflation,\" with the extent of these effects uncertain and the Committee highly attentive to inflation risks.",
+            "statement": "The signal therefore holds its strategy-path exposure at 100% on the latest observation, rather than adding or reducing.",
             "verdict": "supported",
-            "reason": "Statement quotes tighter credit conditions, uncertain effects, attentive to inflation."
+            "reason": "Evidence states strategy path exposure is 100 and action is hold with no change in neutral regime."
           },
           {
-            "statement": "Chair Powell's press conference echoed that the system is sound and resilient, with strong capital and liquidity, that all depositors' savings and the banking system are safe, and that deposit flows have stabilized over the last week.",
+            "statement": "This is historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "Powell cited sound/resilient system, capital/liquidity, safe deposits, stabilized flows."
+            "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "SPX at 3970.99.",
+            "statement": "The March 22 statement called the banking system 'sound and resilient' but flagged likely tighter credit conditions weighing on activity, hiring, and inflation.",
             "verdict": "supported",
-            "reason": "Tool data shows price 3970.99."
+            "reason": "Directly matches March 22 statement text."
           },
           {
-            "statement": "Panic Index 46.84 (percentile 55.8) is neutral, not panic, so no threshold-driven change is indicated.",
+            "statement": "The Panic Index at 46.84 (percentile 55.8) is in the neutral regime, below the panic threshold of 64.",
             "verdict": "supported",
-            "reason": "Neutral regime, no threshold-driven change, per interpretation."
+            "reason": "Panic Index 46.84, percentile 55.8, neutral regime; below panic threshold of 64."
           },
           {
-            "statement": "The March 22, 2023 statement called the U.S. banking system sound and resilient while flagging likely tighter credit conditions.",
+            "statement": "In the neutral regime the signal made no threshold-driven change and holds 100%.",
             "verdict": "supported",
-            "reason": "March 22 statement says sound and resilient and flags tighter credit conditions."
+            "reason": "Evidence states neutral regime: no change; action hold; final exposure 100."
           },
           {
-            "statement": "Powell said at the press conference that the banking system is sound and resilient, with strong capital and liquidity.",
+            "statement": "The 'extreme fear' premise is not supported by this dashboard's data: the composite reads neutral, while the Fear & Greed component alone is 'fear'.",
             "verdict": "supported",
-            "reason": "Powell said banking system sound and resilient with strong capital and liquidity."
+            "reason": "Regime is neutral; Fear & Greed component alone reads 'fear'."
           },
           {
-            "statement": "Powell noted all depositors' savings and the banking system are safe and deposit flows have stabilized.",
+            "statement": "This composite is a model gauge, not a market fact; over the standard backtest window, Buy & Hold returned more than the strategy did.",
             "verdict": "supported",
-            "reason": "Powell cited depositors' savings safe and deposit flows stabilized."
+            "reason": "Backtest shows Buy & Hold -4.62% vs strategy -6.83%, so Buy & Hold returned more."
           },
           {
-            "statement": "Historical research, not investment advice; standard backtest window shows the strategy return of -6.83% below Buy & Hold -4.62%.",
+            "statement": "Not investment advice.",
             "verdict": "supported",
-            "reason": "Backtest shows -6.83% vs Buy & Hold -4.62%; disclaimer supported."
-          },
-          {
-            "statement": "Fear & Greed 37.71 rates 'fear', not extreme fear, and that label is third-party.",
-            "verdict": "unsupported",
-            "reason": "Evidence shows Fear & Greed 37.71 'fear' but does not state it is third-party."
+            "reason": "Generic disclaimer is supported."
           }
         ]
       }
@@ -606,94 +640,88 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 3,
-      "latency_ms": 8321.8,
-      "cost_usd": 0.001744,
-      "input_tokens": 1272,
-      "output_tokens": 1074,
+      "latency_ms": 7949.8,
+      "cost_usd": 0.00173,
+      "input_tokens": 1273,
+      "output_tokens": 1047,
       "fallback_reason": null,
       "repairs": 1,
       "first_violations": [
         "placeholder error: {bt1.strategy_return_pct} names an unknown run_backtest call id (this turn: none)",
-        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: none)",
-        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: none)",
-        "placeholder error: {bt1.strategy_return_pct} names an unknown run_backtest call id (this turn: none)"
+        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: none)"
       ],
-      "placeholders": 4,
-      "answer": "Historically, panic-regime days have been favorable for DJI, but this is a statistical tendency, not a timing call. With the Panic Index at 77.56 (percentile 99.6; VIX 37.56, Fear & Greed 8.39, extreme fear), the regime is panic. From 2021-05-17 through 2025-04-11, the 46 DJI panic-regime days showed a 68.3% win rate over 5 days (mean +1.43%), 71.8% over 21 days (mean +4.21%), and 66.7% over 63 days (mean +4.99%). Tails are wide: 21-day returns ranged from -5.69% to +15.42%. The rule holds 100% exposure; on the latest observation it did not change and had action hold, already at the 100% cap. Note that in the standard window Buy & Hold beat the strategy.",
+      "placeholders": 2,
+      "answer": "On the sample, panic-regime days in DJI have been followed by mostly positive forward returns: after 46 panic days since 2021-05-17, the 21-day window showed a 71.8% win rate and a mean return of 4.21% (median 3.89%, range -5.69% to 15.42%), and the 63-day window 66.7% with a mean of 4.99%. Today's reading is extreme (Panic Index 77.56, percentile 99.6, VIX 37.56, Fear & Greed 8.39 'extreme fear'), so the framework labels this an accumulation environment. The signal's standard path is already at its cap: it holds 100% and holds on the latest observation. Note that over the standard backtest window Buy & Hold outperformed the rule, 17.14% versus 4.78%. Not investment advice.",
       "judge": {
         "groundedness": 1.0,
-        "supported": 13,
+        "supported": 12,
         "unsupported": 0,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.001105,
+        "cost_usd": 0.001068,
         "statements": [
           {
-            "statement": "Historically, panic-regime days have been favorable for DJI, but this is a statistical tendency, not a timing call.",
+            "statement": "On the sample, panic-regime days in DJI have been followed by mostly positive forward returns: after 46 panic days since 2021-05-17, the 21-day window showed a 71.8% win rate and a mean return of 4.21% (median 3.89%, range -5.69% to 15.42%), and the 63-day window 66.7% with a mean of 4.99%.",
             "verdict": "supported",
-            "reason": "Forward returns show positive historical tendency, and note says 'historical evidence, not guaranteed returns' / not independent bottom forecasts."
+            "reason": "Forward-returns evidence matches 46 panic days, 21-day 71.8% win rate, 4.21% mean, 3.89% median, -5.69% to 15.42% range, and 63-day 66.7%/4.99%."
           },
           {
-            "statement": "With the Panic Index at 77.56 (percentile 99.6; VIX 37.56, Fear & Greed 8.39, extreme fear), the regime is panic.",
+            "statement": "Today's reading is extreme (Panic Index 77.56, percentile 99.6, VIX 37.56, Fear & Greed 8.39 'extreme fear'), so the framework labels this an accumulation environment.",
             "verdict": "supported",
-            "reason": "Evidence states Panic Index 77.56, percentile 99.6, VIX 37.56, Fear & Greed 8.39 extreme fear, regime panic."
+            "reason": "Regime tool confirms Panic Index 77.56, percentile 99.6, VIX 37.56, Fear & Greed 8.39 extreme fear, and labels panic an accumulation environment."
           },
           {
-            "statement": "From 2021-05-17 through 2025-04-11, the 46 DJI panic-regime days showed a 68.3% win rate over 5 days (mean +1.43%), 71.8% over 21 days (mean +4.21%), and 66.7% over 63 days (mean +4.99%).",
+            "statement": "The signal's standard path is already at its cap: it holds 100% and holds on the latest observation.",
             "verdict": "supported",
-            "reason": "Matches forward returns: 46 signal days, 5d 68.3%/+1.43%, 21d 71.8%/+4.21%, 63d 66.7%/+4.99%."
+            "reason": "Evidence states final position 100%, hold action, already at the 100% cap."
           },
           {
-            "statement": "Tails are wide: 21-day returns ranged from -5.69% to +15.42%.",
+            "statement": "Note that over the standard backtest window Buy & Hold outperformed the rule, 17.14% versus 4.78%.",
             "verdict": "supported",
-            "reason": "21-day range -5.69% to +15.42% is stated in evidence."
+            "reason": "Backtest states 4.78% strategy vs. 17.14% Buy & Hold."
           },
           {
-            "statement": "The rule holds 100% exposure; on the latest observation it did not change and had action hold, already at the 100% cap.",
+            "statement": "Not investment advice.",
             "verdict": "supported",
-            "reason": "final_position_pct 100, previous 100, action hold, already at 100% cap."
+            "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "Note that in the standard window Buy & Hold beat the strategy.",
+            "statement": "Panic Index is 77.56 at the 99.6th percentile, deep in the panic regime with Fear & Greed at 8.39 (extreme fear).",
             "verdict": "supported",
-            "reason": "Strategy 4.78% vs Buy & Hold 17.14%, so Buy & Hold beat strategy."
+            "reason": "Matches Panic Index 77.56, percentile 99.6, panic regime, Fear & Greed 8.39 extreme fear."
           },
           {
-            "statement": "Panic Index 77.56 sits at the 99.6th percentile, deep in the panic regime (above the 64 threshold).",
+            "statement": "Of 46 DJI panic-regime days since 2021-05-17, the 21-day forward window had a 71.8% win rate and 4.21% mean return.",
             "verdict": "supported",
-            "reason": "Percentile 99.6, panic regime, above 64 threshold per evidence."
+            "reason": "Matches 21-day forward window: 71.8% win rate, 4.21% mean, on 46 panic signal days since 2021-05-17."
           },
           {
-            "statement": "DJI panic-regime days had 71.8% 21-day win rate and 66.7% 63-day win rate since 2021-05-17.",
+            "statement": "The 63-day window showed a 66.7% win rate and 4.99% mean return, with lows of -7.37%.",
             "verdict": "supported",
-            "reason": "21-day 71.8% and 63-day 66.7% win rates stated; window starts 2021-05-17."
+            "reason": "Matches 63-day 66.7% win rate, 4.99% mean, min -7.37%."
           },
           {
-            "statement": "Mean forward returns were positive at all horizons (+1.43% at 5 days, +4.21% at 21, +4.99% at 63), but 21-day outcomes ranged -5.69% to +15.42%.",
+            "statement": "The strategy path is at the 100% cap, so the rule's latest action is hold at 100%.",
             "verdict": "supported",
-            "reason": "Mean returns +1.43/+4.21/+4.99 and 21-day range -5.69% to +15.42% match evidence."
+            "reason": "Evidence states 100% cap and latest action hold."
           },
           {
-            "statement": "The rule holds 100%, its latest action was hold at the 100% cap, so it has no room to add under the position rule.",
+            "statement": "Panic-regime days overlap (they are not independent bottom forecasts), samples are small (39-41 complete windows), and losses up to -7.37% occurred at 63 days.",
             "verdict": "supported",
-            "reason": "Holds 100%, action hold at 100% cap, so no room to add under the cap."
+            "reason": "Evidence notes overlapping regime days, not independent forecasts; counts 39-41; min -7.37% at 63 days."
           },
           {
-            "statement": "Panic-regime days are overlapping exposure days, not independent bottom forecasts; the sample is small and hindsight-selected.",
+            "statement": "Buy & Hold outperformed the standard rule over the backtest window.",
             "verdict": "supported",
-            "reason": "Note states regime days are overlapping exposure days, not independent bottom forecasts; historical evidence not guaranteed."
+            "reason": "Buy & Hold 17.14% exceeded strategy 4.78% over the backtest window."
           },
           {
-            "statement": "Buy & Hold outperformed the strategy over the standard backtest window.",
+            "statement": "Historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "Buy & Hold 17.14% vs strategy 4.78% over standard window."
-          },
-          {
-            "statement": "Historical evidence only; not investment advice.",
-            "verdict": "supported",
-            "reason": "Generic disclaimer consistent with evidence's historical-evidence caveat."
+            "reason": "Historical research disclaimer is supported."
           }
         ]
       }
@@ -706,7 +734,6 @@
         "get_regime",
         "search_fed_docs",
         "search_fed_docs",
-        "search_fed_docs",
         "search_fed_docs"
       ],
       "expected_tools": [
@@ -719,77 +746,73 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 3,
-      "latency_ms": 9040.1,
-      "cost_usd": 0.003449,
-      "input_tokens": 7353,
-      "output_tokens": 960,
+      "latency_ms": 7091.6,
+      "cost_usd": 0.002732,
+      "input_tokens": 5777,
+      "output_tokens": 743,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
-      "placeholders": 1,
-      "answer": "As of 2024-09-20, the most recent FOMC decision was on September 18, 2024: the Committee lowered the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent, citing progress on inflation and the balance of risks (statement-20240918). In his press conference, Chair Powell framed the move as appropriate recalibration given a cooler labor market and risks to inflation and employment that are now roughly balanced (press_conference-20240918). The QQQ Composite Panic Index on 2024-09-20 reads 27.43 (percentile 25.7), composed of VIX 16.15 and Fear & Greed 61.2 (greed rating), which the tool classifies as a neutral regime. The standard signal therefore holds 60% exposure, unchanged from before the latest observation.",
+      "placeholders": 2,
+      "answer": "The Fed's most recent decision, at the September 18, 2024 meeting, was to lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent, while continuing to reduce securities holdings. Chair Powell framed it as a recalibration reflecting growing confidence that inflation is moving sustainably toward 2 percent while strength in the labor market can be maintained, and stressed the Committee is \"not on any preset course.\" The QQQ Composite Panic Index read 27.43 on 2024-09-20 (percentile 25.7), a neutral regime, so the strategy path holds 60% exposure with no change; the signal adds 20% only if the index closes above 64. Historical research, not investment advice.",
       "judge": {
-        "groundedness": 0.727,
-        "supported": 8,
-        "unsupported": 2,
-        "contradicted": 1,
+        "groundedness": 0.9,
+        "supported": 9,
+        "unsupported": 1,
+        "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.002748,
+        "cost_usd": 0.002088,
         "statements": [
           {
-            "statement": "As of 2024-09-20, the most recent FOMC decision was on September 18, 2024: the Committee lowered the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent, citing progress on inflation and the balance of risks (statement-20240918).",
+            "statement": "The Fed's most recent decision, at the September 18, 2024 meeting, was to lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent, while continuing to reduce securities holdings.",
             "verdict": "supported",
-            "reason": "statement-20240918 states the 1/2 point cut to 4-3/4 to 5 percent citing inflation progress and balance of risks."
+            "reason": "September 18 statement lowers range by 1/2 point to 4-3/4 to 5 percent and continues reducing securities holdings."
           },
           {
-            "statement": "In his press conference, Chair Powell framed the move as appropriate recalibration given a cooler labor market and risks to inflation and employment that are now roughly balanced (press_conference-20240918).",
+            "statement": "Chair Powell framed it as a recalibration reflecting growing confidence that inflation is moving sustainably toward 2 percent while strength in the labor market can be maintained, and stressed the Committee is \"not on any preset course.\" The QQQ Composite Panic Index read 27.43 on 2024-09-20 (percentile 25.7), a neutral regime, so the strategy path holds 60% exposure with no change; the signal adds 20% only if the index closes above 64.",
             "verdict": "supported",
-            "reason": "press_conference-20240918 shows Powell citing roughly balanced risks, cooler labor market, and time to change stance."
+            "reason": "Powell's press conference describes recalibration, growing confidence, labor strength, and 'not on any preset course'; Panic Index 27.43 percentile 25.7 neutral, holds 60%, adds 20% above 64."
           },
           {
-            "statement": "The QQQ Composite Panic Index on 2024-09-20 reads 27.43 (percentile 25.7), composed of VIX 16.15 and Fear & Greed 61.2 (greed rating), which the tool classifies as a neutral regime.",
+            "statement": "Historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "get_regime returns panic_index 27.43, percentile 25.7, VIX 16.15, Fear & Greed 61.2 greed, regime neutral."
+            "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "The standard signal therefore holds 60% exposure, unchanged from before the latest observation.",
+            "statement": "The September 18 statement lowered the target range by 1/2 percentage point to 4-3/4 to 5 percent.",
             "verdict": "supported",
-            "reason": "Signal shows final_position_pct 60, previous 60, action hold."
+            "reason": "Statement confirms lowering by 1/2 percentage point to 4-3/4 to 5 percent."
           },
           {
-            "statement": "The September 18, 2024 statement lowered the target range by 1/2 percentage point to 4-3/4 to 5 percent.",
+            "statement": "Chair Powell described the move as a recalibration with risks to employment and inflation roughly in balance.",
             "verdict": "supported",
-            "reason": "statement-20240918 confirms 1/2 point cut to 4-3/4 to 5 percent."
+            "reason": "Powell described recalibration and risks to employment and inflation roughly in balance."
           },
           {
-            "statement": "Chair Powell described the decision as reflecting roughly balanced risks and a cooler labor market, saying it was time to change the stance.",
+            "statement": "QQQ Panic Index at 27.43 (percentile 25.7) sits between the 64 panic and 15 greed thresholds, so no change is indicated.",
             "verdict": "supported",
-            "reason": "press_conference-20240918 records roughly balanced risks, cooler labor market, and time to change stance."
+            "reason": "27.43 sits between 15 and 64, neutral regime, no change indicated."
           },
           {
-            "statement": "The QQQ Panic Index stands at 27.43 with VIX 16.15 and Fear & Greed 61.2, a neutral regime between the 64 panic and 15 greed thresholds.",
+            "statement": "Backtest figures are hindsight-fitted, and the standard QQQ strategy path underperformed Buy & Hold (strategy return 14.77% vs.",
             "verdict": "supported",
-            "reason": "Evidence confirms 27.43, VIX 16.15, Fear & Greed 61.2, neutral regime, thresholds 64 and 15."
+            "reason": "Backtest shows strategy 14.77% vs Buy & Hold 51.82% underperformance; hindsight-fitted framing is generic."
           },
           {
-            "statement": "The last three communications indexed before this decision were holds at 5-1/4 to 5-1/2 percent (January, March, June, July 2024).",
-            "verdict": "contradicted",
-            "reason": "The communications include four holds (Jan, Mar, Jun, Jul), not 'last three,' and listing four contradicts 'three.'"
+            "statement": "51.82%).",
+            "verdict": "supported",
+            "reason": "Buy & Hold return is 51.82% per backtest."
           },
           {
-            "statement": "The Panic Index is a 50/50 blend of VIX and an inverted CNN Fear & Greed reading, so it can move with sentiment rather than fundamentals; thresholds are the backtest's assumptions, not validated rules.",
+            "statement": "Past Fed actions do not determine future policy.",
             "verdict": "unsupported",
-            "reason": "Evidence does not state the Panic Index composition, inversion of Fear & Greed, or that thresholds are unvalidated assumptions."
+            "reason": "Evidence does not discuss whether past Fed actions determine future policy."
           },
           {
-            "statement": "The September 2024 meeting minutes were not yet public as of this date.",
-            "verdict": "unsupported",
-            "reason": "Evidence does not address whether September 2024 minutes were public."
-          },
-          {
-            "statement": "Historical research only, not investment advice.",
+            "statement": "Not investment advice.",
             "verdict": "supported",
             "reason": "Generic disclaimer is supported."
           }
@@ -798,7 +821,7 @@
     },
     {
       "id": "a09",
-      "success": false,
+      "success": true,
       "tool_selection_correct": true,
       "tools_called": [
         "detect_peaks",
@@ -808,96 +831,90 @@
         "detect_peaks"
       ],
       "citation_precision": 1.0,
-      "numeric_faithfulness": 0.889,
-      "unsupported_numbers": [
-        5.0
-      ],
+      "numeric_faithfulness": 1.0,
+      "unsupported_numbers": [],
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 2,
-      "latency_ms": 5944.1,
-      "cost_usd": 0.001296,
-      "input_tokens": 1395,
-      "output_tokens": 695,
+      "latency_ms": 6585.6,
+      "cost_usd": 0.001307,
+      "input_tokens": 1317,
+      "output_tokens": 713,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
       "placeholders": 0,
-      "answer": "In 2022 for SMH the scipy hindsight labeler found 8 peaks and the causal realtime detector fired 13 signals. The hindsight peaks sit at very high Panic Index levels (91.94 on 2022-05-09, 91.55 on 2022-03-07, 85.31 on 2022-10-12) and are dated at the top of each panic spike. The realtime signals are lower \u2014 from 67.97 up to 81.66 \u2014 and land a few sessions later, when the index had already retreated 5% from its local max: e.g. 2022-10-13 (79.8) vs. the hindsight 2022-10-12 peak, and repeated re-triggers on 2022-09-28, 2022-10-03, 2022-10-13 and 2022-10-17. The realtime detector also fires more often, clustering within the same selloff rather than labeling one best point. Only the realtime dates are usable for backtests.",
+      "answer": "For SMH in 2022 the scipy hindsight labeler found 8 Panic Index peaks (Jan 3\u2013Dec 30 window), while the causal realtime detector produced 13 signals. The hindsight peaks are higher and earlier: e.g. 91.94 on 2022-05-09, 91.55 on 2022-03-07, 85.31 on 2022-10-12. The realtime signals confirm reversals later and at lower levels: 76.68 on 2022-05-13, 81.66 on 2022-03-09, and four clustered October signals (75.00 on 10-03, 79.80 on 10-13, 76.45 on 10-17). The realtime detector fires in bursts around each peak, and it caught no comparable event in January or early February despite the scipy label of 79.77 on 2022-01-26 and 68.22 on 2022-02-14. The scipy peak of 44.7 on 2022-12-12 falls below the realtime watch zone.",
       "judge": {
-        "groundedness": 0.308,
-        "supported": 4,
-        "unsupported": 9,
+        "groundedness": 0.833,
+        "supported": 10,
+        "unsupported": 2,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.001088,
+        "cost_usd": 0.000986,
         "statements": [
           {
-            "statement": "In 2022 for SMH the scipy hindsight labeler found 8 peaks and the causal realtime detector fired 13 signals.",
+            "statement": "For SMH in 2022 the scipy hindsight labeler found 8 Panic Index peaks (Jan 3\u2013Dec 30 window), while the causal realtime detector produced 13 signals.",
             "verdict": "supported",
-            "reason": "scipy reports 8 events, realtime reports 13."
+            "reason": "scipy shows 8 events, realtime 13, in the 2022 window."
           },
           {
-            "statement": "The hindsight peaks sit at very high Panic Index levels (91.94 on 2022-05-09, 91.55 on 2022-03-07, 85.31 on 2022-10-12) and are dated at the top of each panic spike.",
-            "verdict": "unsupported",
-            "reason": "Values are given, but 'dated at the top of each panic spike' is interpretive and not stated."
-          },
-          {
-            "statement": "The realtime signals are lower \u2014 from 67.97 up to 81.66 \u2014 and land a few sessions later, when the index had already retreated 5% from its local max: e.g.",
-            "verdict": "unsupported",
-            "reason": "Signals are 67.97-81.66, but the specific '5% retreat' and 'a few sessions later' claims are not in the evidence."
-          },
-          {
-            "statement": "2022-10-13 (79.8) vs.",
-            "verdict": "unsupported",
-            "reason": "The 2022-10-13 (79.8) value is in evidence, but this incomplete comparison does not follow directly from the tool output beyond the values themselves."
-          },
-          {
-            "statement": "the hindsight 2022-10-12 peak, and repeated re-triggers on 2022-09-28, 2022-10-03, 2022-10-13 and 2022-10-17.",
-            "verdict": "unsupported",
-            "reason": "The specific contrast with the 2022-10-12 peak and the 5%-retreat basis is not stated in the evidence."
-          },
-          {
-            "statement": "The realtime detector also fires more often, clustering within the same selloff rather than labeling one best point.",
-            "verdict": "unsupported",
-            "reason": "Clustering interpretation is not explicitly supported by the evidence; only event lists are given."
-          },
-          {
-            "statement": "Only the realtime dates are usable for backtests.",
-            "verdict": "unsupported",
-            "reason": "Evidence says hindsight labels are not tradable but does not state that only realtime dates are usable for backtests."
-          },
-          {
-            "statement": "scipy labeled 8 peaks in 2022, all above the 64 panic threshold, topping out at 91.94 (2022-05-09) and 91.55 (2022-03-07).",
+            "statement": "The hindsight peaks are higher and earlier: e.g.",
             "verdict": "supported",
-            "reason": "All 8 scipy peaks are above 64, with maxima 91.94 and 91.55 on those dates."
+            "reason": "Hindsight peaks are higher and earlier than the later realtime confirmations."
           },
           {
-            "statement": "realtime produced 13 causal signals in 2022, with panic readings from 67.97 (2022-05-03) to 81.66 (2022-03-09).",
+            "statement": "91.94 on 2022-05-09, 91.55 on 2022-03-07, 85.31 on 2022-10-12.",
             "verdict": "supported",
-            "reason": "Realtime shows 13 signals, min 67.97 on 2022-05-03 and max 81.66 on 2022-03-09."
+            "reason": "These exact values appear in the scipy peak list."
           },
           {
-            "statement": "Realtime signals lagged hindsight peaks by a few sessions because they require a 5% retreat from the local max (2022-10-13 vs. 2022-10-12 peak).",
-            "verdict": "unsupported",
-            "reason": "The 5%-retreat explanation and lag rationale are not stated in the evidence."
+            "statement": "The realtime signals confirm reversals later and at lower levels: 76.68 on 2022-05-13, 81.66 on 2022-03-09, and four clustered October signals (75.00 on 10-03, 79.80 on 10-13, 76.45 on 10-17).",
+            "verdict": "supported",
+            "reason": "These realtime dates/values appear in the realtime list, with October cluster of four."
           },
           {
-            "statement": "Realtime clusters within single selloffs (four signals from 2022-09-28 to 2022-10-17), while scipy labels each spike once.",
-            "verdict": "unsupported",
-            "reason": "The clustering and 'each spike once' interpretation is not explicitly supported by the evidence."
+            "statement": "The realtime detector fires in bursts around each peak, and it caught no comparable event in January or early February despite the scipy label of 79.77 on 2022-01-26 and 68.22 on 2022-02-14.",
+            "verdict": "supported",
+            "reason": "Realtime list has no January/early February events despite scipy labels on 01-26 and 02-14."
           },
           {
-            "statement": "scipy peaks are hindsight labels confirmed by later data and are not tradable signals; the realtime detector may re-trigger several times per episode and depends on the 80/5% entry and fall-back settings.",
+            "statement": "The scipy peak of 44.7 on 2022-12-12 falls below the realtime watch zone.",
             "verdict": "unsupported",
-            "reason": "Hindsight-not-tradable is supported, but 80/5% entry and fall-back settings are not in the evidence."
+            "reason": "Evidence does not define a realtime watch zone or compare 44.7 to it."
+          },
+          {
+            "statement": "scipy hindsight labeling found 8 SMH peaks in 2022, all confirmed by later values and therefore not tradable in real time.",
+            "verdict": "supported",
+            "reason": "8 scipy peaks and the hindsight/non-tradable note are stated."
+          },
+          {
+            "statement": "The realtime detector found 13 signal dates, typically several days after each scipy peak and at a lower Panic Index level (e.g. 76.68 on 2022-05-13 vs. 91.94 on 2022-05-09).",
+            "verdict": "supported",
+            "reason": "13 realtime signals, later and lower; 76.68 vs 91.94 example fits."
+          },
+          {
+            "statement": "Realtime signals cluster in bursts (three in early March, two in mid-May, four in late September\u2013October) as the index retreats and re-tests the watch zone.",
+            "verdict": "supported",
+            "reason": "Bursts of three early March, two mid-May, four late Sept\u2013Oct are visible."
+          },
+          {
+            "statement": "The January\u2013February 2022 episode (scipy 79.77 on 2022-01-26 and 68.22 on 2022-02-14) had no matching realtime confirmation, and the 2022-12-12 scipy peak at 44.7 never entered the panic watch zone.",
+            "verdict": "supported",
+            "reason": "No realtime Jan\u2013Feb events; 44.7 is below the panic threshold used elsewhere."
+          },
+          {
+            "statement": "scipy peaks use future values and are hindsight labels, not tradable signals; the realtime list is the causal one but its exact timing depends on the 80 entry threshold and 5% fall-back settings.",
+            "verdict": "unsupported",
+            "reason": "80 entry threshold and 5% fall-back settings are not in the evidence."
           },
           {
             "statement": "Historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "Generic disclaimer is supported."
+            "reason": "Generic not-investment-advice disclaimer is supported."
           }
         ]
       }
@@ -909,7 +926,6 @@
       "tools_called": [
         "search_fed_docs",
         "search_fed_docs",
-        "search_fed_docs",
         "search_fed_docs"
       ],
       "expected_tools": [
@@ -921,79 +937,75 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 3,
-      "latency_ms": 8502.1,
-      "cost_usd": 0.00334,
-      "input_tokens": 7359,
-      "output_tokens": 871,
+      "latency_ms": 8531.3,
+      "cost_usd": 0.003502,
+      "input_tokens": 8565,
+      "output_tokens": 681,
       "fallback_reason": null,
       "repairs": 0,
       "first_violations": [],
-      "placeholders": 0,
-      "answer": "The March 2022 FOMC minutes are not available to me: minutes are released about three weeks after the meeting, so as of 2022-03-25 the latest minutes in the library are from January 26, 2022 (published 2022-02-16). The March 16 statement only says the Committee \"expects to begin reducing its holdings of Treasury securities and agency debt and agency mortgage-backed securities at a coming meeting\" (statement-20220316), and Chair Powell said the Committee \"made good progress on a plan\" and expected to announce the start at a coming meeting (press_conference-20220316). On caps, the last documented views are from January: participants judged runoff would likely be faster than 2017\u20132019 (minutes-20220126). Earlier, in December, many participants said monthly caps could keep runoff measured and predictable (minutes-20211215).",
+      "placeholders": 1,
+      "answer": "The March 2022 FOMC minutes are not available as of 2022-03-25 \u2014 minutes are released about three weeks after the meeting, so no tool result covers them. What the searchable record does show is the Committee's earlier thinking on runoff caps: as of the January 26, 2022 minutes, participants generally judged that current conditions would likely warrant a faster runoff pace than 2017\u20132019 and agreed holdings would be reduced in a predictable manner mainly by adjusting reinvestment, but left timing and pace to upcoming meetings. The December 2021 minutes note that monthly caps on runoff could make the pace measured and predictable. On the dashboard, QQQ is neutral (Panic Index 38.84), so the signal holds 100%.",
       "judge": {
         "groundedness": 1.0,
-        "supported": 11,
+        "supported": 10,
         "unsupported": 0,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.002432,
+        "cost_usd": 0.001958,
         "statements": [
           {
-            "statement": "The March 2022 FOMC minutes are not available to me: minutes are released about three weeks after the meeting, so as of 2022-03-25 the latest minutes in the library are from January 26, 2022 (published 2022-02-16).",
+            "statement": "The March 2022 FOMC minutes are not available as of 2022-03-25 \u2014 minutes are released about three weeks after the meeting, so no tool result covers them.",
             "verdict": "supported",
-            "reason": "Evidence's latest minutes are minutes-20220126 (published 2022-02-16); no March minutes appear, consistent with release lag."
+            "reason": "No March 2022 minutes appear in results; the evidence's latest minutes are January 26, 2022, consistent with minutes being released after the meeting."
           },
           {
-            "statement": "The March 16 statement only says the Committee \"expects to begin reducing its holdings of Treasury securities and agency debt and agency mortgage-backed securities at a coming meeting\" (statement-20220316), and Chair Powell said the Committee \"made good progress on a plan\" and expected to announce the start at a coming meeting (press_conference-20220316).",
+            "statement": "What the searchable record does show is the Committee's earlier thinking on runoff caps: as of the January 26, 2022 minutes, participants generally judged that current conditions would likely warrant a faster runoff pace than 2017\u20132019 and agreed holdings would be reduced in a predictable manner mainly by adjusting reinvestment, but left timing and pace to upcoming meetings.",
             "verdict": "supported",
-            "reason": "statement-20220316 says 'expects to begin reducing its holdings... at a coming meeting'; press_conference-20220316 says 'made good progress on a plan' and announce at coming meeting."
+            "reason": "January 26, 2022 minutes state faster runoff than 2017\u20132019 likely and timing/pace determined at upcoming meetings."
           },
           {
-            "statement": "On caps, the last documented views are from January: participants judged runoff would likely be faster than 2017\u20132019 (minutes-20220126).",
+            "statement": "The December 2021 minutes note that monthly caps on runoff could make the pace measured and predictable.",
             "verdict": "supported",
-            "reason": "minutes-20220126 states participants generally noted a faster pace than 2017-2019; no later cap views documented."
+            "reason": "December 2021 minutes say many participants judged monthly caps could help ensure a measured and predictable pace."
           },
           {
-            "statement": "Earlier, in December, many participants said monthly caps could keep runoff measured and predictable (minutes-20211215).",
+            "statement": "On the dashboard, QQQ is neutral (Panic Index 38.84), so the signal holds 100%.",
             "verdict": "supported",
-            "reason": "minutes-20211215 states many participants judged monthly caps could help ensure measured and predictable runoff."
+            "reason": "Evidence shows QQQ neutral with Panic Index 38.84 and final_position_pct 100."
           },
           {
-            "statement": "No March 2022 minutes were published on or before 2022-03-25 (minutes release lag of roughly three weeks).",
+            "statement": "March 2022 minutes postdate 2022-03-25 and were not returned.",
             "verdict": "supported",
-            "reason": "No March 2022 minutes appear in evidence; latest is January 26, published February 16, consistent with ~3-week lag."
+            "reason": "No March 2022 minutes in results; consistent with postdating 2022-03-25."
           },
           {
-            "statement": "The March 16 statement deferred the decision, expecting to begin reducing holdings 'at a coming meeting' (statement-20220316).",
+            "statement": "January 2022 minutes: faster runoff than 2017\u20132019 likely, details deferred.",
             "verdict": "supported",
-            "reason": "statement-20220316 quotes expecting to begin reducing holdings 'at a coming meeting.'"
+            "reason": "January 2022 minutes indicate faster runoff likely and details deferred to upcoming meetings."
           },
           {
-            "statement": "Chair Powell said the Committee made 'good progress on a plan' and would announce the start at a coming meeting (press_conference-20220316).",
+            "statement": "December 2021 minutes: monthly caps seen as supporting a measured, predictable pace.",
             "verdict": "supported",
-            "reason": "press_conference-20220316 contains 'made good progress on a plan' and announce at a coming meeting."
+            "reason": "December 2021 minutes describe monthly caps as supporting measured, predictable runoff."
           },
           {
-            "statement": "January minutes said participants generally expected a faster runoff pace than 2017\u20132019, with details to be set at upcoming meetings (minutes-20220126).",
+            "statement": "QQQ neutral regime, so the rule holds its position.",
             "verdict": "supported",
-            "reason": "minutes-20220126 notes faster pace than 2017-2019 and details determined at upcoming meetings."
+            "reason": "Neutral regime and hold action with 100% position are in the evidence."
           },
           {
-            "statement": "March 2022 minutes postdate as_of and could not be retrieved; the specific cap sizes were not yet public.",
+            "statement": "Specific cap sizes and phase-in schedule from the March 2022 minutes cannot be verified with tools at this date; no specific cap figures are quoted.",
             "verdict": "supported",
-            "reason": "No March minutes retrieved and no specific cap sizes appear in evidence."
+            "reason": "No specific cap figures or phase-in schedule appear in tool results for March 2022; evidence shows this cannot be verified."
           },
           {
             "statement": "Historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "Generic disclaimer is supported."
-          },
-          {
-            "statement": "The strategy signal is computed by code and shown elsewhere; it does not bear on this policy question.",
-            "verdict": "supported",
-            "reason": "Signal is code-computed and shown above; does not bear on the Fed policy question."
+            "reason": "Generic disclaimer about research not being investment advice is supported."
           }
         ]
       }
@@ -1003,7 +1015,8 @@
       "success": true,
       "tool_selection_correct": true,
       "tools_called": [
-        "search_fed_docs"
+        "search_fed_docs",
+        "get_regime"
       ],
       "expected_tools": [
         "search_fed_docs"
@@ -1014,69 +1027,78 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
-      "steps": 2,
-      "latency_ms": 5183.2,
-      "cost_usd": 0.001265,
-      "input_tokens": 2126,
-      "output_tokens": 487,
+      "steps": 3,
+      "latency_ms": 8222.4,
+      "cost_usd": 0.001956,
+      "input_tokens": 2178,
+      "output_tokens": 1004,
       "fallback_reason": null,
-      "repairs": 0,
-      "first_violations": [],
-      "placeholders": 2,
-      "answer": "I can't answer that as of 2024-08-30: the September 2024 FOMC meeting had not yet occurred, and search_fed_docs returned no September 2024 statement, minutes, or press conference (latest decision passages available are from earlier meetings, e.g., doc_id minutes-20240320). So there is no tool-grounded description of what the Committee decided in September 2024. What the tools do show for context on the strategy: as of 2024-08-30, SPX is in the neutral regime with a Panic Index of 25.72 (percentile 22.3), and the signal's action on that observation is hold, leaving exposure at 60%; the next session it holds, adding only on a close above 64 or reducing below 15. This is historical research, not investment advice.",
+      "repairs": 1,
+      "first_violations": [
+        "placeholder error: {bt1.strategy_return_pct} names an unknown run_backtest call id (this turn: none)",
+        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: none)"
+      ],
+      "placeholders": 1,
+      "answer": "I can't answer that from this session: the September 2024 FOMC meeting had not happened as of the 2024-08-30 cutoff, so no statement, minutes, or press conference from it exists in the document library. The latest decision on record is the July 31, 2024 statement, where the Committee kept the target range at 5-1/4 to 5-1/2 percent (statement-20240731) and said it does not expect it will be appropriate to reduce the range until it has gained greater confidence that inflation is moving sustainably toward 2 percent. Post-cutoff outcomes are outside what I can verify. Separately, the SPX regime on 2024-08-30 is neutral at a Panic Index of 25.72, so the signal holds; the strategy path's final exposure is 60%, and over the standard window the strategy's cumulative return was 8.61% versus Buy & Hold's 35.67%. Historical research, not investment advice.",
       "judge": {
         "groundedness": 1.0,
-        "supported": 9,
+        "supported": 10,
         "unsupported": 0,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.001045,
+        "cost_usd": 0.001194,
         "statements": [
           {
-            "statement": "I can't answer that as of 2024-08-30: the September 2024 FOMC meeting had not yet occurred, and search_fed_docs returned no September 2024 statement, minutes, or press conference (latest decision passages available are from earlier meetings, e.g., doc_id minutes-20240320).",
+            "statement": "I can't answer that from this session: the September 2024 FOMC meeting had not happened as of the 2024-08-30 cutoff, so no statement, minutes, or press conference from it exists in the document library.",
             "verdict": "supported",
-            "reason": "Search results return no September 2024 docs; latest decision passage is minutes-20240320."
+            "reason": "Evidence cutoff is 2024-08-30; the September 2024 meeting is after that date, so no such document exists in the library."
           },
           {
-            "statement": "So there is no tool-grounded description of what the Committee decided in September 2024.",
+            "statement": "The latest decision on record is the July 31, 2024 statement, where the Committee kept the target range at 5-1/4 to 5-1/2 percent (statement-20240731) and said it does not expect it will be appropriate to reduce the range until it has gained greater confidence that inflation is moving sustainably toward 2 percent.",
             "verdict": "supported",
-            "reason": "Follows directly from the absence of September 2024 decision documents."
+            "reason": "statement-20240731 held the range at 5-1/4 to 5-1/2 percent and stated it does not expect to reduce until greater confidence inflation moves toward 2 percent."
           },
           {
-            "statement": "What the tools do show for context on the strategy: as of 2024-08-30, SPX is in the neutral regime with a Panic Index of 25.72 (percentile 22.3), and the signal's action on that observation is hold, leaving exposure at 60%; the next session it holds, adding only on a close above 64 or reducing below 15.",
+            "statement": "Post-cutoff outcomes are outside what I can verify.",
             "verdict": "supported",
-            "reason": "Matches evidence: neutral, Panic Index 25.72 (22.3 percentile), hold at 60%, add above 64, reduce below 15."
+            "reason": "Consistent with the as_of cutoff of 2024-08-30; post-cutoff outcomes are not in the evidence."
           },
           {
-            "statement": "This is historical research, not investment advice.",
+            "statement": "Separately, the SPX regime on 2024-08-30 is neutral at a Panic Index of 25.72, so the signal holds; the strategy path's final exposure is 60%, and over the standard window the strategy's cumulative return was 8.61% versus Buy & Hold's 35.67%.",
+            "verdict": "supported",
+            "reason": "Regime neutral, Panic Index 25.72, final exposure 60, strategy 8.61% vs Buy & Hold 35.67% all match the evidence."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
             "verdict": "supported",
             "reason": "Generic disclaimer is supported."
           },
           {
-            "statement": "The as_of cutoff is 2024-08-30, before the September 2024 FOMC meeting, and no September 2024 decision documents were returned by search_fed_docs.",
+            "statement": "No FOMC document dated after 2024-08-30 is available; the September 2024 meeting is past the as_of cutoff.",
             "verdict": "supported",
-            "reason": "as_of 2024-08-30 precedes the September 2024 meeting and no such docs returned."
+            "reason": "No FOMC document after 2024-08-30 appears; the cutoff excludes the September 2024 meeting."
           },
           {
-            "statement": "The most recent FOMC decision passage returned is from the March 2024 meeting (doc_id minutes-20240320), unrelated to a September 2024 decision.",
+            "statement": "The most recent decision in the library is the July 31, 2024 statement holding the target range at 5-1/4 to 5-1/2 percent.",
             "verdict": "supported",
-            "reason": "Most recent decision passage in results is minutes-20240320."
+            "reason": "The latest dated statement in results is 2024-07-31 holding 5-1/4 to 5-1/2 percent."
           },
           {
-            "statement": "SPX sat in the neutral regime at 25.72 Panic Index (percentile 22.3) on 2024-08-30, so the signal's action that day is hold at 60%.",
+            "statement": "SPX is in a neutral regime on 2024-08-30 (Panic Index 25.72, percentile 22.3), so the signal takes no threshold-driven action.",
             "verdict": "supported",
-            "reason": "Matches evidence exactly on regime, index, percentile, action, and position."
+            "reason": "Neutral regime, Panic Index 25.72, percentile 22.3, and no threshold-driven action all match the evidence."
           },
           {
-            "statement": "The requested event postdates the as_of cutoff, so it cannot be researched here without hindsight; asking again with a later as_of date would be needed.",
+            "statement": "Question falls after the as_of date; answering would require post-cutoff information the tools exclude.",
             "verdict": "supported",
-            "reason": "Event postdates as_of cutoff and isn't covered by returned documents."
+            "reason": "Consistent with the as_of 2024-08-30 cutoff and document exclusion."
           },
           {
-            "statement": "Historical research only, not investment advice.",
+            "statement": "Backtest figures are hypothetical and hindsight-informed; Buy & Hold outperformed the strategy over the standard window.",
             "verdict": "supported",
-            "reason": "Generic disclaimer is supported."
+            "reason": "Backtest is hypothetical/hindsight-informed and Buy & Hold 35.67% exceeded strategy 8.61% over the standard window."
           }
         ]
       }
@@ -1086,7 +1108,6 @@
       "success": true,
       "tool_selection_correct": true,
       "tools_called": [
-        "get_regime",
         "run_backtest",
         "get_forward_returns"
       ],
@@ -1099,98 +1120,390 @@
       "leaked": false,
       "leaked_dates": [],
       "leaked_phrases": [],
+      "user_position_problems": [],
       "as_of_clamped_calls": 0,
       "steps": 3,
-      "latency_ms": 9024.7,
-      "cost_usd": 0.002121,
-      "input_tokens": 1881,
-      "output_tokens": 1233,
+      "latency_ms": 8406.2,
+      "cost_usd": 0.002084,
+      "input_tokens": 1762,
+      "output_tokens": 1218,
       "fallback_reason": null,
       "repairs": 1,
       "first_violations": [
-        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: Since 2023-01-03 on QQQ, greed-regime days (Panic Index below 15) each cut exposure by 10%, within a 0%\u2013100% band; the what-if run over that window ended at 60% exposure, averaging 29.5%.",
-        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: Greed regime is Panic Index below 15, and each such day reduces exposure by 10% down to a 0% floor.",
-        "raw position figure 0%: write position figures only as placeholders such as {current_exposure}: Greed regime is Panic Index below 15, and each such day reduces exposure by 10% down to a 0% floor."
+        "placeholder error: {bt1.latest_action}: latest_action is not one of final_position_pct, previous_position_pct, initial_position_pct, add_pct, reduce_pct, max_position_pct, min_position_pct, average_exposure_pct, time_below_full_exposure_pct, strategy_return_pct, buyhold_return_pct, strategy_max_drawdown_pct, buyhold_max_drawdown_pct, upside_drag_pp, downside_cushion_pp, strategy_sharpe, buyhold_sharpe, strategy_calmar, buyhold_calmar",
+        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: On QQQ from 2023-01-03 through 2024-12-31, the rule cut exposure by 10% on each greed-regime day (Panic Index below 15), and there were 44 such signal days in that window (last one 2024-03-04).",
+        "raw position figure 10%: write position figures only as placeholders such as {current_exposure}: 44 greed-regime days occurred on QQQ between 2023-01-03 and 2024-12-31, each reducing exposure by 10% under the position rule."
       ],
-      "placeholders": 19,
-      "answer": "Since 2023-01-03 on QQQ, each greed-regime day (Panic Index below 15) cuts exposure by 10%, bounded by 0% and 100%; the what-if run over that window ended at 60% exposure, averaging 29.5%. The signal says the latest 2024-12-31 observation is neutral (Panic Index 47.12, percentile 70) and the action was hold. There were 44 greed days, most recently 2024-03-04. Over this window the upside drag was 167.66pp, against a downside cushion of 133.15pp. Buy & Hold beat the strategy on return, 95.79% versus 42.19%, though the rule had the smaller drawdown (-4.24% vs. -13.56%) and higher Sharpe.",
+      "placeholders": 18,
+      "answer": "On QQQ from 2023-01-03 through 2024-12-31, the rule cut exposure by 10% on each greed-regime day (Panic Index below 15), and there were 44 such signal days in that window (last one 2024-03-04). Those reductions kept the strategy's average exposure at 29.5%, so the rule finished at 60% exposure and held there on the latest neutral observation. The cost was real: upside drag of 167.66pp and a strategy return of 42.19% versus Buy & Hold's 95.79% \u2014 Buy & Hold won on return. The offset was drawdown: -4.24% versus -13.56%, giving 2.138 vs 1.973 Sharpe.",
       "judge": {
-        "groundedness": 0.857,
-        "supported": 12,
-        "unsupported": 2,
+        "groundedness": 1.0,
+        "supported": 10,
+        "unsupported": 0,
         "contradicted": 0,
         "unjudged": 0,
-        "cost_usd": 0.001272,
+        "cost_usd": 0.001017,
         "statements": [
           {
-            "statement": "Since 2023-01-03 on QQQ, each greed-regime day (Panic Index below 15) cuts exposure by 10%, bounded by 0% and 100%; the what-if run over that window ended at 60% exposure, averaging 29.5%.",
+            "statement": "On QQQ from 2023-01-03 through 2024-12-31, the rule cut exposure by 10% on each greed-regime day (Panic Index below 15), and there were 44 such signal days in that window (last one 2024-03-04).",
             "verdict": "supported",
-            "reason": "Position rule and bt1 match: greed below 15 reduces 10%, bounded 0-100%, ended 60%, avg exposure 29.5%."
+            "reason": "Position rule cuts 10% per greed-regime day (Panic below 15); forward returns show 44 signal days, last 2024-03-04."
           },
           {
-            "statement": "The signal says the latest 2024-12-31 observation is neutral (Panic Index 47.12, percentile 70) and the action was hold.",
+            "statement": "Those reductions kept the strategy's average exposure at 29.5%, so the rule finished at 60% exposure and held there on the latest neutral observation.",
             "verdict": "supported",
-            "reason": "get_regime shows neutral, Panic Index 47.12, percentile 70, and action hold."
+            "reason": "Average exposure 29.5%, final_position_pct 60, latest_action hold on neutral regime."
           },
           {
-            "statement": "There were 44 greed days, most recently 2024-03-04.",
+            "statement": "The cost was real: upside drag of 167.66pp and a strategy return of 42.19% versus Buy & Hold's 95.79% \u2014 Buy & Hold won on return.",
             "verdict": "supported",
-            "reason": "get_forward_returns shows signal_days 44 and last_signal_date 2024-03-04."
+            "reason": "Upside drag 167.66pp; strategy 42.19% vs Buy & Hold 95.79%."
           },
           {
-            "statement": "Over this window the upside drag was 167.66pp, against a downside cushion of 133.15pp.",
+            "statement": "The offset was drawdown: -4.24% versus -13.56%, giving 2.138 vs 1.973 Sharpe.",
             "verdict": "supported",
-            "reason": "bt1 reports upside_drag_pp 167.66 and downside_cushion_pp 133.15."
+            "reason": "Max drawdown -4.24% vs -13.56%; Sharpe 2.138 vs 1.973."
           },
           {
-            "statement": "Buy & Hold beat the strategy on return, 95.79% versus 42.19%, though the rule had the smaller drawdown (-4.24% vs.",
+            "statement": "44 greed-regime days occurred on QQQ between 2023-01-03 and 2024-12-31, each cutting exposure by 10% under the position rule.",
             "verdict": "supported",
-            "reason": "bt1 shows Buy & Hold 95.79% vs strategy 42.19%, and smaller strategy drawdown -4.24% vs -13.56%."
+            "reason": "44 greed signal days confirmed; each reduces 10% per position rule."
           },
           {
-            "statement": "-13.56%) and higher Sharpe.",
+            "statement": "Average exposure over the window was 29.5%, with 100% of the time below full exposure.",
             "verdict": "supported",
-            "reason": "Drawdown -4.24% vs -13.56% and Sharpe 2.138 vs 1.973 support this."
+            "reason": "average_exposure_pct 29.5 and time_below_full_exposure_pct 100.0."
           },
           {
-            "statement": "Greed regime is Panic Index below 15, and each such day reduces exposure by 10%, with the rule bounded by 0% and 100%.",
+            "statement": "Upside drag reached 167.66pp against a downside cushion of 133.15pp, and Buy & Hold's 95.79% beat the strategy's 42.19%.",
             "verdict": "supported",
-            "reason": "Position rule states greed below 15 reduces 10% per day, bounded 0-100%."
+            "reason": "Upside drag 167.66pp, downside cushion 133.15pp; Buy & Hold 95.79% beats 42.19%."
           },
           {
-            "statement": "In the 2023-onward what-if backtest the rule averaged 29.5% exposure and ended at 60%, with upside drag of 167.66pp.",
+            "statement": "The latest observation (2024-12-31) is neutral at Panic Index 47.12, so the path holds 60% and the next session adds on a close above 64 or reduces on a close below 15.",
             "verdict": "supported",
-            "reason": "bt1 shows average_exposure_pct 29.5, final_position_pct 60, upside_drag_pp 167.66."
+            "reason": "Latest neutral at 47.12, holds 60%; next session adds above 64, reduces below 15."
           },
           {
-            "statement": "44 greed-regime days occurred since 2023, the last on 2024-03-04; their forward 21-day win rate was 65.9% with mean return 1.52%, so reducing exposure there cost participation.",
-            "verdict": "unsupported",
-            "reason": "44 days and 21-day win rate 65.9%/mean 1.52% are supported, but the claim that reducing exposure 'cost participation' is an inference not stated in the evidence."
-          },
-          {
-            "statement": "Buy & Hold returned 95.79% versus 42.19% for the rule over 2023-2024, while the rule showed the smaller drawdown.",
+            "statement": "This is a what-if backtest starting 2023-01-03, not the standard window; greed days are overlapping exposure days, not independent signals, and results are hindsight-labeled historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "bt1 shows Buy & Hold 95.79% vs 42.19% and smaller strategy drawdown."
+            "reason": "Backtest starts 2023-01-03; note states overlapping exposure days and historical evidence; disclaimer supported."
           },
           {
-            "statement": "This is a what-if backtest with hindsight thresholds and overlapping regime days; returns are not guaranteed.",
+            "statement": "No Fed documents were used, so no policy citations apply.",
             "verdict": "supported",
-            "reason": "Evidence notes overlapping regime days, historical/not guaranteed; what-if/hindsight framing is consistent with the backtest context."
-          },
+            "reason": "Evidence contains no Fed documents, so no policy citations apply."
+          }
+        ]
+      }
+    },
+    {
+      "id": "a13",
+      "success": true,
+      "tool_selection_correct": true,
+      "tools_called": [
+        "plan_position",
+        "get_regime"
+      ],
+      "expected_tools": [
+        "plan_position"
+      ],
+      "citation_precision": 1.0,
+      "numeric_faithfulness": 1.0,
+      "unsupported_numbers": [],
+      "leaked": false,
+      "leaked_dates": [],
+      "leaked_phrases": [],
+      "user_position_problems": [],
+      "as_of_clamped_calls": 0,
+      "steps": 3,
+      "latency_ms": 7590.9,
+      "cost_usd": 0.001623,
+      "input_tokens": 1349,
+      "output_tokens": 941,
+      "fallback_reason": null,
+      "repairs": 1,
+      "first_violations": [
+        "placeholder error: {bt1.strategy_return_pct} names an unknown run_backtest call id (this turn: pp1)",
+        "placeholder error: {bt1.buyhold_return_pct} names an unknown run_backtest call id (this turn: pp1)",
+        "raw position figure 0%: write position figures only as placeholders such as {current_exposure}: With no QQQ position today, applying today's panic regime once to your 0% position, the rule adds 20% to your position, taking it from 0% to 20%.",
+        "raw position figure 0%: write position figures only as placeholders such as {current_exposure}: plan_position from a 0% position applies one panic-regime step of 20%, ending at 20%."
+      ],
+      "placeholders": 8,
+      "answer": "With no QQQ position today, applying today's panic regime once to your 0% position, the rule adds 20% to your position, taking it to 20%. That is a single step from your starting point, not the strategy path, which already holds 100% and simply holds today (panic regime, already at the cap). The regime reading is panic: Panic Index 65.75 (percentile 90.4), built from VIX 24.87 and CNN Fear & Greed 17.2 (extreme fear). From that new position, the next step adds again if the index closes above 64 and reduces if it closes below 15. Note that over the standard backtest window Buy & Hold finished ahead of the strategy path, 54.09% versus 15.23%.",
+      "judge": {
+        "groundedness": 1.0,
+        "supported": 12,
+        "unsupported": 0,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.000857,
+        "statements": [
           {
-            "statement": "Position sizes are rule outputs, not advice.",
+            "statement": "With no QQQ position today, applying today's panic regime once to your 0% position, the rule adds 20% to your position, taking it to 20%.",
             "verdict": "supported",
-            "reason": "Generic disclaimer that position sizes are rule outputs, not advice is supported."
+            "reason": "plan_position from 0% applies +20%, target 20%."
           },
           {
-            "statement": "Fed documents were not needed here, so no doc_ids are cited.",
-            "verdict": "unsupported",
-            "reason": "The evidence does not mention Fed documents or doc_ids."
+            "statement": "That is a single step from your starting point, not the strategy path, which already holds 100% and simply holds today (panic regime, already at the cap).",
+            "verdict": "supported",
+            "reason": "Evidence distinguishes plan_position (20%) from strategy path holding 100% at cap."
+          },
+          {
+            "statement": "The regime reading is panic: Panic Index 65.75 (percentile 90.4), built from VIX 24.87 and CNN Fear & Greed 17.2 (extreme fear).",
+            "verdict": "supported",
+            "reason": "Regime, index, percentile, VIX, and Fear & Greed values match evidence."
+          },
+          {
+            "statement": "From that new position, the next step adds again if the index closes above 64 and reduces if it closes below 15.",
+            "verdict": "supported",
+            "reason": "next_rule states add above 64, reduce below 15."
+          },
+          {
+            "statement": "Note that over the standard backtest window Buy & Hold finished ahead of the strategy path, 54.09% versus 15.23%.",
+            "verdict": "supported",
+            "reason": "Backtest: Buy & Hold 54.09% vs strategy 15.23%."
+          },
+          {
+            "statement": "QQQ is in the panic regime on 2025-03-06 with a Panic Index of 65.75 (percentile 90.4), above the 64 threshold.",
+            "verdict": "supported",
+            "reason": "Panic regime, index 65.75, percentile 90.4, above 64 threshold."
+          },
+          {
+            "statement": "The index components are VIX 24.87 and CNN Fear & Greed 17.2 (extreme fear), so the regime call is driven by both.",
+            "verdict": "supported",
+            "reason": "VIX 24.87 and Fear & Greed 17.2 extreme fear are given; regime is panic."
+          },
+          {
+            "statement": "plan_position starting from your 0% applies one panic-regime step of 20%, ending at 20%.",
+            "verdict": "supported",
+            "reason": "plan_position applies one 20% step ending at 20%."
+          },
+          {
+            "statement": "The strategy path itself already holds 100% and holds today because it is at the cap.",
+            "verdict": "supported",
+            "reason": "Strategy path holds 100%, at cap, action hold."
+          },
+          {
+            "statement": "plan_position applies one step only; it does not replay history and is not a forecast.",
+            "verdict": "supported",
+            "reason": "plan_position output shows single step, no history replay or forecast."
+          },
+          {
+            "statement": "The regime index is a threshold heuristic, and in the standard backtest Buy & Hold beat the strategy.",
+            "verdict": "supported",
+            "reason": "Threshold rule and Buy & Hold outperformance are both in evidence."
           },
           {
             "statement": "Historical research, not investment advice.",
             "verdict": "supported",
-            "reason": "Generic 'not investment advice' disclaimer is supported."
+            "reason": "Generic disclaimer is supported."
+          }
+        ]
+      }
+    },
+    {
+      "id": "a14",
+      "success": true,
+      "tool_selection_correct": true,
+      "tools_called": [
+        "plan_position",
+        "get_regime"
+      ],
+      "expected_tools": [
+        "plan_position"
+      ],
+      "citation_precision": 1.0,
+      "numeric_faithfulness": 1.0,
+      "unsupported_numbers": [],
+      "leaked": false,
+      "leaked_dates": [],
+      "leaked_phrases": [],
+      "user_position_problems": [],
+      "as_of_clamped_calls": 0,
+      "steps": 3,
+      "latency_ms": 7533.0,
+      "cost_usd": 0.001683,
+      "input_tokens": 1172,
+      "output_tokens": 1034,
+      "fallback_reason": null,
+      "repairs": 1,
+      "first_violations": [
+        "raw position figure 50%: write position figures only as placeholders such as {current_exposure}: From your 50% position, the rule reduces your position by 10% to 40%."
+      ],
+      "placeholders": 6,
+      "answer": "From your current position of 50%, the rule reduces your position by 10% to 40%. QQQ sits in the greed regime on 2023-06-16: Panic Index 9.37 (percentile 0.2), below the 15 sell threshold, built from VIX 13.54 and CNN Fear & Greed 81.26 (extreme greed). The signal path reached the same action from its own path, having cut to the 0% floor. From your new level, the next step adds 20% if the Panic Index closes above 64, reduces 10% if it closes below 15, and otherwise holds. Note the standard backtest's Buy & Hold return (14.83%) beat the strategy's 5.73% over 2021-05-17 to 2023-06-16, so the rules have lagged in a rising tape. Historical research, not investment advice.",
+      "judge": {
+        "groundedness": 0.846,
+        "supported": 11,
+        "unsupported": 2,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.000885,
+        "statements": [
+          {
+            "statement": "From your current position of 50%, the rule reduces your position by 10% to 40%.",
+            "verdict": "supported",
+            "reason": "plan_position shows 50% reduced by 10% to 40%."
+          },
+          {
+            "statement": "QQQ sits in the greed regime on 2023-06-16: Panic Index 9.37 (percentile 0.2), below the 15 sell threshold, built from VIX 13.54 and CNN Fear & Greed 81.26 (extreme greed).",
+            "verdict": "supported",
+            "reason": "Regime evidence gives panic 9.37, percentile 0.2, below 15, VIX 13.54, F&G 81.26 extreme greed."
+          },
+          {
+            "statement": "The signal path reached the same action from its own path, having cut to the 0% floor.",
+            "verdict": "supported",
+            "reason": "Strategy path reduced to 0% floor; plan_position applies same action from 50%."
+          },
+          {
+            "statement": "From your new level, the next step adds 20% if the Panic Index closes above 64, reduces 10% if it closes below 15, and otherwise holds.",
+            "verdict": "supported",
+            "reason": "next_rule states add 20% above 64, reduce 10% below 15, otherwise hold."
+          },
+          {
+            "statement": "Note the standard backtest's Buy & Hold return (14.83%) beat the strategy's 5.73% over 2021-05-17 to 2023-06-16, so the rules have lagged in a rising tape.",
+            "verdict": "supported",
+            "reason": "Backtest states strategy 5.73% vs Buy & Hold 14.83% over the window."
+          },
+          {
+            "statement": "Historical research, not investment advice.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not state this disclaimer."
+          },
+          {
+            "statement": "QQQ's Panic Index was 9.37 on 2023-06-16 (percentile 0.2), classifying the market as greed rather than panic.",
+            "verdict": "supported",
+            "reason": "Panic 9.37 percentile 0.2 with greed regime is in evidence."
+          },
+          {
+            "statement": "Greed regime applies one reduce step to your holdings: the rule reduces your position by 10% to 40%.",
+            "verdict": "supported",
+            "reason": "plan_position confirms reduce 10% from 50% to 40%."
+          },
+          {
+            "statement": "The step is capped by the 0% floor only for the strategy path; from your starting position it lands at 40%.",
+            "verdict": "supported",
+            "reason": "Strategy path hit 0% floor; from 50% the step lands at 40%."
+          },
+          {
+            "statement": "In the standard backtest window Buy & Hold returned 14.83% versus 5.73% for the strategy.",
+            "verdict": "supported",
+            "reason": "Backtest window shows Buy & Hold 14.83% vs strategy 5.73%."
+          },
+          {
+            "statement": "The 64/15 thresholds and step sizes are fixed backtest parameters, and regime labels are mechanical composites of VIX and CNN Fear & Greed; greed is treated as a risk warning, not a guaranteed exit signal.",
+            "verdict": "supported",
+            "reason": "Thresholds/steps are given as parameters; get_regime interpretation notes greed is a risk warning, not an immediate exit."
+          },
+          {
+            "statement": "The comparison figures come from a fixed 2021-05-17 to 2023-06-16 window.",
+            "verdict": "supported",
+            "reason": "Window 2021-05-17 to 2023-06-16 is explicitly stated."
+          },
+          {
+            "statement": "Historical research only, not investment advice.",
+            "verdict": "unsupported",
+            "reason": "Evidence does not include this disclaimer."
+          }
+        ]
+      }
+    },
+    {
+      "id": "a15",
+      "success": true,
+      "tool_selection_correct": true,
+      "tools_called": [
+        "plan_position",
+        "plan_position",
+        "plan_position",
+        "plan_position",
+        "plan_position"
+      ],
+      "expected_tools": [
+        "plan_position"
+      ],
+      "citation_precision": 1.0,
+      "numeric_faithfulness": 1.0,
+      "unsupported_numbers": [],
+      "leaked": false,
+      "leaked_dates": [],
+      "leaked_phrases": [],
+      "user_position_problems": [],
+      "as_of_clamped_calls": 0,
+      "steps": 3,
+      "latency_ms": 8595.8,
+      "cost_usd": 0.002032,
+      "input_tokens": 1829,
+      "output_tokens": 1154,
+      "fallback_reason": null,
+      "repairs": 1,
+      "first_violations": [
+        "placeholder error: {bt_standard.strategy_return_pct} names an unknown run_backtest or plan_position call id (this turn: pp1, pp2, pp3, pp4, pp5)",
+        "placeholder error: {bt_standard.buyhold_return_pct} names an unknown run_backtest or plan_position call id (this turn: pp1, pp2, pp3, pp4, pp5)",
+        "raw position figure 20%: write position figures only as placeholders such as {current_exposure}: QQQ is in the panic regime (Panic Index 65.75, percentile 90.4), so one step of the rule adds 20% today from each starting position below the cap: from 0% the rule adds 20% to 20%; from 20% it adds 20% to 40%; from 50% it adds 20% to 70%; from 80% it adds 20% to 100%.",
+        "raw position figure 100%: write position figures only as placeholders such as {current_exposure}: Each position below the 100% cap moves up by the fixed add step, whatever its starting level.",
+        "raw position figure 100%: write position figures only as placeholders such as {current_exposure}: The 100% start needs no add because it is already at the maximum position."
+      ],
+      "placeholders": 11,
+      "answer": "QQQ is in the panic regime (Panic Index 65.75, percentile 90.4), so one step of the rule adds today from each starting position below the cap: from 0% the rule adds 20% to 20%; from 20% it adds 20% to 40%; from 50% it adds 20% to 70%; from 80% it adds 20% to 100%. From 100% it holds at 100% because it is already at the cap (0% change). The strategy path, followed since 2021-05-17, likewise holds 100%. Note that over the standard window Buy & Hold beat the strategy: 54.09% versus 15.23% for the strategy.",
+      "judge": {
+        "groundedness": 1.0,
+        "supported": 10,
+        "unsupported": 0,
+        "contradicted": 0,
+        "unjudged": 0,
+        "cost_usd": 0.001047,
+        "statements": [
+          {
+            "statement": "QQQ is in the panic regime (Panic Index 65.75, percentile 90.4), so one step of the rule adds today from each starting position below the cap: from 0% the rule adds 20% to 20%; from 20% it adds 20% to 40%; from 50% it adds 20% to 70%; from 80% it adds 20% to 100%.",
+            "verdict": "supported",
+            "reason": "Matches evidence: panic 65.75/90.4 percentile; adds 20% from 0\u219220, 20\u219240, 50\u219270, 80\u2192100."
+          },
+          {
+            "statement": "From 100% it holds at 100% because it is already at the cap (0% change).",
+            "verdict": "supported",
+            "reason": "pp5 shows 100% holds at 100% with 0% change, at the cap."
+          },
+          {
+            "statement": "The strategy path, followed since 2021-05-17, likewise holds 100%.",
+            "verdict": "supported",
+            "reason": "Evidence states strategy path holds 100% reached continuously since 2021-05-17."
+          },
+          {
+            "statement": "Note that over the standard window Buy & Hold beat the strategy: 54.09% versus 15.23% for the strategy.",
+            "verdict": "supported",
+            "reason": "Backtest shows strategy 15.23% vs Buy & Hold 54.09%."
+          },
+          {
+            "statement": "Panic Index 65.75 sits above the 64 buy threshold, so the latest observation is in the panic regime and the step is an add.",
+            "verdict": "supported",
+            "reason": "65.75 is above 64 threshold, regime panic, action add."
+          },
+          {
+            "statement": "Each position below the cap moves up by the fixed add step, whatever its starting level.",
+            "verdict": "supported",
+            "reason": "All below-cap positions in pp1\u2013pp4 increase by the fixed 20% add step."
+          },
+          {
+            "statement": "The highest starting position needs no add because it is already at the maximum position.",
+            "verdict": "supported",
+            "reason": "100% starting position holds because already at max (pp5)."
+          },
+          {
+            "statement": "In the standard backtest window Buy & Hold returned more than the strategy path.",
+            "verdict": "supported",
+            "reason": "Buy & Hold 54.09% exceeds strategy 15.23%."
+          },
+          {
+            "statement": "Historical research, not investment advice; no Fed documents were needed for this position-rule question.",
+            "verdict": "supported",
+            "reason": "Generic disclaimer; no Fed documents needed for a position-rule question."
+          },
+          {
+            "statement": "These are single-step applications of the rule to hypothetical starting positions, not forecasts; the standard backtest's strategy return of 15.23% lagged Buy & Hold's 54.09%.",
+            "verdict": "supported",
+            "reason": "These are single-step rule applications and 15.23% lagged 54.09%."
           }
         ]
       }
