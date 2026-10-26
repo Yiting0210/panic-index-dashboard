@@ -1,12 +1,15 @@
 """Strategy-consistency evaluation: does the answer agree with the signal?
 
 Two layers:
-    offline - no API key (CI). Checks that each fixture's standard backtest
-              lands in its expected scenario, and that the validator accepts
-              the consistent probe answer and rejects every planted
-              contradiction (fabricated position, contradictory direction).
+    offline - no API key (CI). Checks that each fixture's code-owned decision
+              (the standard backtest) lands in its expected scenario, and
+              that the runtime contract accepts the consistent probe and
+              rejects every planted restatement of a position (fabricated
+              position, current_equals_*). Contradictory-direction probes are
+              reported but not blocked at runtime (#35): the judge measures
+              prose that contradicts the decision.
     agent   - asks each fixture's question through the agent and counts
-              answers the validator rejected, plus as-of leakage.
+              answers that broke the contract, plus as-of leakage.
               --mode record/live calls the real API; replay uses recordings.
 
 Usage:
@@ -53,8 +56,9 @@ def run_offline(fixtures):
         signal = build_strategy_signal(fixture["market"], fixture["as_of"])
         for kind, text in fixture["probes"].items():
             # Probes are written like model output: placeholders, then rendering.
-            violations = validate_answer(render(text, signal), signal)
-            should_pass = kind == "consistent"
+            violations = validate_answer(render(text, signal))
+            # Direction wording is eval-only now, so the runtime passes it.
+            should_pass = kind in ("consistent", "contradictory_direction")
             rows.append({
                 "id": fixture["id"],
                 "probe": kind,
@@ -62,14 +66,18 @@ def run_offline(fixtures):
                 "correct": bool(violations) != should_pass,
                 "violations": violations,
             })
-    planted = [r for r in rows if r["probe"] != "consistent"]
+    planted = [r for r in rows if r["probe"] not in ("consistent", "contradictory_direction")]
     clean = [r for r in rows if r["probe"] == "consistent"]
+    direction = [r for r in rows if r["probe"] == "contradictory_direction"]
     summary = {
         "fixtures": len(fixtures),
         "signal_mismatches": sum(bool(r["signal_mismatches"]) for r in clean),
-        "planted_contradictions": len(planted),
+        "planted_restatements": len(planted),
         "detection_rate": round(mean(r["correct"] for r in planted), 3),
         "false_positive_rate": round(mean(not r["correct"] for r in clean), 3),
+        # Not blocked at runtime by design; listed so the change is visible.
+        "direction_probes_not_blocked": sum(r["correct"] for r in direction),
+        "direction_probes": len(direction),
     }
     return summary, rows
 

@@ -1,10 +1,10 @@
 """LLM-judge groundedness: is each statement supported by this turn's evidence?
 
-Position figures are guaranteed by code (placeholders), but the prose around
-them (reasons, Fed context, caveats) can still drift from the tool results.
-This judge splits an answer into statements and asks a model to label each
-one against the evidence the assistant had: the strategy signal and every
-tool result of the turn.
+Decision facts are code-owned (assistant/presentation.py), but the
+explanation around them (reasons, Fed context, risks) can still drift from
+the tool results or contradict the decision. This judge splits an answer
+into statements and asks a model to label each one against the evidence the
+assistant had: the decision facts and every tool result of the turn.
 
 It is a measurement, not a gate: the score is reported by the live evals and
 never blocks an answer. Labels:
@@ -43,17 +43,19 @@ EVIDENCE_LIMIT = 6000  # characters per tool result
 
 
 def statements(result):
-    """The answer's sentences, key reasons, and caveats, one statement each."""
+    """The summary's sentences, why sentences, historical context, and risks."""
     items = [s.strip() for s in SENTENCE_RE.split(result.answer) if s.strip()]
     items += [r for r in result.key_reasons if r.strip()]
-    if result.caveats and result.caveats.strip().lower() != "none":
-        items += [s.strip() for s in SENTENCE_RE.split(result.caveats) if s.strip()]
+    items += [s.strip() for s in SENTENCE_RE.split(result.historical_context) if s.strip()]
+    items += [r.strip() for r in result.risks if r.strip() and r.strip().lower() != "none"]
     return items
 
 
 def evidence(result):
     parts = []
-    if result.signal is not None:
+    if result.decision is not None:
+        parts.append(result.decision.prompt_block())
+    elif result.signal is not None:
         parts.append(result.signal.prompt_block())
     for call in result.tool_calls:
         payload = json.dumps(call.result, default=str)[:EVIDENCE_LIMIT]

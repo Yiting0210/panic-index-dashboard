@@ -1,4 +1,5 @@
-"""The rule applied once to the user's own position (#33), and its placeholders."""
+"""The rule applied once to the user's own position (#33) and the code-owned
+decision facts built from it (#35)."""
 import os
 import sys
 from datetime import date
@@ -7,7 +8,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from assistant import build_strategy_signal, position_plans, render, validate_answer  # noqa: E402
+from assistant import (boundary_state, build_decision, build_strategy_signal,  # noqa: E402
+                       position_plans, render, validate_answer)
 from tools import plan_position  # noqa: E402
 from tools.market import ToolInputError  # noqa: E402
 from utils.strategy import StrategyParams, apply_rule_once  # noqa: E402
@@ -103,15 +105,10 @@ def test_position_plans_use_session_settings_and_skip_out_of_range_rows():
     assert [p.target_position_pct for p in plans] == [30.0, 50.0, 80.0, 80.0]
 
 
-# Placeholders and format checks.
+# Placeholders for comparison scenarios the planner computes.
 def plans_for(as_of, *positions):
     return {f"pp{i}": plan_position("QQQ", as_of, current_position_pct=p).model_dump()
             for i, p in enumerate(positions, 1)}
-
-
-def check(text, signal, calls):
-    plans = {k: v for k, v in calls.items() if k.startswith("pp")}
-    return validate_answer(render(text, signal, calls), signal, plans=plans)
 
 
 def test_plan_placeholders_render_from_the_named_call():
@@ -135,46 +132,57 @@ def test_bad_plan_placeholders_are_errors(text, error):
     assert len(out.errors) == 1 and error in out.errors[0]
 
 
-def test_your_position_sentences_are_checked_against_the_plan_not_the_path():
-    signal = build_strategy_signal("QQQ", CAP_DAY)  # path holds at the cap
-    calls = plans_for(CAP_DAY, 50.0)                # from 50% the rule adds
-    text = ("The strategy path holds {current_exposure} exposure at the cap. From your "
-            "{pp1.current_position_pct} position the rule adds {pp1.applied_change_pct} "
-            "today, taking you to {pp1.target_position_pct}.")
-    assert check(text, signal, calls) == []
-
-
-@pytest.mark.parametrize("as_of, text", [
-    # The path adds (0% -> 20%); someone already at the cap holds. Without a
-    # plan figure this sentence used to pass against the path's "add".
-    (PANIC_DAY, "From your position the rule adds exposure today."),
-    (CAP_DAY, "From your position the rule adds exposure today."),
-    (CAP_DAY, "You're fully invested, so your exposure stays where it is today."),
-    (GREED_DAY, "The rule now reduces your allocation."),
-])
-def test_your_position_action_without_a_plan_figure_is_rejected(as_of, text):
-    violations = check(text, build_strategy_signal("QQQ", as_of), {})
-    assert len(violations) == 1 and "without a plan_position figure" in violations[0]
-
-
-@pytest.mark.parametrize("text", [
-    "If you hold 0 today, the rule would add exposure.",          # hedged: skipped
-    "This tells you the strategy holds {current_exposure} exposure today.",  # bare "you"
-    "Your question is about the rule's history since 2023.",      # no current action
-])
-def test_other_you_sentences_are_not_flagged(text):
-    assert check(text, build_strategy_signal("QQQ", CAP_DAY), {}) == []
-
-
-def test_your_position_sentence_contradicting_the_plan_is_rejected():
-    signal = build_strategy_signal("QQQ", CAP_DAY)
-    calls = plans_for(CAP_DAY, 100.0)  # already at the cap: hold
-    violations = check("From your {pp1.current_position_pct} position the rule is adding "
-                       "exposure today.", signal, calls)
-    assert violations and "from your position (pp1)" in violations[0]
-
-
-def test_raw_user_position_figures_are_still_rejected():
-    signal = build_strategy_signal("QQQ", CAP_DAY)
-    violations = check("If your position is 50% today, the rule takes it to 70%.", signal, {})
+def test_restated_user_position_figures_are_rejected():
+    violations = validate_answer(render("Your position goes from 50% to 70% today.", None))
     assert any("raw position figure" in v for v in violations)
+
+
+# #35: code-owned decision facts.
+def plan_on(as_of, position, **settings):
+    return plan_position("QQQ", as_of, current_position_pct=position, **settings)
+
+
+@pytest.mark.parametrize("as_of, position, settings, action, boundary", [
+    (PANIC_DAY, 50.0, {}, "add", None),
+    (PANIC_DAY, 80.0, {}, "add", "reached the 100% cap"),
+    (PANIC_DAY, 90.0, {}, "add", "clipped at the 100% cap"),
+    (PANIC_DAY, 100.0, {}, "hold", "already at the 100% cap"),
+    (GREED_DAY, 50.0, {}, "reduce", None),
+    (GREED_DAY, 10.0, {}, "reduce", "reached the 0% floor"),
+    (GREED_DAY, 5.0, {}, "reduce", "clipped at the 0% floor"),
+    (GREED_DAY, 0.0, {}, "hold", "already at the 0% floor"),
+    (NEUTRAL_DAY, 100.0, {}, "hold", None),  # neutral at the cap is a plain hold
+    (PANIC_DAY, 70.0, {"max_position_pct": 80.0}, "add", "clipped at the 80% cap"),
+])
+def test_boundary_state(as_of, position, settings, action, boundary):
+    plan = plan_on(as_of, position, **settings)
+    assert plan.action == action
+    assert boundary_state(plan) == boundary
+
+
+def test_decision_from_the_page_input():
+    decision = build_decision("QQQ", CAP_DAY, current_position_pct=90)
+    assert decision.signal.action == "hold"          # the path holds at the cap
+    assert decision.plan.current_position_pct == 90.0
+    assert (decision.plan.action, decision.plan.applied_change_pct,
+            decision.plan.target_position_pct) == ("add", 10.0, 100.0)
+    facts = decision.as_dict()
+    assert facts["strategy_path"]["exposure_pct"] == 100.0
+    assert facts["your_position"]["boundary"] == "clipped at the 100% cap"
+    block = decision.prompt_block()
+    assert "current position: 90%" in block
+    assert "today's action: add (+10%; clipped at the 100% cap)" in block
+    assert "position after today's rule: 100%" in block
+    assert "do not recalculate, reinterpret, override, or restate them" in block
+
+
+def test_decision_without_a_page_input_has_no_plan():
+    decision = build_decision("QQQ", CAP_DAY)
+    assert decision.plan is None and "your_position" not in decision.as_dict()
+    assert "Your-position decision" not in decision.prompt_block()
+
+
+def test_decision_uses_session_settings():
+    decision = build_decision("QQQ", GREED_DAY, StrategyParams(reduce_pct=25.0),
+                              current_position_pct=50)
+    assert decision.plan.target_position_pct == 25.0

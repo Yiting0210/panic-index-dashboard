@@ -41,7 +41,7 @@ PROVIDERS = {
 }
 EXAMPLES = [
     "What exposure does the strategy hold right now, and why?",
-    "I have no position. What would the rule do today?",
+    "Given the exposure I entered, what does the rule do today, and why?",
     "Compare what the rule does today from 0%, 50%, and 100% starting exposure.",
     "Is the current regime historically attractive for adding exposure?",
     "What would make the rule add or reduce exposure from here?",
@@ -170,21 +170,30 @@ question = st.text_area(
     value="" if example == "(write your own)" else example,
     height=90,
 )
+# The user's own exposure goes to code, never through the model: the
+# your-position decision is plan_position applied to this number.
+own_position = st.number_input(
+    "Your current exposure (%), optional", value=None, placeholder="leave blank to skip",
+    min_value=float(strategy.min_position_pct), max_value=float(strategy.max_position_pct),
+    step=5.0,
+    help="The rule's step from this position is computed by code and shown under "
+         "Decision Facts. The model explains it but never reads or restates the number.")
 ask = st.button("Ask", type="primary", disabled=not question.strip())
 
 if ask:
     full_question = f"{question.strip()} (Market: {market})"
     agent = build_agent(provider["id"], model, api_key)
     with st.spinner("Calling tools…"):
-        result = agent.run(full_question, as_of, market=market, strategy=strategy)
+        result = agent.run(full_question, as_of, market=market, strategy=strategy,
+                           current_position_pct=own_position)
     st.session_state["last_result"] = result
 
 result = st.session_state.get("last_result")
 if result is not None:
     if result.violations:
         st.warning(
-            "The model's explanation contradicted the strategy signal, so it was "
-            "replaced with the rule-based research summary. See Advanced / Debug."
+            "The model's explanation broke the answer contract, so it was replaced "
+            "with the rule-based research summary. See Advanced / Debug."
         )
     elif result.used_fallback:
         st.warning(
@@ -192,11 +201,16 @@ if result is not None:
             f"Reason: {result.fallback_reason}"
         )
 
-    # Market Regime and Strategy Signal are filled by code from the standard
-    # backtest; the model only writes the explanation below them.
-    signal = result.signal
-    if signal is not None:
-        regime_col, signal_col = st.columns(2)
+    # ── Decision facts: computed by code, never written by the model ─────────
+    decision = result.decision
+    if decision is not None:
+        from assistant import boundary_state, position_plans
+
+        signal = decision.signal
+        st.subheader("Decision / Strategy Facts")
+        st.caption("Computed by code from the tools. The AI analysis below explains "
+                   "these facts and cannot change them.")
+        regime_col, path_col, own_col = st.columns(3)
         with regime_col.container(border=True):
             st.markdown("**Market Regime**")
             st.metric(f"{signal.market} Panic Index", f"{signal.panic_index:.1f}",
@@ -207,15 +221,15 @@ if result is not None:
                 f"{signal.panic_index_percentile:g}th percentile of history to date."
             )
             st.caption(f"Latest observation {signal.observation_date:%b %d, %Y}")
-        with signal_col.container(border=True):
-            st.markdown("**Strategy Signal**")
+        with path_col.container(border=True):
+            st.markdown("**Strategy Path**")
             st.metric(
                 "Strategy path exposure", f"{signal.final_position_pct:g}%",
                 help=(f"Exposure reached by following the standard rule continuously from "
                       f"{signal.backtest_start:%Y-%m-%d} through the latest observation "
                       "(run_backtest.final_position_pct). This is not a recommendation to "
                       "move directly to this exposure from a different starting position "
-                      "today; see Decision From Your Current Position below."))
+                      "today."))
             st.markdown(f"Latest action: **{signal.action}** — {signal.action_text}.  \n"
                         f"Next session: {signal.next_rule}.")
             st.caption(
@@ -226,50 +240,66 @@ if result is not None:
                 f"{signal.strategy_max_drawdown_pct:.1f}% vs. "
                 f"{signal.buyhold_max_drawdown_pct:.1f}%."
             )
+        with own_col.container(border=True):
+            st.markdown("**Your Position**")
+            plan = decision.plan
+            if plan is None:
+                st.caption("No current exposure entered. Enter one above the Ask button "
+                           "to see the rule's step from your own position.")
+            else:
+                st.metric("Position after today's rule", f"{plan.target_position_pct:g}%",
+                          delta=f"{plan.applied_change_pct:+g}%" if plan.applied_change_pct else None,
+                          help="tools.plan_position: the latest regime applied once to "
+                               "the exposure you entered. No history is replayed.")
+                boundary = f" ({decision.plan_boundary})" if decision.plan_boundary else ""
+                st.markdown(f"From your **{plan.current_position_pct:g}%**: today's rule "
+                            f"action is **{plan.action}**{boundary}.  \n"
+                            f"Next: {plan.next_rule.split(': ', 1)[1]}.")
         st.caption(f"**Why this signal?** {signal.provenance}.")
 
-        # The rule applied once to a position the user holds today: no history
-        # is replayed, so this does not depend on the backtest start.
-        from assistant import position_plans
         plan_strategy = result.strategy or DEFAULT_STRATEGY
-        with st.container(border=True):
-            st.markdown("**Decision From Your Current Position**")
-            own_col, table_col = st.columns([1, 2])
-            with own_col:
-                own = st.number_input(
-                    "Your current exposure (%)", key="own_position_pct",
-                    min_value=float(plan_strategy.min_position_pct),
-                    max_value=float(plan_strategy.max_position_pct),
-                    value=float(plan_strategy.min_position_pct), step=5.0)
-                mine = position_plans(signal.market, signal.as_of, positions=[own],
-                                      strategy=plan_strategy)[0]
-                st.metric("Position after today's rule", f"{mine.target_position_pct:g}%",
-                          delta=f"{mine.applied_change_pct:+g}%" if mine.applied_change_pct else None,
-                          help="tools.plan_position: today's regime applied once to your position.")
-                st.markdown(f"Today's rule action: **{mine.action}**.  \n"
-                            f"Next: {mine.next_rule}.")
-            with table_col:
-                st.dataframe(
-                    [{"Your current position": f"{p.current_position_pct:g}%",
-                      "Today's rule action": p.action,
-                      "Position after today's rule": f"{p.target_position_pct:g}%",
-                      "Next trigger": p.next_rule.split(": ", 1)[1]}
-                     for p in position_plans(signal.market, signal.as_of,
-                                             strategy=plan_strategy)],
-                    hide_index=True, width="stretch")
-            st.caption(
-                f"{signal.regime.title()} regime on {signal.observation_date:%b %d, %Y}, "
-                "applied once to each starting position. The strategy path exposure "
-                "above is where the rule stands after following it since "
-                f"{signal.backtest_start:%b %d, %Y}; it is not a target for these rows.")
+        with st.expander("The rule's step from common starting positions"):
+            st.dataframe(
+                [{"Starting position": f"{p.current_position_pct:g}%",
+                  "Today's rule action": p.action,
+                  "Position after today's rule": f"{p.target_position_pct:g}%",
+                  "Cap / floor": boundary_state(p) or "",
+                  "Next trigger": p.next_rule.split(": ", 1)[1]}
+                 for p in position_plans(signal.market, signal.as_of,
+                                         strategy=plan_strategy)],
+                hide_index=True, width="stretch")
+            st.caption(f"{signal.regime.title()} regime on {signal.observation_date:%b %d, %Y}, "
+                       "applied once to each starting position. The strategy path exposure "
+                       "is not a target for these rows.")
 
-    st.subheader("Rule-based summary" if result.used_fallback else "Key Reasons")
+    # ── AI analysis: written by the model ─────────────────────────────────────
+    st.subheader("Rule-based summary" if result.used_fallback else "AI Analysis")
     st.markdown(result.answer)
-    for reason in result.key_reasons:
-        st.markdown(f"- {reason}")
-    if result.caveats and result.caveats.lower() != "none":
-        st.subheader("Risks / Caveats")
-        st.markdown(result.caveats)
+    if result.key_reasons:
+        st.markdown("**Why**")
+        for reason in result.key_reasons:
+            st.markdown(f"- {reason}")
+    if result.historical_context:
+        st.markdown("**Historical context**")
+        st.markdown(result.historical_context)
+
+    # Scenarios the model asked for, as code-rendered rows with their inputs.
+    scenarios = [c.result for c in result.tool_calls
+                 if c.name == "plan_position" and c.result and not c.is_error]
+    if scenarios and not result.used_fallback:
+        st.markdown("**Scenarios computed for this question** (by code)")
+        st.dataframe(
+            [{"Input position": f"{s['current_position_pct']:g}%",
+              "Today's rule action": s["action"],
+              "Position after today's rule": f"{s['target_position_pct']:g}%",
+              "Next trigger": s["next_rule"].split(": ", 1)[1]}
+             for s in scenarios],
+            hide_index=True, width="stretch")
+    risks = [r for r in result.risks if r.strip() and r.strip().lower() != "none"]
+    if risks:
+        st.markdown("**Risks / Caveats**")
+        for risk in risks:
+            st.markdown(f"- {risk}")
 
     retrieved = {}
     for call in result.tool_calls:
@@ -277,7 +307,7 @@ if result is not None:
             for hit in call.result.get("results", []):
                 retrieved[hit["doc_id"]] = hit
     if result.citations:
-        st.subheader("Sources")
+        st.markdown("**Sources**")
         for citation in result.citations:
             hit = retrieved.get(citation["doc_id"])
             if hit:
@@ -298,16 +328,19 @@ if result is not None:
                        f"{result.cached_responses} cached responses")
         if result.fallback_reason:
             st.markdown(f"**Fallback reason:** {result.fallback_reason}")
+        if decision is not None:
+            st.markdown("**Decision facts given to the model (read-only)**")
+            st.json(decision.as_dict(), expanded=False)
         if result.repairs and not result.violations:
-            st.markdown("**Revised once** after the guardrail check found:")
+            st.markdown("**Revised once** after the contract check found:")
             for violation in result.first_violations:
                 st.markdown(f"- {violation}")
         for violation in result.violations:
             st.markdown(f"- Guardrail: {violation}")
         rendered = sum(r.count for r in result.rendered)
         if result.raw_answer:
-            st.markdown(f"**Position figures rendered by code:** {rendered}")
-            st.caption("Model text before rendering: " + result.raw_answer["answer"])
+            st.markdown(f"**What-if figures rendered by code:** {rendered}")
+            st.caption("Model text before rendering: " + result.raw_answer["summary"])
         for call in result.tool_calls:
             label = f"{call.name}({', '.join(f'{k}={v}' for k, v in call.arguments.items())})"
             if call.as_of_clamped:

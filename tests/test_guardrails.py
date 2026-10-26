@@ -1,7 +1,6 @@
 """Standard-backtest strategy signal, placeholder rendering, and format checks."""
 import os
 import sys
-from dataclasses import replace
 from datetime import date
 from types import SimpleNamespace
 
@@ -12,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from assistant import (STANDARD_BACKTEST_START, build_strategy_signal, render,  # noqa: E402
                        validate_answer)
 from assistant.signal import _action_text  # noqa: E402
-from assistant.validator import parse_current_action  # noqa: E402
+from assistant.validator import citation_violations  # noqa: E402
 from evals.consistency_eval import load_fixtures, run_offline  # noqa: E402
 from utils.strategy import StrategyParams  # noqa: E402
 
@@ -52,9 +51,9 @@ def test_action_text_uses_the_applied_step(regime, action, previous, final, expe
     assert _action_text(bt) == expected
 
 
-def check(text, signal, backtests=None, current_action=None):
+def check(text, signal, backtests=None):
     """Render like the agent does, then validate."""
-    return validate_answer(render(text, signal, backtests), signal, current_action)
+    return validate_answer(render(text, signal, backtests))
 
 
 # Placeholder rendering.
@@ -127,35 +126,18 @@ def test_raw_position_figures_are_rejected(panic_signal, text):
     ("The Panic Index is at the 99.3rd percentile, and 63-day returns averaged -1.0%.", None),
 ])
 def test_placeholder_answers_pass(panic_signal, text, backtests):
-    assert check(text, panic_signal, backtests, current_action="add") == []
+    assert check(text, panic_signal, backtests) == []
 
 
-# Issue #31 A: strategy-state phrasings without a position word.
+# #35: the strategy-state phrasing table (#31 A) is gone. A raw figure with no
+# position word in its clause is not blocked at runtime; the decision panel is
+# the source of truth and the judge measures the prose.
 @pytest.mark.parametrize("text", [
     "The rule holds 64%.",
-    "The strategy currently holds 64%.",
-    "The signal is at 64%.",
-    "The framework remains at 20%.",
-    "The strategy is still at 64%.",
     "The signal holds at the 100% cap.",
-    # Live run 5, a10: no position word in the clause.
-    "QQQ remains neutral (Panic Index 38.84), so the rule holds 100%; a close above 64 "
-    "would add.",
 ])
-def test_strategy_state_phrasings_need_placeholders(panic_signal, text):
-    violations = check(text, panic_signal)
-    assert any("raw position figure" in v for v in violations), violations
-
-
-@pytest.mark.parametrize("text", [
-    "The rule holds {current_exposure}.",
-    "The strategy currently holds {current_exposure}.",
-    "The signal is at {current_exposure}.",
-    "The framework remains at {floor}.",
-    "The signal holds at the {cap} cap.",
-])
-def test_strategy_state_phrasings_with_placeholders_pass(panic_signal, text):
-    assert check(text, panic_signal, current_action="add") == []
+def test_strategy_state_phrasings_are_not_blocked_at_runtime(panic_signal, text):
+    assert check(text, panic_signal) == []
 
 
 @pytest.mark.parametrize("text", [
@@ -194,7 +176,7 @@ def test_a12_attribution_renders_but_a_raw_step_is_still_rejected(panic_signal):
     rendered = ("Upside drag was {bt1.upside_drag_pp} against a downside cushion of "
                 "{bt1.downside_cushion_pp}, with average exposure of "
                 "{bt1.average_exposure_pct}.")
-    assert check(rendered, panic_signal, A12_BACKTEST, current_action="add") == []
+    assert check(rendered, panic_signal, A12_BACKTEST) == []
     raw_step = "Each greed day trimmed exposure by 10%."
     assert any("raw position figure 10%" in v
                for v in check(raw_step, panic_signal, A12_BACKTEST))
@@ -202,35 +184,36 @@ def test_a12_attribution_renders_but_a_raw_step_is_still_rejected(panic_signal):
                  A12_BACKTEST) == []
 
 
-def test_current_action_must_match_the_signal(panic_signal):
-    assert check("Holding steady.", panic_signal, current_action="reduce")
-    assert parse_current_action({"current_action": "add"}) == ("add", [])
-    assert parse_current_action({"current_action": "not_stated"}) == (None, [])
-    assert parse_current_action({}) == (None, [])
-    action, errors = parse_current_action({"current_action": "buy"})
-    assert action is None and "invalid structured output" in errors[0]
+@pytest.mark.parametrize("text", [
+    "The strategy is now reducing exposure.",
+    "The strategy is currently adding exposure.",
+])
+def test_direction_wording_is_not_checked_at_runtime(panic_signal, text):
+    # #35: the action is code-owned and shown by the app; prose that
+    # contradicts it is measured by the judge, not blocked.
+    assert check(text, panic_signal) == []
 
 
-def test_validator_rejects_contradictory_direction(panic_signal):
-    violations = validate_answer("The strategy is now reducing exposure.", panic_signal)
-    assert len(violations) == 1 and "contradicts" in violations[0]
-    # Negated and conditional sentences describe the rule, not the current action.
-    assert validate_answer("The strategy is not reducing exposure now.", panic_signal) == []
-    assert validate_answer("If greed returns, the rule would now reduce exposure.",
-                           panic_signal) == []
+RETRIEVED = {"statement-20240731": "2024-07-31", "minutes-20240731": "2024-08-21"}
 
 
-def test_hold_signal_ignores_past_tense_history(panic_signal):
-    hold = replace(panic_signal, regime="neutral", action="hold", final_position_pct=0.0)
-    history = ("Exposure was reduced to {floor} in June 2023 and the strategy currently "
-               "holds {current_exposure}.")
-    assert check(history, hold) == []
-    assert validate_answer("The strategy is currently adding exposure.", hold)
+def test_citations_must_come_from_this_run_and_predate_as_of():
+    ok = [{"doc_id": "statement-20240731", "published_at": "2024-07-31"}]
+    assert citation_violations(ok, RETRIEVED, date(2024, 8, 5)) == []
+    missing = [{"doc_id": "statement-20240612", "published_at": "2024-06-12"}]
+    assert "not returned by search_fed_docs" in citation_violations(
+        missing, RETRIEVED, date(2024, 8, 5))[0]
+    late = [{"doc_id": "minutes-20240731", "published_at": "2024-07-31"}]
+    assert "published after as_of" in citation_violations(late, RETRIEVED, date(2024, 8, 5))[0]
+    assert validate_answer("Fed held rates.", citations=missing, retrieved=RETRIEVED,
+                           as_of=date(2024, 8, 5))
 
 
-def test_offline_consistency_eval_catches_every_planted_contradiction():
+def test_offline_consistency_eval_catches_every_planted_restatement():
     summary, rows = run_offline(load_fixtures())
     assert summary["fixtures"] == 10
+    assert summary["planted_restatements"] == 14
+    assert summary["direction_probes_not_blocked"] == summary["direction_probes"] == 10
     assert summary["signal_mismatches"] == 0, [r for r in rows if r["signal_mismatches"]]
     assert summary["detection_rate"] == 1.0, [r for r in rows if not r["correct"]]
     assert summary["false_positive_rate"] == 0.0, [r for r in rows if not r["correct"]]
