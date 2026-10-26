@@ -76,6 +76,32 @@ class BacktestResult(PointInTime):
     verdict: str
 
 
+class PositionPlanResult(PointInTime):
+    market: Market
+    observation_date: date
+    panic_index: float
+    regime: Regime
+    current_position_pct: float = Field(description="The position supplied by the caller (0-100).")
+    action: Literal["add", "reduce", "hold"] = Field(description=(
+        "What the rule does from current_position_pct on the latest observation's regime."
+    ))
+    applied_change_pct: float = Field(description=(
+        "target_position_pct minus current_position_pct: the step after clipping at the "
+        "cap or floor."
+    ))
+    target_position_pct: float = Field(description=(
+        "Position after applying the latest observation's regime once to "
+        "current_position_pct (0-100). Not a backtest: no history is replayed."
+    ))
+    buy_threshold: float
+    sell_threshold: float
+    add_pct: float
+    reduce_pct: float
+    max_position_pct: float
+    min_position_pct: float
+    next_rule: str = Field(description="What the rule does from target_position_pct on the next observation.")
+
+
 class HorizonStats(BaseModel):
     horizon_days: int
     count: int

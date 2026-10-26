@@ -33,3 +33,23 @@ class StrategyParams:
 
 
 DEFAULT_STRATEGY = StrategyParams()
+
+
+def apply_rule_once(position_pct, regime, params=DEFAULT_STRATEGY):
+    """(action, applied_change_pct, target_pct) for one observation of ``regime``.
+
+    The same step the backtest applies each day: add ``add_pct`` in the
+    panic regime, remove ``reduce_pct`` in the greed regime, hold otherwise,
+    clipped to the min/max exposure. The action is read from the change, so
+    a step clipped to zero at the cap or floor is a hold.
+    """
+    if regime == "panic":
+        target = min(position_pct + params.add_pct, params.max_position_pct)
+    elif regime == "greed":
+        target = max(position_pct - params.reduce_pct, params.min_position_pct)
+    else:
+        target = position_pct
+    target = round(target, 1)
+    change = round(target - position_pct, 1)
+    action = "add" if change > 0 else "reduce" if change < 0 else "hold"
+    return action, change, target

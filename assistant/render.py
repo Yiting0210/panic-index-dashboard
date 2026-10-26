@@ -9,7 +9,10 @@ placeholder that names the field, and code fills in the value:
 * a run_backtest call made this turn, by the call id its result was labelled
   with: {bt1.final_position_pct}, {bt2.average_exposure_pct}, and also its
   return, drawdown, ratio, and attribution metrics ({bt1.strategy_return_pct},
-  {bt1.strategy_sharpe}, {bt1.upside_drag_pp}, ...).
+  {bt1.strategy_sharpe}, {bt1.upside_drag_pp}, ...);
+* a plan_position call (the user's own position today), labelled pp1, pp2,
+  ...: {pp1.current_position_pct}, {pp1.applied_change_pct},
+  {pp1.target_position_pct}, ...
 
 Each field has an explicit unit: percent fields render with "%",
 attribution fields in percentage points with "pp", and ratios bare. So a
@@ -77,25 +80,56 @@ CALL_FIELDS = {
 }
 
 
+def format_abs_pct(value):
+    return format_pct(abs(float(value)))
+
+
+# Display-safe plan_position fields. The applied change renders as a
+# magnitude, like {applied_change}; the action word gives the direction.
+PLAN_FIELDS = {
+    "current_position_pct": format_pct,
+    "target_position_pct": format_pct,
+    "applied_change_pct": format_abs_pct,
+    "add_pct": format_pct,
+    "reduce_pct": format_pct,
+    "max_position_pct": format_pct,
+    "min_position_pct": format_pct,
+}
+
+# Call-id prefix -> (tool, allowed fields).
+CALL_KINDS = {"bt": ("run_backtest", CALL_FIELDS), "pp": ("plan_position", PLAN_FIELDS)}
+CALL_ID_RE = re.compile(r"^(bt|pp)\d+$")
+
+
+def call_kind(call_id):
+    """("run_backtest" | "plan_position", fields) for a call id, or None."""
+    m = CALL_ID_RE.match(call_id or "")
+    return CALL_KINDS[m.group(1)] if m else None
+
+
 @dataclass
 class Rendered:
     text: str
     spans: list = field(default_factory=list)  # (start, end) of each rendered value
     errors: list = field(default_factory=list)
     count: int = 0
+    # Call id each span was rendered from (None for the standard signal).
+    sources: list = field(default_factory=list)
 
 
-def render(text, signal=None, backtests=None):
+def render(text, signal=None, calls=None):
     """Replace placeholders in ``text``.
 
-    ``backtests`` maps call id -> run_backtest result for this turn.
+    ``calls`` maps call id -> result for this turn's labelled calls:
+    run_backtest (bt1, bt2, ...) and plan_position (pp1, pp2, ...).
     """
-    backtests = backtests or {}
-    out, spans, errors, last = [], [], [], 0
+    calls = calls or {}
+    out, spans, sources, errors, last = [], [], [], [], 0
     length = 0
     for m in PLACEHOLDER_RE.finditer(text):
         name, attr = m.group(1), m.group(2)
         value, formatter = None, format_pct
+        kind = call_kind(name) if attr is not None else None
         if attr is None:
             if name not in SIGNAL_PLACEHOLDERS:
                 errors.append(f"unknown placeholder {m.group(0)}; use one of "
@@ -104,24 +138,26 @@ def render(text, signal=None, backtests=None):
                 errors.append(f"{m.group(0)} has no strategy signal to render from")
             else:
                 value = SIGNAL_PLACEHOLDERS[name](signal)
-        elif name not in backtests:
-            known = ", ".join(sorted(backtests)) or "none"
-            errors.append(f"{m.group(0)} names an unknown run_backtest call id "
+        elif kind is None or name not in calls:
+            tool = kind[0] if kind else "run_backtest or plan_position"
+            known = ", ".join(sorted(calls)) or "none"
+            errors.append(f"{m.group(0)} names an unknown {tool} call id "
                           f"(this turn: {known})")
-        elif attr not in CALL_FIELDS:
-            errors.append(f"{m.group(0)}: {attr} is not one of {', '.join(CALL_FIELDS)}")
-        elif backtests[name].get(attr) is None:
+        elif attr not in kind[1]:
+            errors.append(f"{m.group(0)}: {attr} is not one of {', '.join(kind[1])}")
+        elif calls[name].get(attr) is None:
             errors.append(f"{m.group(0)}: call {name} has no value for {attr}")
         else:
-            value, formatter = backtests[name][attr], CALL_FIELDS[attr]
+            value, formatter = calls[name][attr], kind[1][attr]
         piece = text[last:m.start()]
         out.append(piece)
         length += len(piece)
         rendered = m.group(0) if value is None else formatter(value)
         if value is not None:
             spans.append((length, length + len(rendered)))
+            sources.append(name if attr is not None else None)
         out.append(rendered)
         length += len(rendered)
         last = m.end()
     out.append(text[last:])
-    return Rendered("".join(out), spans, errors, len(spans))
+    return Rendered("".join(out), spans, errors, len(spans), sources)

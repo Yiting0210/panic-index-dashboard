@@ -5,12 +5,16 @@ date and initial exposure. So the assistant never lets the model pick them.
 Every answer is anchored on one backtest with a fixed start date and the
 session's strategy settings, and the Market Regime and Strategy Signal panels
 are filled from that result. The model only explains them.
+
+That exposure is the strategy path's, not a personal target: someone who
+holds a different position today gets the rule's next step from
+``tools.plan_position`` instead (see ``position_plans``).
 """
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-from tools import get_regime, run_backtest
+from tools import get_regime, plan_position, run_backtest
 from utils.strategy import DEFAULT_STRATEGY
 
 # First observation in the dataset; every standard backtest starts here.
@@ -68,9 +72,11 @@ class StrategySignal:
             f"- market: {self.market}; latest observation: {self.observation_date.isoformat()}\n"
             f"- regime: {self.regime}; Panic Index {self.panic_index:g} "
             f"(percentile {self.panic_index_percentile:g})\n"
-            f"- final_position_pct: {self.final_position_pct:g} "
-            f"(previous_position_pct before the latest observation: "
-            f"{self.previous_position_pct:g})\n"
+            f"- strategy path exposure (final_position_pct): {self.final_position_pct:g}, "
+            f"reached by following the rule continuously since "
+            f"{self.backtest_start.isoformat()} (previous_position_pct before the latest "
+            f"observation: {self.previous_position_pct:g}); not a target for someone "
+            f"holding a different position today (plan_position covers that)\n"
             f"- action on the latest observation: {self.action} ({self.action_text})\n"
             f"- next session: {self.next_rule}\n"
             f"- position_rule: {self.position_rule}\n"
@@ -110,7 +116,7 @@ def build_strategy_signal(market, as_of, strategy=None):
     regime = get_regime(market, as_of, buy_threshold=params.buy_threshold,
                         sell_threshold=params.sell_threshold)
     next_rule = (
-        f"holds {bt.final_position_pct:g}%; adds {params.add_pct:g}% if the Panic Index "
+        f"the strategy path holds {bt.final_position_pct:g}%; adds {params.add_pct:g}% if the Panic Index "
         f"closes above {params.buy_threshold:g}, reduces {params.reduce_pct:g}% if it "
         f"closes below {params.sell_threshold:g}, within {params.min_position_pct:g}%-"
         f"{params.max_position_pct:g}%"
@@ -141,3 +147,19 @@ def build_strategy_signal(market, as_of, strategy=None):
         strategy_max_drawdown_pct=bt.strategy_max_drawdown_pct,
         buyhold_max_drawdown_pct=bt.buyhold_max_drawdown_pct,
     )
+
+
+# Starting positions in the page's "Decision From Your Current Position" table.
+COMPARISON_POSITIONS = (0.0, 20.0, 50.0, 80.0, 100.0)
+
+
+def position_plans(market, as_of, positions=COMPARISON_POSITIONS, strategy=None):
+    """plan_position for each starting position, with the session's settings.
+
+    Positions outside the rule's min/max range are left out.
+    """
+    params = strategy or DEFAULT_STRATEGY
+    settings = {k: v for k, v in params.as_dict().items() if k != "initial_position_pct"}
+    return [plan_position(market, as_of, current_position_pct=p, **settings)
+            for p in positions
+            if params.min_position_pct <= p <= params.max_position_pct]

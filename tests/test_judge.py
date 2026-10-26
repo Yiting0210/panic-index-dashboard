@@ -36,7 +36,7 @@ def test_statements_and_evidence():
     assert statements(result) == ["The rule holds 20% exposure.", "Panic Index is 83.5.",
                                   "The index is above 64.", "Hindsight labels.", "Not advice."]
     text = evidence(result)
-    assert "final_position_pct: 20" in text and "[bt1] run_backtest" in text
+    assert "(final_position_pct): 20" in text and "[bt1] run_backtest" in text
 
 
 def test_judge_counts_verdicts_and_marks_missing_ones():

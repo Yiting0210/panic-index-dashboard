@@ -41,6 +41,8 @@ PROVIDERS = {
 }
 EXAMPLES = [
     "What exposure does the strategy hold right now, and why?",
+    "I have no position. What would the rule do today?",
+    "Compare what the rule does today from 0%, 50%, and 100% starting exposure.",
     "Is the current regime historically attractive for adding exposure?",
     "What would make the rule add or reduce exposure from here?",
     "How does current Fed policy context relate to the regime?",
@@ -207,8 +209,13 @@ if result is not None:
             st.caption(f"Latest observation {signal.observation_date:%b %d, %Y}")
         with signal_col.container(border=True):
             st.markdown("**Strategy Signal**")
-            st.metric("Current exposure", f"{signal.final_position_pct:g}%",
-                      help="final_position_pct of the standard backtest (0-100).")
+            st.metric(
+                "Strategy path exposure", f"{signal.final_position_pct:g}%",
+                help=(f"Exposure reached by following the standard rule continuously from "
+                      f"{signal.backtest_start:%Y-%m-%d} through the latest observation "
+                      "(run_backtest.final_position_pct). This is not a recommendation to "
+                      "move directly to this exposure from a different starting position "
+                      "today; see Decision From Your Current Position below."))
             st.markdown(f"Latest action: **{signal.action}** — {signal.action_text}.  \n"
                         f"Next session: {signal.next_rule}.")
             st.caption(
@@ -220,6 +227,41 @@ if result is not None:
                 f"{signal.buyhold_max_drawdown_pct:.1f}%."
             )
         st.caption(f"**Why this signal?** {signal.provenance}.")
+
+        # The rule applied once to a position the user holds today: no history
+        # is replayed, so this does not depend on the backtest start.
+        from assistant import position_plans
+        plan_strategy = result.strategy or DEFAULT_STRATEGY
+        with st.container(border=True):
+            st.markdown("**Decision From Your Current Position**")
+            own_col, table_col = st.columns([1, 2])
+            with own_col:
+                own = st.number_input(
+                    "Your current exposure (%)", key="own_position_pct",
+                    min_value=float(plan_strategy.min_position_pct),
+                    max_value=float(plan_strategy.max_position_pct),
+                    value=float(plan_strategy.min_position_pct), step=5.0)
+                mine = position_plans(signal.market, signal.as_of, positions=[own],
+                                      strategy=plan_strategy)[0]
+                st.metric("Position after today's rule", f"{mine.target_position_pct:g}%",
+                          delta=f"{mine.applied_change_pct:+g}%" if mine.applied_change_pct else None,
+                          help="tools.plan_position: today's regime applied once to your position.")
+                st.markdown(f"Today's rule action: **{mine.action}**.  \n"
+                            f"Next: {mine.next_rule}.")
+            with table_col:
+                st.dataframe(
+                    [{"Your current position": f"{p.current_position_pct:g}%",
+                      "Today's rule action": p.action,
+                      "Position after today's rule": f"{p.target_position_pct:g}%",
+                      "Next trigger": p.next_rule.split(": ", 1)[1]}
+                     for p in position_plans(signal.market, signal.as_of,
+                                             strategy=plan_strategy)],
+                    hide_index=True, width="stretch")
+            st.caption(
+                f"{signal.regime.title()} regime on {signal.observation_date:%b %d, %Y}, "
+                "applied once to each starting position. The strategy path exposure "
+                "above is where the rule stands after following it since "
+                f"{signal.backtest_start:%b %d, %Y}; it is not a target for these rows.")
 
     st.subheader("Rule-based summary" if result.used_fallback else "Key Reasons")
     st.markdown(result.answer)

@@ -424,7 +424,7 @@ def test_strategy_signal_is_computed_by_code_and_sent_to_the_model(make_agent):
     assert result.answer == "The rule holds 20% exposure."
     assert result.raw_answer["answer"] == "The rule holds {current_exposure} exposure."
     first_message = client.requests[0]["messages"][0]["content"]
-    assert "final_position_pct: 20" in first_message
+    assert "strategy path exposure (final_position_pct): 20" in first_message
     assert "{current_exposure}" in client.requests[0]["system"]
 
 
@@ -549,3 +549,38 @@ def test_malformed_current_action_triggers_repair(make_deepseek_agent):
     assert result.repairs == 1
     assert any("invalid structured output" in v for v in result.first_violations)
     assert result.fallback_reason.startswith("GuardrailViolation")
+
+
+def test_plan_position_results_get_call_ids_and_session_settings(make_agent):
+    from utils.strategy import StrategyParams
+
+    # QQQ 2025-03-06: the strategy path holds at the 100% cap; from 50% the rule adds.
+    args = {"market": "QQQ", "as_of": "2025-03-06", "current_position_pct": 50}
+    text = ("The strategy path holds {current_exposure} exposure. From your "
+            "{pp1.current_position_pct} position the rule adds {pp1.applied_change_pct} "
+            "today, taking you to {pp1.target_position_pct}.")
+    agent, client = make_agent([tool_use_response("plan_position", args),
+                                structured_final(text, action="hold")])
+    result = agent.run("I am 50% invested. What happens now?", date(2025, 3, 6),
+                       market="QQQ", strategy=StrategyParams(add_pct=30.0))
+
+    call = result.tool_calls[0]
+    assert call.call_id == "pp1" and call.arguments["add_pct"] == 30.0
+    assert client.requests[1]["messages"][-1]["content"][0]["content"].startswith(
+        "[call_id: pp1]")
+    assert result.violations == [] and result.fallback_reason is None
+    assert result.answer == ("The strategy path holds 100% exposure. From your 50% position "
+                             "the rule adds 30% today, taking you to 80%.")
+
+
+def test_backtest_and_plan_call_ids_are_counted_separately(make_agent):
+    agent, _ = make_agent([
+        tool_use_response("plan_position", {"market": "QQQ", "as_of": "2024-08-05",
+                                            "current_position_pct": 0}, "toolu_1"),
+        tool_use_response("run_backtest", {"market": "QQQ", "as_of": "2024-08-05"}, "toolu_2"),
+        tool_use_response("plan_position", {"market": "QQQ", "as_of": "2024-08-05",
+                                            "current_position_pct": 80}, "toolu_3"),
+        structured_final("Panic regime."),
+    ])
+    result = agent.run("Compare", date(2024, 8, 5), market="QQQ")
+    assert [c.call_id for c in result.tool_calls] == ["pp1", "bt1", "pp2"]

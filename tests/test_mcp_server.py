@@ -9,7 +9,7 @@ from mcp import Client
 
 from mcp_server import build_server
 
-EXPECTED_TOOLS = {"get_regime", "run_backtest", "get_forward_returns",
+EXPECTED_TOOLS = {"get_regime", "run_backtest", "plan_position", "get_forward_returns",
                   "detect_peaks", "search_fed_docs"}
 
 

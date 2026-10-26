@@ -19,6 +19,10 @@ the format contract and the one structured field:
 * contradictory direction (backstop): an unhedged sentence about the
   current action that says add while the rule reduces or holds, or the
   reverse. Negated or conditional sentences ("would add if...") are skipped.
+  A sentence with a figure rendered from a plan_position call is about the
+  user's own position, so it is checked against that call's action instead
+  of the standard signal's (from 50% the rule adds while the strategy path,
+  already at the cap, holds).
 """
 import re
 
@@ -123,27 +127,56 @@ def parse_current_action(data):
     return None, [error]
 
 
-def stated_actions(text, present_only=False):
-    """(action, sentence) for unhedged sentences about the current action."""
+def _stated_action(sentence, present_only):
+    """add / reduce for an unhedged sentence about the current action, else None."""
+    if not (CURRENT_RE.search(sentence) and TOPIC_RE.search(sentence)):
+        return None
+    if HEDGE_RE.search(sentence):
+        return None
     add_re, reduce_re = (ADD_NOW_RE, REDUCE_NOW_RE) if present_only else (ADD_ANY_RE, REDUCE_ANY_RE)
-    found = []
-    for sentence in SENTENCE_RE.split(text):
-        if not (CURRENT_RE.search(sentence) and TOPIC_RE.search(sentence)):
-            continue
-        if HEDGE_RE.search(sentence):
-            continue
-        verbs = BUY_HOLD_RE.sub(" ", sentence)
-        adds, reduces = bool(add_re.search(verbs)), bool(reduce_re.search(verbs))
-        if adds != reduces:
-            found.append(("add" if adds else "reduce", sentence.strip()))
-    return found
+    verbs = BUY_HOLD_RE.sub(" ", sentence)
+    adds, reduces = bool(add_re.search(verbs)), bool(reduce_re.search(verbs))
+    if adds == reduces:
+        return None
+    return "add" if adds else "reduce"
 
 
-def validate_answer(rendered, signal, current_action=None):
+def _plan_sources(rendered, start, end):
+    """Ids of plan_position calls whose figures were rendered in text[start:end]."""
+    return {source for (s, e), source in zip(rendered.spans, rendered.sources)
+            if source and source.startswith("pp") and start <= s and e <= end}
+
+
+def _direction_violations(parts, signal, plans):
+    violations = []
+    for part in parts:
+        for start, end in _segments(part.text, SENTENCE_RE):
+            sentence = part.text[start:end].strip()
+            ids = _plan_sources(part, start, end)
+            if ids:
+                expected = {plans[i]["action"] for i in ids if i in plans}
+                action = _stated_action(sentence, present_only=expected == {"hold"})
+                if action and action not in expected:
+                    names = ", ".join(sorted(ids))
+                    violations.append(
+                        f"direction '{action}' contradicts the rule's "
+                        f"'{'/'.join(sorted(expected))}' from your position ({names}): "
+                        f"{sentence}")
+            elif signal is not None:
+                action = _stated_action(sentence, present_only=signal.action == "hold")
+                if action and action != signal.action:
+                    violations.append(
+                        f"direction '{action}' contradicts the rule's '{signal.action}' "
+                        f"({signal.regime} regime): {sentence}")
+    return violations
+
+
+def validate_answer(rendered, signal, current_action=None, plans=None):
     """Violations of the format contract and the signal; empty when consistent.
 
     ``rendered`` is one Rendered text (or a plain string with no rendered
-    figures), or a list of them, one per answer field.
+    figures), or a list of them, one per answer field. ``plans`` maps
+    plan_position call ids to their results.
     """
     parts = rendered if isinstance(rendered, list) else [rendered]
     parts = [Rendered(p) if isinstance(p, str) else p for p in parts]
@@ -154,15 +187,7 @@ def validate_answer(rendered, signal, current_action=None):
             violations.append(
                 f"raw position figure {figure}: write position figures only as "
                 f"placeholders such as {{current_exposure}}: {sentence}")
-    if signal is None:
-        return violations
-    if current_action is not None and current_action != signal.action:
+    if signal is not None and current_action is not None and current_action != signal.action:
         violations.append(f"current_action '{current_action}' contradicts the rule's "
                           f"'{signal.action}' ({signal.regime} regime)")
-    text = "\n".join(p.text for p in parts)
-    for action, sentence in stated_actions(text, present_only=signal.action == "hold"):
-        if action != signal.action:
-            violations.append(
-                f"direction '{action}' contradicts the rule's '{signal.action}' "
-                f"({signal.regime} regime): {sentence}")
-    return violations
+    return violations + _direction_violations(parts, signal, plans or {})
