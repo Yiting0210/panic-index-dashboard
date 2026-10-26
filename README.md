@@ -307,14 +307,14 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 |---|---|---|---|
 | Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
-| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 91.7% citation precision, 97.7% numeric faithfulness; LLM judge: 90.6% of statements supported |
-| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 10/12 task success, 0 leaks |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 99.1% numeric faithfulness; LLM judge: 83.8% of statements supported (see run 6 notes) |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions) | 12 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 11/12 task success, 0 leaks, 0 fallbacks |
 | Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 10 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce, adds and reductions clipped at the cap/floor, holds at the cap/floor) with a consistent answer and planted contradictions (`evals/datasets/consistency.yaml`) | 10/10 scenarios, 24/24 caught, 0 false positives |
 | Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 4/10 broke the placeholder format on the first pass, 0/10 after one repair turn, 0 fallbacks; 0 leaks |
 
 #### Live run (DeepSeek, 2026-10-25)
 
-Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 5.
+Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 6.
 
 The first run exposed false positives in the scoring code, not model errors, so the code was changed **after seeing live answers**:
 
@@ -331,7 +331,8 @@ Each fix has a regression test built from the sentence that triggered it (`tests
 | 2, re-scored | fix round 2 | 0/10 | 12/12 | 98.9% | 0 | 0 |
 | 3, fresh | fix round 2 | 2/10 | 10/12 | 94.8% | 0 | 0 |
 | 4, fresh: declared figures + repair | structured claims | 2/10 first pass → 0/10 after repair | 11/12 | 97.7% | 0 | 0 |
-| **5, fresh: placeholders** | **code-rendered figures, format check** | **4/10 first pass → 0/10 after repair** | **10/12** | **97.7%** | **0** | **1** |
+| 5, fresh: placeholders | code-rendered figures, format check | 4/10 first pass → 0/10 after repair | 10/12 | 97.7% | 0 | 1 |
+| **6, fresh: #31 gaps closed** | **+ state phrasings, metric placeholders with units** | **4/10 first pass → 0/10 after repair** | **11/12** | **99.1%** | **0** | **0** |
 
 Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 
@@ -350,7 +351,14 @@ Run 5 is the placeholder design (`9db66c1`), reported without changes after seei
 - **a10:** a correct refusal of the trap question, but it cites a minutes document its search did not return, so citation precision is 0 for that question.
 - **A gap in the format rule:** a10 also says "so the rule holds 100%". That clause has no position word, so a raw figure there is not flagged. The value is right here, but a wrong one would pass.
 
-Two follow-ups this run points to, not done here: let placeholders render any numeric tool field (returns, drawdowns, drag), which the model already tries to do and which would remove misquoted figures such as a12's 161.1 / 128.5; and treat "holds N%" / "at N%" next to *rule* or *strategy* as a position clause.
+Two follow-ups this run pointed to, both done in #31 and measured in run 6: let placeholders render a backtest call's other numeric fields (returns, drawdowns, drag), which the model already tried to do; and treat "the rule holds N%" as a position phrasing.
+
+Run 6 adds the #31 changes (`01f97c5`): strategy-state phrasings and unit-aware metric placeholders. It is reported without changes after seeing it ($0.07 with the judge). Consistency: 4/10 broke the format on the first pass, all repaired, 0 fallbacks, 125 figures rendered by code, 0 leaks. Agent: 11/12, 100% tool selection, 100% citation precision, 99.1% numeric faithfulness, 0 leaks, 3 repair turns, 0 fallbacks. Judge: 87.4% of 127 consistency statements and 83.8% of 136 agent statements supported, 4 contradicted. By hand:
+
+- **First-pass format misses (all repaired):** the model asked for `{bt1.latest_position_change_pct}` (not on the allowlist; `{applied_change}` is the signal's equivalent); wrote raw "0%" / "10%" step figures (c06, a02, a12); and in a07 used `{bt1.strategy_return_pct}` without calling `run_backtest`, because it wanted the standard backtest's returns, which have no placeholders (the documented limitation).
+- **Real model errors the judge caught:** a04 gives 2025-04-11's price for 2025-04-09; a08 says "the last three communications" and lists four. The other two "contradicted" labels (c05, c07) look like judge mistakes.
+- **The lower groundedness is mostly the judge, not the answers:** most "unsupported" labels are meta statements ("No Fed documents were needed"), disclaimers, method facts that live in the tool descriptions (the detector's 5% fall-back and 80 entry threshold, which the judge's evidence does not include), and reasonable inferences. Treat the judge as a trend metric with run-to-run noise, not as an exact error count.
+- **a09** fails only on the detector's default "5%", which is not in the tool output (as in earlier runs).
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
