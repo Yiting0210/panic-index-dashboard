@@ -309,14 +309,14 @@ Both providers use the same MCP tools, as-of clamp, response cache, usage ledger
 |---|---|---|---|
 | Retrieval | recall@5, MRR | 30 hand-labelled questions (`evals/datasets/retrieval.yaml`) | see the ablation below |
 | Point-in-time | leakage rate (target 0) | perturbation tests on every market tool; release-date sweep across queries, dates, and search modes | 0 leaks |
-| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 100% numeric faithfulness; LLM judge: 92.8% of statements supported (see run 7 notes) |
-| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions); for the three user-position questions, a `plan_position` call per stated position, `{ppN...}` placeholders, and no clause presenting the strategy path's `{current_exposure}` as the user's position | 15 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 14/15 task success, 2/3 user-position questions passed the plan contract, 0 leaks, 0 fallbacks |
+| Generation | citation precision, numeric faithfulness | cited doc ids must come from this run's tool results and predate `as_of`; numbers in the answer must match tool outputs or the code-computed signal | DeepSeek: 100% citation precision, 100% numeric faithfulness; LLM judge: 91.7% of statements supported (see run 8 notes) |
+| Agent | tool-selection accuracy, task success, steps, latency, cost, leakage (including two point-in-time trap questions); for the three user-position questions, a `plan_position` call per stated position, `{ppN...}` placeholders, and no clause presenting the strategy path's `{current_exposure}` as the user's position | 15 questions with expected tools (`evals/datasets/agent.yaml`) | DeepSeek: 100% tool selection, 15/15 task success, 3/3 user-position questions passed the plan contract, 0 leaks, 0 fallbacks (run 8) |
 | Strategy consistency (offline) | signal scenarios reproduced; planted contradictions caught; false positives | 10 dated fixtures (full exposure, 80%, after reductions, panic add, greed reduce, adds and reductions clipped at the cap/floor, holds at the cap/floor) with a consistent answer and planted contradictions (`evals/datasets/consistency.yaml`) | 10/10 scenarios, 24/24 caught, 0 false positives |
-| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 4/10 broke the placeholder format on the first pass, 0/10 after one repair turn, 0 fallbacks; 0 leaks (run 7) |
+| Strategy consistency (live) | answers rejected by the validator, leakage | the same 10 fixtures' questions through the agent | DeepSeek: 7/10 broke the placeholder format on the first pass, 1/10 still after one repair turn (fell back to the rule-based summary); 0 leaks (run 8) |
 
 #### Live run (DeepSeek, 2026-10-25)
 
-Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 7.
+Claude has not been run against these evals; every live number in this README is `deepseek-flash` (`--mode live --provider deepseek`). Runs 1–3 cost $0.10 in total; the latest numbers are from run 8.
 
 The first run exposed false positives in the scoring code, not model errors, so the code was changed **after seeing live answers**:
 
@@ -335,7 +335,8 @@ Each fix has a regression test built from the sentence that triggered it (`tests
 | 4, fresh: declared figures + repair | structured claims | 2/10 first pass → 0/10 after repair | 11/12 | 97.7% | 0 | 0 |
 | 5, fresh: placeholders | code-rendered figures, format check | 4/10 first pass → 0/10 after repair | 10/12 | 97.7% | 0 | 1 |
 | 6, fresh: #31 gaps closed | + state phrasings, metric placeholders with units | 4/10 first pass → 0/10 after repair | 11/12 | 99.1% | 0 | 0 |
-| **7, fresh: #33 plan_position** | **+ `plan_position`, "your position" rule, 3 user-position questions** | **4/10 first pass → 0/10 after repair** | **14/15** | **100%** | **0** | **0** |
+| 7, fresh: #33 plan_position | + `plan_position`, "your position" rule, 3 user-position questions | 4/10 first pass → 0/10 after repair | 14/15 | 100% | 0 | 0 |
+| **8, fresh: run 7 follow-ups** | **+ per-clause plan check, unsigned-change note in the prompt** | **7/10 first pass → 1/10 after repair** | **15/15** | **100%** | **0** | **1 (consistency)** |
 
 Run 3 failures, reviewed by hand (`evals/results/*_deepseek.json`):
 
@@ -370,6 +371,13 @@ Run 7 adds `plan_position` and the "your position" format rule (#33), plus three
 - **First-pass format misses (all repaired):** raw "0%" / "50%" user positions (a13, a14), `{bt1.latest_position_change_pct}` (c06, c07; not on the allowlist), `{bt1.*}` without a `run_backtest` call (a07, the documented limitation), raw step figures (a12, c05, c06), and c08's "a hold rather than a new add", which the direction check reads as an add (a false positive).
 - **Judge contradictions:** two real model errors: a04 again gives 77.56 as the 2025-04-09 Panic Index (the tool says 72.13), and c09 writes `{current_exposure}` for the next step's target, which renders as "lifts the strategy path to 0%" instead of 20%. The other five (c03, c06 ×3, c10) label a correct "Buy & Hold beat the strategy (X vs. Y)" as reversed: judge mistakes.
 - **A first attempt at run 7 was discarded:** it ran while the full test suite was running on the same machine, and the embedding model failed to load (`bad allocation`) on two `search_fed_docs` calls. Its answers were not used; the reported run was a fresh run on its own, with no code changes in between.
+
+Run 8 measures the two changes made after run 7 (`ae5a5d4`): the plan check is per clause, and the prompt says `{ppN.applied_change_pct}` renders without a sign. It is reported without changes after seeing it ($0.08 with the judge). Agent: 15/15, 100% tool selection, 100% citation precision, 100% numeric faithfulness, 0 leaks, 7 repair turns, 0 fallbacks, and 3/3 user-position questions passed the plan contract. Consistency: 7/10 broke the format on the first pass, 6 were repaired, and 1 (c08) still broke it and fell back to the rule-based summary; 107 figures rendered by code, 0 leaks. Judge: 85.0% of 107 consistency statements (9 answers; the fallback is not judged) and 91.7% of 169 agent statements supported, 4 contradicted. By hand:
+
+- **The two follow-ups did what they were for.** a14 now writes the verb ("the rule reduces your position by 10% to 40%"), and the per-clause check raised no false positive. All three user-position questions called `plan_position` for every stated position and kept the strategy path separate ("not the strategy path, which already holds 100%"). Their first drafts wrote the user's positions raw (a13, a14, a15); one repair fixed each.
+- **The consistency eval did worse than in run 7 (7/10 first pass vs. 4/10).** Most first-pass misses repeat earlier runs: `{bt1.latest_position_change_pct}` (c01, c04, c07, c09; not on the allowlist, `{applied_change}` is the signal's equivalent, and the model has asked for it in runs 6–8), raw figures (c06, c10), and c08's "holds rather than adds", which the direction check reads as an add (a false positive, as in run 7). c08's repair then wrote "within the 0%-100% band" raw, which is still a raw position figure, so it fell back as designed. The check also reads that range as "0%" and "-100%", a parsing quirk that does not change the outcome.
+- **The standard backtest's metrics are now the most common agent miss.** Five answers (a01, a07, a11, a13, a15) asked for `{bt1.strategy_return_pct}` or `{bt_standard.*}` without a `run_backtest` call, wanting the Strategy Signal panel's returns, which have no placeholders (the documented limitation). All were repaired.
+- **Judge contradictions:** one real model error, a04's Panic Index again (77.56 vs. 72.13, as in runs 3, 5, and 7). c05's two labels flag a correct "Buy & Hold beat the strategy (5.31% vs. 13.38%)" as reversed, and c02's is about a truncated passage: judge mistakes.
 
 Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 
