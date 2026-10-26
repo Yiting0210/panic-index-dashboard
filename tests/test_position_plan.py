@@ -142,8 +142,28 @@ def test_your_position_sentences_are_checked_against_the_plan_not_the_path():
             "{pp1.current_position_pct} position the rule adds {pp1.applied_change_pct} "
             "today, taking you to {pp1.target_position_pct}.")
     assert check(text, signal, calls) == []
-    # Without the plan figures the same sentence is about the path, which holds.
-    assert check("From your position the rule adds exposure today.", signal, calls)
+
+
+@pytest.mark.parametrize("as_of, text", [
+    # The path adds (0% -> 20%); someone already at the cap holds. Without a
+    # plan figure this sentence used to pass against the path's "add".
+    (PANIC_DAY, "From your position the rule adds exposure today."),
+    (CAP_DAY, "From your position the rule adds exposure today."),
+    (CAP_DAY, "You're fully invested, so your exposure stays where it is today."),
+    (GREED_DAY, "The rule now reduces your allocation."),
+])
+def test_your_position_action_without_a_plan_figure_is_rejected(as_of, text):
+    violations = check(text, build_strategy_signal("QQQ", as_of), {})
+    assert len(violations) == 1 and "without a plan_position figure" in violations[0]
+
+
+@pytest.mark.parametrize("text", [
+    "If you hold 0 today, the rule would add exposure.",          # hedged: skipped
+    "This tells you the strategy holds {current_exposure} exposure today.",  # bare "you"
+    "Your question is about the rule's history since 2023.",      # no current action
+])
+def test_other_you_sentences_are_not_flagged(text):
+    assert check(text, build_strategy_signal("QQQ", CAP_DAY), {}) == []
 
 
 def test_your_position_sentence_contradicting_the_plan_is_rejected():

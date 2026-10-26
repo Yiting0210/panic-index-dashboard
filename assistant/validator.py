@@ -22,7 +22,9 @@ the format contract and the one structured field:
   A sentence with a figure rendered from a plan_position call is about the
   user's own position, so it is checked against that call's action instead
   of the standard signal's (from 50% the rule adds while the strategy path,
-  already at the cap, holds).
+  already at the cap, holds). An unhedged sentence about the rule's action
+  today from "your" position with no such figure is a violation, since
+  there is no plan to check it against.
 """
 import re
 
@@ -67,6 +69,11 @@ ADD_PAST = r"added|increased|raised|accumulated|bought"
 REDUCE_NOW = (r"reduc(?:e|es|ing)|trim(?:s|ming)?|cut(?:s|ting)?|lower(?:s|ing)?|"
               r"sell(?:s|ing)?|de-?risk(?:s|ing)?")
 REDUCE_PAST = r"reduced|trimmed|lowered|sold|de-?risked"
+# "your position", "you're 50% invested": a sentence about the user's own
+# position. Deliberately narrow: a bare "you" ("this tells you...") is not.
+YOUR_RE = re.compile(r"\byour\b|\byou(?:'re|\s+are|\s+hold|\s+have|\s+own)\b", re.IGNORECASE)
+HOLD_RE = re.compile(r"\b(?:hold(?:s|ing)?|stay(?:s|ing)?|keep(?:s|ing)?|remain(?:s|ing)?|"
+                     r"unchanged)\b", re.IGNORECASE)
 ADD_NOW_RE = re.compile(rf"\b(?:{ADD_NOW})\b", re.IGNORECASE)
 ADD_ANY_RE = re.compile(rf"\b(?:{ADD_NOW}|{ADD_PAST})\b", re.IGNORECASE)
 REDUCE_NOW_RE = re.compile(rf"\b(?:{REDUCE_NOW})\b", re.IGNORECASE)
@@ -141,6 +148,16 @@ def _stated_action(sentence, present_only):
     return "add" if adds else "reduce"
 
 
+def _unplanned_your_action(sentence):
+    """Whether an unhedged sentence states the rule's action today from the
+    user's own position (add, reduce, or hold)."""
+    if not (YOUR_RE.search(sentence) and CURRENT_RE.search(sentence)
+            and TOPIC_RE.search(sentence)) or HEDGE_RE.search(sentence):
+        return False
+    verbs = BUY_HOLD_RE.sub(" ", sentence)
+    return bool(ADD_ANY_RE.search(verbs) or REDUCE_ANY_RE.search(verbs) or HOLD_RE.search(verbs))
+
+
 def _plan_sources(rendered, start, end):
     """Ids of plan_position calls whose figures were rendered in text[start:end]."""
     return {source for (s, e), source in zip(rendered.spans, rendered.sources)
@@ -162,6 +179,13 @@ def _direction_violations(parts, signal, plans):
                         f"direction '{action}' contradicts the rule's "
                         f"'{'/'.join(sorted(expected))}' from your position ({names}): "
                         f"{sentence}")
+            elif _unplanned_your_action(sentence):
+                # Without a plan figure it would be checked against the
+                # strategy path, which is a different position.
+                violations.append(
+                    "your-position action without a plan_position figure: call "
+                    "plan_position for that position and write {ppN.current_position_pct} "
+                    f"/ {{ppN.target_position_pct}}: {sentence}")
             elif signal is not None:
                 action = _stated_action(sentence, present_only=signal.action == "hold")
                 if action and action != signal.action:

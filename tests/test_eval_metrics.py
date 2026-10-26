@@ -147,3 +147,49 @@ def test_signal_numbers_count_as_sources():
 
 def test_two_day_meeting_dates_are_not_counted_as_numbers():
     assert extract_numbers("the March 15–16, 2022 meeting and Jan 25-26 cut 0.25") == [0.25]
+
+
+POSITION_QUESTION = {"id": "p", "question": "I have no position. What would the rule do today?",
+                     "as_of": date(2022, 3, 18), "expected_tools": ["plan_position"],
+                     "user_positions": [0]}
+
+
+def plan_call(position, target):
+    return ToolCall(
+        name="plan_position",
+        arguments={"market": "QQQ", "as_of": "2022-03-18", "current_position_pct": position},
+        result={"data_through": "2022-03-18", "current_position_pct": float(position),
+                "target_position_pct": float(target), "applied_change_pct": float(target - position)},
+        is_error=False, latency_ms=1.0, call_id="pp1",
+    )
+
+
+def test_user_position_question_needs_plan_placeholders():
+    raw = "From your {pp1.current_position_pct} position the rule adds today."
+    ok = make_result("From your 0% position the rule adds today.", [], [plan_call(0, 20)])
+    ok.raw_answer = {"answer": raw, "key_reasons": [], "caveats": "none"}
+    row = score_result(POSITION_QUESTION, ok)
+    assert row["user_position_problems"] == [] and row["success"]
+
+
+@pytest.mark.parametrize("tool_calls, raw, problem", [
+    ([], "The rule holds {current_exposure} exposure.", "no plan_position call for 0%"),
+    ([plan_call(0, 20)], "The rule holds {current_exposure} exposure.", "no {ppN...} placeholder"),
+    ([plan_call(0, 20)], "Your target is {current_exposure}; from {pp1.current_position_pct} it adds.",
+     "strategy path exposure stated as your position"),
+])
+def test_user_position_problems(tool_calls, raw, problem):
+    result = make_result("text", [], tool_calls)
+    result.raw_answer = {"answer": raw, "key_reasons": [], "caveats": "none"}
+    row = score_result(POSITION_QUESTION, result)
+    assert any(problem in p for p in row["user_position_problems"]) and not row["success"]
+
+
+def test_contrasting_the_strategy_path_with_your_position_is_fine():
+    # Run 7, a14: the path figure sits in its own clause, contrasted with "your account".
+    raw = ("From {pp1.current_position_pct} the rule reduces you to {pp1.target_position_pct}. "
+           "Separately, the strategy path has already worked down to {current_exposure}; "
+           "that is the rule's own path, not a target for your account.")
+    result = make_result("text", [], [plan_call(0, 20)])
+    result.raw_answer = {"answer": raw, "key_reasons": [], "caveats": "none"}
+    assert score_result(POSITION_QUESTION, result)["user_position_problems"] == []

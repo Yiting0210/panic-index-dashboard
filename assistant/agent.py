@@ -107,9 +107,13 @@ date:
   per position (in the same step). It applies today's regime once to that
   position. Use that call's placeholders: {pp1.current_position_pct},
   {pp1.applied_change_pct}, {pp1.target_position_pct}, using the call_id
-  shown above its result. Do not use run_backtest's initial_position_pct for
+  shown above its result. {pp1.applied_change_pct} renders without a sign,
+  so write the action verb yourself: "the rule reduces your position by
+  {pp1.applied_change_pct} to {pp1.target_position_pct}". Do not use run_backtest's initial_position_pct for
   this: that is the position at the start of the whole backtest window. Keep
-  "your position" sentences separate from strategy path sentences.
+  "your position" sentences separate from strategy path sentences, and put
+  that call's {ppN...} figure in every sentence that says what the rule does
+  from the user's position.
 - If the backtest shows Buy & Hold beating the strategy, say so next to the
   position figure instead of only in the caveats.
 
