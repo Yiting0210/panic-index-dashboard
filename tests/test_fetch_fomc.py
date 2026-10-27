@@ -48,6 +48,23 @@ def test_calendar_lists_press_conferences_on_the_decision_day():
     assert {e["doc_type"] for e in entries} == {"statement", "minutes", "press_conference"}
 
 
+def test_calendar_accepts_the_pressconf_spelling():
+    calendar = """
+    <div class="fomc-meeting">
+      <a href="/newsevents/pressreleases/monetary20260128a.htm">HTML</a>
+      <a href="/monetarypolicy/fomcpressconf20260128.htm">Press Conference</a>
+    </div>
+    """
+    presconf = [e for e in fetch_fomc.parse_calendar(calendar)
+                if e["doc_type"] == "press_conference"]
+    assert presconf == [{
+        "doc_type": "press_conference",
+        "meeting_date": date(2026, 1, 28),
+        "published_at": date(2026, 1, 28),
+        "url": "https://www.federalreserve.gov/monetarypolicy/fomcpressconf20260128.htm",
+    }]
+
+
 def test_extract_transcript_joins_turns_and_drops_page_furniture():
     role, speaker, text = fetch_fomc.extract_transcript(TRANSCRIPT_LINES)
     assert (role, speaker) == ("Chair", "Powell")

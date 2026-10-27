@@ -64,7 +64,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4586,
+        "eligible_chunks": 4640,
         "retrieved": [
           "minutes-20240131",
           "minutes-20250917",
@@ -81,7 +81,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4998,
+        "eligible_chunks": 5052,
         "retrieved": [
           "minutes-20240918",
           "minutes-20230920",
@@ -97,7 +97,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4955,
+        "eligible_chunks": 5009,
         "retrieved": [
           "minutes-20230726",
           "minutes-20220727",
@@ -148,7 +148,7 @@
       "k": 5,
       "questions": 30,
       "recall@5": 0.7333,
-      "mrr": 0.5889,
+      "mrr": 0.5833,
       "leakage_rate": 0
     },
     "misses": [
@@ -174,10 +174,10 @@
         "eligible_chunks": 4206,
         "retrieved": [
           "minutes-20220615",
-          "minutes-20241218",
           "minutes-20240918",
+          "minutes-20241218",
           "press_conference-20211215",
-          "press_conference-20210317"
+          "minutes-20210728"
         ],
         "relevant": [
           "statement-20250730"
@@ -188,11 +188,11 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4586,
+        "eligible_chunks": 4640,
         "retrieved": [
+          "press_conference-20260128",
           "minutes-20250129",
           "minutes-20220126",
-          "minutes-20241218",
           "minutes-20210127",
           "minutes-20240320"
         ],
@@ -205,13 +205,13 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4998,
+        "eligible_chunks": 5052,
         "retrieved": [
           "minutes-20230920",
-          "minutes-20260729",
           "minutes-20211103",
+          "minutes-20260729",
           "press_conference-20240612",
-          "minutes-20251029"
+          "press_conference-20251210"
         ],
         "relevant": [
           "statement-20260916"
@@ -222,7 +222,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4955,
+        "eligible_chunks": 5009,
         "retrieved": [
           "minutes-20220615",
           "press_conference-20260429",
@@ -329,7 +329,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4586,
+        "eligible_chunks": 4640,
         "retrieved": [
           "minutes-20241218",
           "minutes-20220126",
@@ -346,7 +346,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4998,
+        "eligible_chunks": 5052,
         "retrieved": [
           "minutes-20260729",
           "minutes-20260318",
@@ -362,7 +362,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4955,
+        "eligible_chunks": 5009,
         "retrieved": [
           "minutes-20220615",
           "minutes-20230726",
@@ -410,7 +410,7 @@
         "recall": 0.0,
         "reciprocal_rank": 0.0,
         "leaked": 0,
-        "eligible_chunks": 4685,
+        "eligible_chunks": 4739,
         "retrieved": [
           "minutes-20220126",
           "minutes-20250319",
@@ -446,8 +446,8 @@
           "minutes-20251029",
           "minutes-20231101",
           "minutes-20230322",
-          "minutes-20230201",
-          "minutes-20250507"
+          "minutes-20250507",
+          "minutes-20230201"
         ],
         "relevant": [
           "minutes-20251210"
@@ -461,7 +461,7 @@
       "k": 5,
       "questions": 30,
       "recall@5": 0.9333,
-      "mrr": 0.7639,
+      "mrr": 0.7528,
       "leakage_rate": 0
     },
     "misses": [
@@ -492,8 +492,8 @@
           "minutes-20251029",
           "minutes-20231101",
           "minutes-20230322",
-          "minutes-20230201",
-          "minutes-20250507"
+          "minutes-20250507",
+          "minutes-20230201"
         ],
         "relevant": [
           "minutes-20251210"
