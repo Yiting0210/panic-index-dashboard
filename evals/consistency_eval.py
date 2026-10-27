@@ -26,7 +26,7 @@ from statistics import mean
 
 import yaml
 
-from evals.agent_eval import RECORDINGS_DIR, RESULTS_DIR, score_result
+from evals.agent_eval import RESULTS_DIR, build_agent, score_result
 
 DATASET = Path(__file__).parent / "datasets" / "consistency.yaml"
 
@@ -102,6 +102,8 @@ async def run_agent(agent, fixtures, judge=None):
             "leaked": scored["leaked"],
             "unsupported_numbers": scored["unsupported_numbers"],
             "cost_usd": result.cost_usd,
+            "model_responses": result.model_responses,
+            "cached_responses": result.cached_responses,
             "answer": result.answer,
             "key_reasons": result.key_reasons,
             "judge": judge_result(result, judge) if judge is not None else None,
@@ -111,6 +113,7 @@ async def run_agent(agent, fixtures, judge=None):
         "provider": agent.provider,
         "model": agent.model,
         "fixtures": len(rows),
+        "signal_mismatches": sum(bool(r["signal_mismatches"]) for r in rows),
         "answered": len(answered),
         # Before the repair turn, and after it (an answer still violating is
         # replaced by the rule-based summary).
@@ -123,22 +126,31 @@ async def run_agent(agent, fixtures, judge=None):
         "leakage_rate": round(mean(r["leaked"] for r in rows), 3),
         "other_fallbacks": len(rows) - len(answered),
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
+        "model_responses": sum(r["model_responses"] for r in rows),
+        "cached_responses": sum(r["cached_responses"] for r in rows),
     }
     if judge is not None:
         summary.update(summarize_judgements([r["judge"] for r in rows]))
     return summary, rows
 
 
-def build_agent(mode, provider):
-    from assistant import DeepSeekAgent, ResearchAgent, ResponseCache, UsageLedger
-
-    if mode == "live":
-        cache = ResponseCache(mode="readwrite")
+def evaluate(agent=None, judge=None, extra=None):
+    """Run the offline layer (agent=None) or the agent layer, and write its
+    result file; extra joins the summary."""
+    fixtures = load_fixtures()
+    if agent is None:
+        summary, rows = run_offline(fixtures)
+        out = RESULTS_DIR / "consistency_offline.json"
     else:
-        cache = ResponseCache(RECORDINGS_DIR, mode=mode)
-    ledger = UsageLedger(RESULTS_DIR / "agent_usage.jsonl", daily_budget_usd=5.00)
-    agent_cls = DeepSeekAgent if provider == "deepseek" else ResearchAgent
-    return agent_cls(cache=cache, ledger=ledger)
+        summary, rows = asyncio.run(run_agent(agent, fixtures, judge))
+        out = RESULTS_DIR / f"consistency_{agent.provider}.json"
+    summary = {**summary, **(extra or {})}
+    print(json.dumps(summary, indent=2))
+    RESULTS_DIR.mkdir(exist_ok=True)
+    out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str) + "\n",
+                   encoding="utf-8")
+    print(f"Wrote {out}")
+    return summary, rows
 
 
 def main():
@@ -150,23 +162,14 @@ def main():
                         help="label each statement's grounding with a DeepSeek judge")
     args = parser.parse_args()
 
-    fixtures = load_fixtures()
     if args.mode == "offline":
-        summary, rows = run_offline(fixtures)
-        out = RESULTS_DIR / "consistency_offline.json"
-    else:
-        judge = None
-        if args.judge:
-            from evals.judge import DeepSeekJudge
-            judge = DeepSeekJudge()
-        summary, rows = asyncio.run(run_agent(build_agent(args.mode, args.provider), fixtures,
-                                              judge))
-        out = RESULTS_DIR / f"consistency_{args.provider}.json"
-    print(json.dumps(summary, indent=2))
-    RESULTS_DIR.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str) + "\n",
-                   encoding="utf-8")
-    print(f"Wrote {out}")
+        evaluate()
+        return
+    judge = None
+    if args.judge:
+        from evals.judge import DeepSeekJudge
+        judge = DeepSeekJudge()
+    evaluate(build_agent(args.mode, args.provider), judge)
 
 
 if __name__ == "__main__":

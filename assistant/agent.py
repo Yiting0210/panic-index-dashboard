@@ -223,6 +223,8 @@ class AgentResult:
     cache_read_tokens: int = 0
     cost_usd: float = 0.0
     latency_ms: float = 0.0
+    # Model responses this answer used, and how many came from the cache.
+    model_responses: int = 0
     cached_responses: int = 0
     fallback_reason: Optional[str] = None
     strategy: Optional[StrategyParams] = None
@@ -478,6 +480,7 @@ class ResearchAgent:
         else:
             response = cached
             result.cached_responses += 1
+        result.model_responses += 1
         latency_ms = (time.perf_counter() - started) * 1000
         usage = self._usage(response)
         record = self.ledger.record(

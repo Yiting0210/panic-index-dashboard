@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import date
 from pathlib import Path
 
@@ -27,14 +26,12 @@ PROVIDERS = {
     "Claude (Anthropic)": {
         "id": "anthropic",
         "models": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
-        "env": "ANTHROPIC_API_KEY",
         "placeholder": "sk-ant-...",
         "keys_url": "https://console.anthropic.com/settings/keys",
     },
     "DeepSeek": {
         "id": "deepseek",
         "models": ["deepseek-flash", "deepseek-v4-pro"],
-        "env": "DEEPSEEK_API_KEY",
         "placeholder": "sk-...",
         "keys_url": "https://platform.deepseek.com/api_keys",
     },
@@ -62,33 +59,47 @@ def latest_fomc_date():
 
 @st.cache_resource
 def shared_resources():
-    """MCP server, response cache, and the owner-key ledger, shared by all sessions."""
-    from assistant import ResponseCache, UsageLedger
+    """MCP server and response cache, shared by all sessions."""
+    from assistant import ResponseCache
     from mcp_server import server
 
-    budget = float(os.getenv("PANIC_LLM_DAILY_BUDGET_USD", "1.00"))
-    return server, ResponseCache(), UsageLedger(daily_budget_usd=budget)
+    return server, ResponseCache()
+
+
+class NoKeyClient:
+    """Stands in for the provider client when no key was entered.
+
+    The page never falls back to a key from the environment: any model call
+    raises, and the agent answers with the rule-based summary (or a cached
+    response to the identical request).
+    """
+
+    def __getattr__(self, name):
+        raise RuntimeError("no API key entered")
 
 
 def build_agent(provider, model, api_key):
     """A per-request agent; a visitor's key never leaves this session's memory.
 
-    Visitor keys are logged as billed_to="user" and do not consume the app
-    owner's daily budget. Without a visitor key the owner's key from the
-    environment is used, subject to that budget.
+    Only a key typed into the page is used. Calls are logged as
+    billed_to="user".
     """
     import anthropic
+    import openai
 
     from assistant import DeepSeekAgent, ResearchAgent, UsageLedger
+    from assistant.agent import DEEPSEEK_BASE_URL
 
-    server, cache, owner_ledger = shared_resources()
-    ledger = (UsageLedger(daily_budget_usd=float("inf"), billed_to="user")
-              if api_key else owner_ledger)
-    if provider == "deepseek":
-        return DeepSeekAgent(server=server, api_key=api_key or None, model=model,
-                             cache=cache, ledger=ledger)
-    client = anthropic.Anthropic(api_key=api_key) if api_key else None
-    return ResearchAgent(server=server, client=client, model=model, cache=cache, ledger=ledger)
+    server, cache = shared_resources()
+    ledger = UsageLedger(daily_budget_usd=float("inf"), billed_to="user")
+    if not api_key:
+        client = NoKeyClient()
+    elif provider == "deepseek":
+        client = openai.OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+    else:
+        client = anthropic.Anthropic(api_key=api_key)
+    agent_cls = DeepSeekAgent if provider == "deepseek" else ResearchAgent
+    return agent_cls(server=server, client=client, model=model, cache=cache, ledger=ledger)
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -127,11 +138,8 @@ api_key = st.text_input(
         "or logged, and requests are billed to your account."
     ),
 ).strip()
-owner_key = bool(os.getenv(provider["env"]))
 if api_key:
     st.caption("Using your key. Spend is shown per answer and billed to your account.")
-elif owner_key:
-    st.caption("No key entered: using the app's key, limited by its daily budget.")
 else:
     st.caption(
         "No key entered: answers fall back to the deterministic rule-based summary "
@@ -157,11 +165,6 @@ st.sidebar.caption(
     ("Defaults" if strategy == DEFAULT_STRATEGY else "From the Threshold Strategy page")
     + f": {strategy.describe()}. Change them on the Threshold Strategy page."
 )
-
-if not api_key and owner_key:
-    owner_ledger = shared_resources()[2]
-    remaining = max(owner_ledger.daily_budget_usd - owner_ledger.spent_today(), 0.0)
-    st.sidebar.caption(f"App key daily budget remaining: ${remaining:.2f}")
 
 # ── Question ──────────────────────────────────────────────────────────────────
 example = st.selectbox("Example questions", ["(write your own)"] + EXAMPLES)
