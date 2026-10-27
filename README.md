@@ -38,6 +38,18 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 
 ![Peak Detection & Signal Validation screenshot](assets/Peak_Detection.png)
 
+### Research Assistant
+
+QQQ as of 2026-10-23 with a 50% current exposure entered on the page. The Decision / Strategy Facts block is rendered by code; the model only writes the AI Analysis below it.
+
+![Research Assistant decision facts screenshot](assets/Research_Assistant_Decision.png)
+
+![Research Assistant AI analysis screenshot](assets/Research_Assistant_Analysis.png)
+
+*Advanced / Debug* lists the decision facts the model saw, each tool call with its result, and the run's latency and cost.
+
+![Research Assistant debug panel screenshot](assets/Research_Assistant_Debug.png)
+
 ---
 
 ## Features
@@ -289,6 +301,10 @@ Explanation ──────► AI Analysis ──────────┴�
 - **Prose is measured, not gated.** Whether the explanation contradicts the decision, or says something the evidence does not support, is measured by an LLM judge in the live evals (`--judge`, `evals/judge.py`), never used to block an answer. Earlier versions blocked it with direction checks and phrasing tables; those were removed in #35.
 
 The panels show the framework's rule, not a recommendation; the page's example questions are phrased as research questions for the same reason.
+
+### FOMC documents are a background layer
+
+FOMC documents only enter the assistant through retrieval. The model calls `search_fed_docs`, reads the passages, and writes the Fed context in `historical_context`, citing doc ids. Nothing from the Fed reaches the decision: the regime, the strategy path, and `plan_position` depend only on the Panic Index and the strategy settings, and no code turns a statement or minutes passage into a signal, a threshold, or a position change. "Restrictive" or "easing" in the AI Analysis is the model's reading of the passages it retrieved, not a computed state.
 
 ### Cost and observability
 
@@ -617,3 +633,14 @@ These findings are descriptive historical evidence and should not be interpreted
 - The retrieval and agent eval sets are small (30 and 12 questions) and were written for this project; the date-aware retrieval feature was tuned on the same retrieval set.
 - Earlier validators parsed prose to work out what each exposure figure meant. On fresh DeepSeek answers they rejected 20–40% of correct explanations, and their fixes were written after seeing live answers (runs 1–8 below). Since #35 the decision is code-owned and the runtime contract is small, so the limits are different: prose that contradicts the decision or restates it in wording outside the one format rule ("the rule holds 100%") reaches the user next to the correct panel, and only the judge, itself a model, measures it. The standard backtest's own metrics (the Strategy Path panel's returns and drawdowns) have no placeholders, so the model copies them as text. Live numbers come from one provider and a handful of runs of 10 + 15 questions.
 - The assistant tells the model not to use its own knowledge, but the model's training data can still include events after `as_of`; the agent eval checks answers for future dates and late citations.
+- `get_forward_returns` covers panic and greed days only. When the current regime is neutral, the assistant can compare the panic and greed histories but has no forward-return statistics for the state the market is actually in.
+- `search_fed_docs` ranks passages by relevance, not recency, so a question about the "latest" FOMC communication can miss the most recent statement even though it is in the library (seen on QQQ as of 2026-10-23: the 2026-09-16 minutes were cited, the same meeting's statement was not retrieved). The library also lacks some press conference transcripts, for example 2026-09-16.
+- Reasoning errors in the prose are not caught at runtime. In the same answer the model wrote that shorter horizons have fewer complete forward windows (it is the longer ones, and here all horizons had the same count) and called a reading 15 points from the threshold "near the threshold". Every number matched the tools and the decision panel was correct, so by design these are eval / judge cases, not validator rules.
+- The Fed policy backdrop is qualitative text written by the model from retrieved passages. It has no schema, is not checked against a computed state, and does not affect any decision fact (see *FOMC documents are a background layer*).
+
+---
+
+## Roadmap
+
+1. **FOMC macro-state schema.** A deterministic, point-in-time record of the latest policy state as of a date, built from the documents published by then: for example the target range and the last change, the decision direction, the next scheduled meeting, and which document types exist for the latest meeting. Each field cites the document it came from. It would be computed by code from the corpus and indexed by `published_at` like the documents themselves, with look-ahead tests.
+2. **Decide how it enters a portfolio overlay.** Only after the schema exists and is tested: whether the macro state stays read-only context for the explanation, or becomes an explicit, backtested input to position sizing (for example a cap on adds in a tightening phase). Any input to sizing would be a strategy-math change with its own tests and a statement of how historical results change. Until then FOMC stays the retrieval background layer described above.
