@@ -52,7 +52,7 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **RealTimePeakDetector Causal Signal Analysis**: past/current-data-only panic-reversal confirmation signal for tactical research.
 - **Interactive Controls**: market selector, date range, thresholds, position sizing, horizons, and peak-detection parameters.
 - **MCP Research Server**: regime, backtest, forward-return, peak-detection, and FOMC-search tools for any MCP client, each pinned to an `as_of` date.
-- **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 137 FOMC statements, minutes, and Chair press conference transcripts, filtered by public release date.
+- **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 138 FOMC statements, minutes, and Chair press conference transcripts, filtered by public release date.
 - **Research Assistant**: tool-use client for Claude or DeepSeek with bring-your-own API keys, citations, cost and latency logging, and a rule-based fallback.
 - **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
 - **Daily Data Updates**: scheduled, append-only ingestion of prices, Fear & Greed, and FOMC documents with data-quality checks.
@@ -221,8 +221,8 @@ tools/  <- one tool layer: every function takes as_of and returns a pydantic mod
                   ^                      response cache, usage ledger, budget, fallback
                   +-- pages/3_🤖_Research_Assistant.py
 
-rag/    <- 137 FOMC statements, minutes, press conferences (2021-2026)
-           -> 5,034 chunks,
+rag/    <- 138 FOMC statements, minutes, press conferences (2021-2026)
+           -> 5,088 chunks,
            FAISS dense + BM25 hybrid search, filtered by release date
 evals/  <- retrieval, agent, and point-in-time evaluations (pytest + CI)
 ```
@@ -403,13 +403,15 @@ Retrieval ablation (`python -m evals.retrieval_eval`, k = 5):
 | Configuration | recall@5 | MRR | Leakage |
 |---|---|---|---|
 | Dense (bge-small-en-v1.5 + FAISS) | 0.733 | 0.494 | 0 |
-| BM25 | 0.733 | 0.589 | 0 |
+| BM25 | 0.733 | 0.583 | 0 |
 | Hybrid (RRF of dense + BM25) | 0.667 | 0.533 | 0 |
-| **Hybrid + meeting-month ranking** | **0.933** | **0.764** | **0** |
+| **Hybrid + meeting-month ranking** | **0.933** | **0.753** | **0** |
 
 Most misses in the first three rows were questions that name a month ("September 2024"), where a short policy statement was outranked by long minutes. When a query names a month, the final configuration adds a third ranked list restricted to that meeting month. That feature was designed after inspecting misses on the same 30 questions and there is no held-out split, so treat the final row as optimistic.
 
 Adding the 44 press conference transcripts lowered MRR from 0.799 to 0.764. Three questions whose answer the same day's press conference also states (r03, r07, r10) now accept either document, after checking the transcript text by phrase search. Two questions (r14, r30) now rank the labelled document sixth, just outside the top five, because long transcripts compete for the same slots.
+
+The January 2026 press conference was missing until the fetcher accepted the calendar's `fomcpressconf` link spelling. Adding it lowered hybrid MRR from 0.764 to 0.753 (recall unchanged). In BM25 it takes r16's top slot, pushing the labelled January 2026 statement out of the top five, so BM25 MRR fell from 0.589 to 0.583. The r16 label was not changed.
 
 `python -m evals.run` is the entry point for every suite:
 

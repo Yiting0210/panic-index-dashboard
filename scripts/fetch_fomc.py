@@ -31,7 +31,8 @@ HEADERS = {"User-Agent": "panic-index-dashboard research corpus builder"}
 
 STATEMENT_RE = re.compile(r"/newsevents/pressreleases/monetary(\d{8})a\.htm$")
 MINUTES_RE = re.compile(r"/monetarypolicy/fomcminutes(\d{8})\.htm$")
-PRESCONF_RE = re.compile(r"/monetarypolicy/fomcpresconf(\d{8})\.htm$")
+# The January 2026 calendar link is spelled "fomcpressconf".
+PRESCONF_RE = re.compile(r"/monetarypolicy/fomcpress?conf(\d{8})\.htm$")
 TRANSCRIPT_PDF_RE = re.compile(r"/FOMCpresconf\d{8}\.pdf$", re.IGNORECASE)
 RELEASED_RE = re.compile(r"Released\s+([A-Z][a-z]+\s+\d{1,2},\s+\d{4})")
 # Non-breaking hyphens and en/em dashes appear in rate ranges such as "1‑1/2".
