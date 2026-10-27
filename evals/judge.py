@@ -19,6 +19,8 @@ import re
 from assistant.agent import DEEPSEEK_BASE_URL, _extract_json
 from assistant.ledger import cost_usd
 
+JUDGE_MODEL = "deepseek-flash"
+
 JUDGE_PROMPT = """\
 You are checking a research assistant's answer against the evidence it had.
 Label each numbered statement with exactly one verdict:
@@ -67,7 +69,7 @@ def evidence(result):
 class DeepSeekJudge:
     """Judge model behind the OpenAI-compatible DeepSeek API."""
 
-    def __init__(self, model="deepseek-flash", api_key=None):
+    def __init__(self, model=JUDGE_MODEL, api_key=None):
         import openai
 
         self.model = model

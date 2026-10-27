@@ -148,6 +148,8 @@ def score_result(question, result):
         "cost_usd": result.cost_usd,
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,
+        "model_responses": result.model_responses,
+        "cached_responses": result.cached_responses,
         "fallback_reason": result.fallback_reason,
         "repairs": result.repairs,
         "first_violations": result.first_violations,
@@ -170,6 +172,8 @@ def summarize(rows, questions=None):
         "avg_steps": round(mean(r["steps"] for r in rows), 2),
         "avg_latency_ms": round(mean(r["latency_ms"] for r in rows), 1),
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
+        "model_responses": sum(r["model_responses"] for r in rows),
+        "cached_responses": sum(r["cached_responses"] for r in rows),
         "fallbacks": sum(r["fallback_reason"] is not None for r in rows),
         "repair_turns": sum(r["repairs"] for r in rows),
         "first_pass_violations": sum(bool(r["first_violations"]) or
@@ -200,11 +204,13 @@ async def run_eval(agent, questions, judge=None):
     return summary, rows
 
 
-def build_agent(mode, provider="anthropic"):
+def build_agent(mode, provider="anthropic", cache_dir=None):
+    """cache_dir: a live run's response cache (default .cache/llm)."""
     from assistant import DeepSeekAgent, ResearchAgent, ResponseCache, UsageLedger
+    from assistant.cache import CACHE_DIR
 
     if mode == "live":
-        cache = ResponseCache(mode="readwrite")
+        cache = ResponseCache(cache_dir or CACHE_DIR, mode="readwrite")
     else:
         cache = ResponseCache(RECORDINGS_DIR, mode=mode)
     ledger = UsageLedger(RESULTS_DIR / "agent_usage.jsonl", daily_budget_usd=5.00)
@@ -220,20 +226,25 @@ def main():
                         help="label each statement's grounding with a DeepSeek judge")
     args = parser.parse_args()
 
-    agent = build_agent(args.mode, args.provider)
     judge = None
     if args.judge:
         from evals.judge import DeepSeekJudge
         judge = DeepSeekJudge()
+    evaluate(build_agent(args.mode, args.provider), judge)
+
+
+def evaluate(agent, judge=None, extra=None):
+    """Run the agent eval and write its result file; extra joins the summary."""
     summary, rows = asyncio.run(run_eval(agent, load_questions(), judge))
-    summary = {"provider": agent.provider, "model": agent.model, **summary}
+    summary = {"provider": agent.provider, "model": agent.model, **summary, **(extra or {})}
     print(json.dumps(summary, indent=2))
     RESULTS_DIR.mkdir(exist_ok=True)
-    out = RESULTS_DIR / ("agent.json" if args.provider == "anthropic"
-                         else f"agent_{args.provider}.json")
+    out = RESULTS_DIR / ("agent.json" if agent.provider == "anthropic"
+                         else f"agent_{agent.provider}.json")
     out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str) + "\n",
                    encoding="utf-8")
     print(f"Wrote {out}")
+    return summary, rows
 
 
 if __name__ == "__main__":

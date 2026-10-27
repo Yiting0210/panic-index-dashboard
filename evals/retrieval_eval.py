@@ -61,25 +61,29 @@ def evaluate(index, questions, config="hybrid", k=5):
 
 
 def main():
-    from rag import get_index
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", choices=["all", *CONFIGS], default="all")
     parser.add_argument("--k", type=int, default=5)
     args = parser.parse_args()
+    evaluate_configs(list(CONFIGS) if args.config == "all" else [args.config], k=args.k)
+
+
+def evaluate_configs(configs=tuple(CONFIGS), k=5):
+    """Evaluate each config and write the result file; returns the report."""
+    from rag import get_index
 
     index = get_index()
     questions = load_questions()
-    configs = list(CONFIGS) if args.config == "all" else [args.config]
     report = {}
     for config in configs:
-        summary, rows = evaluate(index, questions, config=config, k=args.k)
+        summary, rows = evaluate(index, questions, config=config, k=k)
         report[config] = {"summary": summary, "misses": [r for r in rows if r["recall"] < 1]}
         print(json.dumps(summary))
     RESULTS_DIR.mkdir(exist_ok=True)
     out = RESULTS_DIR / "retrieval.json"
     out.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
     print(f"Wrote {out}")
+    return report
 
 
 if __name__ == "__main__":

@@ -53,7 +53,7 @@ The dashboard separates threshold strategy research, exposure diagnostics, forwa
 - **Interactive Controls**: market selector, date range, thresholds, position sizing, horizons, and peak-detection parameters.
 - **MCP Research Server**: regime, backtest, forward-return, peak-detection, and FOMC-search tools for any MCP client, each pinned to an `as_of` date.
 - **RAG over FOMC Documents**: hybrid dense + BM25 retrieval over 137 FOMC statements, minutes, and Chair press conference transcripts, filtered by public release date.
-- **Research Assistant**: tool-use client for Claude or DeepSeek with bring-your-own API keys, citations, cost and latency logging, a daily budget for the app's key, and a rule-based fallback.
+- **Research Assistant**: tool-use client for Claude or DeepSeek with bring-your-own API keys, citations, cost and latency logging, and a rule-based fallback.
 - **Evaluation Suite**: retrieval recall@5 / MRR, look-ahead leakage tests, and agent tool-selection / faithfulness metrics in CI.
 - **Daily Data Updates**: scheduled, append-only ingestion of prices, Fear & Greed, and FOMC documents with data-quality checks.
 
@@ -294,9 +294,8 @@ The panels show the framework's rule, not a recommendation; the page's example q
 
 - Every Messages API call is logged to `logs/llm_usage.jsonl` with input, output, and cache tokens, latency, and USD cost.
 - Identical requests are served from a content-addressed response cache (`.cache/llm/`) at $0.
-- A daily budget (`PANIC_LLM_DAILY_BUDGET_USD`, default $1.00) blocks new calls once it is reached.
 - The stable prefix (tool definitions and system prompt) is prompt-cached across agent steps.
-- On a missing key, an API error, a refusal, or an exhausted budget, the page falls back to the deterministic rule-based Research Summary.
+- With no key, an API error, or a refusal, the page falls back to the deterministic rule-based Research Summary.
 
 ### Model providers and API keys
 
@@ -310,8 +309,8 @@ The Research Assistant page lets each visitor pick a provider and model, then pa
 Both providers use the same MCP tools, as-of clamp, response cache, usage ledger, and rule-based fallback.
 
 - A visitor's key is kept only in that browser session's memory. It is not written to disk, the response cache, or the usage log, and requests are billed to the visitor's account.
-- Visitor-key calls are logged with `billed_to: "user"` and do not consume the app's daily budget.
-- With no key entered, the page uses the app owner's `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` (if set) under `PANIC_LLM_DAILY_BUDGET_USD`; otherwise it shows the rule-based summary.
+- Calls are logged with `billed_to: "user"`.
+- With no key entered, the page never calls a model: it shows the rule-based summary, or a cached response to an identical earlier request. It does not read `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` from the environment; `.env` is only for the evals.
 - DeepSeek costs are recorded at peak-hour rates (off-peak is half), so logged spend can overstate but not understate the bill.
 
 ### Evaluation
@@ -412,17 +411,32 @@ Most misses in the first three rows were questions that name a month ("September
 
 Adding the 44 press conference transcripts lowered MRR from 0.799 to 0.764. Three questions whose answer the same day's press conference also states (r03, r07, r10) now accept either document, after checking the transcript text by phrase search. Two questions (r14, r30) now rank the labelled document sixth, just outside the top five, because long transcripts compete for the same slots.
 
-CI runs the unit, leakage, and retrieval tests on every push. The agent eval replays recorded responses from `evals/recordings/` without an API key, and a manually triggered workflow (`workflow_dispatch` with `live_agent_eval`) runs it against the real API with the `ANTHROPIC_API_KEY` repository secret:
+`python -m evals.run` is the entry point for every suite:
+
+```bash
+python -m evals.run offline       # point-in-time tests + consistency + retrieval; no API calls
+python -m evals.run ci            # the same suites; what CI runs on every push
+python -m evals.run consistency   # offline: fixtures + validator probes
+python -m evals.run retrieval     # recall@5, MRR, leakage
+python -m evals.run agent --provider deepseek --live --fresh            # DEEPSEEK_API_KEY
+python -m evals.run agent --provider claude --live --fresh --judge      # also DEEPSEEK_API_KEY
+python -m evals.run consistency --provider deepseek --live --fresh
+```
+
+- Live runs read `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` from `.env` (not committed); a variable already set in the shell wins. `.env` is for these test runs only; the app does not read it.
+- Live runs need `--live` and an explicit `--provider` (`claude` or `deepseek`). They print the provider, model, and daily budget, then ask for confirmation. `--yes` skips the prompt; without a terminal, `--yes` is required.
+- `--judge` always uses the DeepSeek judge, whatever the provider.
+- `--fresh` answers from a new, empty cache directory under `.cache/llm-runs/`. Without it, live runs use `.cache/llm/` and may replay cached responses at $0. `.cache/llm/` is never moved or deleted, and each fresh run keeps its own directory.
+- The summary reports `cached_responses: N / M` and `fresh_responses: M-N / M`. A fresh run shows `cached_responses: 0`.
+- Exit codes: 0 passed; 1 a correctness check failed; 2 a usage or safety refusal, made before any provider call. Offline, a failure means a point-in-time test failed, a consistency signal mismatch, a missed planted restatement or false positive, or retrieval leakage. Live, it means a wrong code-owned decision or any look-ahead leakage. Task success, citation precision, numeric faithfulness, repairs, fallbacks, and judge scores are report-only.
+- Do not run live evals concurrently with the full test suite: both load the embedding model, and a concurrent run once failed with `bad allocation`.
+
+Record and replay stay on the suite modules. The manually triggered workflow (`workflow_dispatch` with `live_agent_eval`) uses them with the `ANTHROPIC_API_KEY` repository secret:
 
 ```bash
 python -m evals.agent_eval --mode record   # real API; writes evals/recordings/
 python -m evals.agent_eval --mode replay   # no API key needed
-python -m evals.consistency_eval           # offline: fixtures + validator probes
-python -m evals.agent_eval --mode live --provider deepseek         # DEEPSEEK_API_KEY
-python -m evals.consistency_eval --mode live --provider deepseek   # local cache only
 ```
-
-`--mode live` caches responses under `.cache/llm/` (not committed); a second run with the same code replays them at $0, so move that directory aside for a fresh sample.
 
 The offline consistency numbers measure the validator against hand-written answers, not the model; only the live run says how often a model contradicts the signal.
 

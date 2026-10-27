@@ -54,11 +54,8 @@ jobs:
       - name: Run tests (unit, point-in-time leakage, retrieval eval, agent replay)
         run: python -m pytest -q
 
-      - name: Retrieval eval report
-        run: python -m evals.retrieval_eval
-
-      - name: Strategy-consistency eval report (offline)
-        run: python -m evals.consistency_eval
+      - name: Offline evals (point-in-time tests, consistency, retrieval)
+        run: python -m evals.run ci
 
       - name: Upload eval results
         uses: actions/upload-artifact@v4

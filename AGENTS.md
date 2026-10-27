@@ -109,9 +109,12 @@ Run tests with the project virtualenv:
 
 ```bash
 .venv/Scripts/python.exe -m pytest -q        # Windows; .venv/bin/python elsewhere
-python -m evals.consistency_eval             # offline: decision scenarios + contract probes
-python -m evals.retrieval_eval               # retrieval recall@5 / MRR
+python -m evals.run offline                  # point-in-time tests + consistency + retrieval
+python -m evals.run consistency              # offline: decision scenarios + contract probes
+python -m evals.run retrieval                # retrieval recall@5 / MRR
 ```
+
+`python -m evals.run` exits 1 on a correctness failure and 2 on a usage or safety refusal.
 
 Before completing a change:
 
@@ -124,9 +127,9 @@ The offline agent eval (`--mode replay`) needs committed recordings. There are n
 
 ## Live model evals
 
-- **They cost money. Ask the user before every live run**, and state the expected cost. Live runs use the `DEEPSEEK_API_KEY` in `.env`.
+- **They cost money. Ask the user before every live run**, and state the expected cost. Live runs use the `DEEPSEEK_API_KEY` in `.env`, which `python -m evals.run` reads for live commands only.
 - Run one for major agent-architecture milestones, after offline tests pass, and only when the user agrees.
-- **Make every run fresh.** Move `.cache/llm/` aside first, or responses replay from the cache.
+- **Make every run fresh.** Use `python -m evals.run agent --provider deepseek --live --fresh` (same for `consistency`). Without `--fresh`, responses replay from `.cache/llm/`. Check that the summary shows `cached_responses: 0 / N`.
 - **Run nothing else alongside it.** A concurrent full test suite once made the embedding model fail to load (`bad allocation`) and spoiled a run.
 - **Report every run as-is** in the README run history and the PR. Changes made after seeing a run are disclosed and count as unverified until a later fresh run. Re-scoring the same answers is not evidence.
 - Do not treat a live run as a reason to patch every wording issue it shows.
