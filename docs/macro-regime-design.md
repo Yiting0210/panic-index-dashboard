@@ -21,7 +21,7 @@ Each layer has a different owner and a different failure mode, so each is stored
 | Fed state (V1a) | policy facts parsed from documents | deterministic code |
 | Fed assessment (V1b) | interpretation of the Fed's view | LLM, frozen and versioned |
 | Macro data (V2) | observed economic and market series, by vintage | deterministic code |
-| Market expectations (V2.x) | pre-event rate-path probabilities / implied rates | deterministic code from market data |
+| Market expectations (V2.4) | pre-event rate-path probabilities / implied rates | deterministic code from market data |
 | Macro regime (V2) | a classification of growth and inflation conditions | deterministic code |
 | Investor interpretation | explanation of transmission channels and asset sensitivity | deterministic mapping plus Research Assistant explanation |
 
@@ -42,7 +42,7 @@ These apply to every stage below.
 - **Point in time.** Every record is indexed by the date it became public or, for market data, the timestamp/date at which it was observable. An `as_of` query sees only information available on or before `as_of`. Each stage adds look-ahead tests to `tests/test_point_in_time.py`.
 - **Code owns facts.** Anything rendered as a structured fact (a table cell, an arrow, a regime name, a market-implied probability, or a surprise label) is computed by code, or is an LLM output that is extracted once, frozen, versioned, and labelled as a model interpretation. The Research Assistant receives these as read-only context and may explain them, not recompute them.
 - **Background layer until decided otherwise.** Nothing here changes the regime, the strategy path, or `plan_position`. Making macro state or market expectations an input to sizing is a separate decision (README Roadmap item 2), would be a strategy-math change, and needs its own backtest and a statement of how historical results change.
-- **No uncalibrated confidence.** Do not show model self-reported confidence (`0.87`) or regime confidence percentages. Where support needs to be shown, use countable quantities, for example "2 of 3 documents for this meeting support this reading". Market-implied probabilities are allowed because they are derived from prices rather than model confidence.
+- **No uncalibrated confidence.** Do not show model self-reported confidence (`0.87`) or regime confidence percentages. Where support needs to be shown, use countable quantities, for example "2 of 3 documents for this meeting support this reading". Market-implied probabilities are allowed because they are derived from prices rather than model confidence, but they are risk-neutral probabilities produced by a fixed conversion method, not real-world probabilities; see *Probability method* in section 9.
 - **No invented market expectations.** If a historical point-in-time expectations source is unavailable, the system may show a proxy such as the 2Y Treasury yield, but it must not convert that proxy into a fabricated probability of a hike or cut.
 
 ## 3. Current corpus
@@ -152,18 +152,20 @@ The grid is meant for questions such as "has the Fed become progressively more c
 
 ### Investor interpretation
 
-The page should not stop at labels such as `inflation = elevated, cooling`. Investors need the transmission channel. The structured display can expose a small number of deterministic descriptors, for example:
+The page should not stop at labels such as `inflation = elevated, cooling`. Investors need the transmission channel. The structured display can expose a small number of descriptors, for example:
 
-| Field | Example values |
-|---|---|
-| Policy direction | tightening / steady / easing |
-| Inflation risk | rising / stable / falling |
-| Growth risk | improving / stable / deteriorating |
-| Labor risk | tightening / balanced / weakening |
-| Rate-pressure implication | upward / mixed / downward |
-| Long-duration valuation implication | restrictive / mixed / supportive |
+| Field | Example values | Derived from |
+|---|---|---|
+| Policy direction | tightening / steady / easing | V1a decision and target range |
+| Inflation risk | rising / stable / falling | V1b inflation direction |
+| Growth risk | improving / stable / deteriorating | V1b growth direction |
+| Labor risk | tightening / balanced / weakening | V1b labor level and direction |
+| Rate-pressure implication | upward / mixed / downward | the rows above |
+| Long-duration valuation implication | restrictive / mixed / supportive | the rows above |
 
-These are not buy/sell labels. They describe sensitivity under an explicit chain such as:
+The mapping from inputs to descriptors is a lookup table of named constants in code, with a test per row, so the same inputs always give the same descriptor. The mapping is deterministic, but in V1 most of its inputs are V1b model readings, so every descriptor except policy direction inherits that status and is labelled in the UI as derived from model interpretation. Once V2 exists, the same descriptors can be computed from observed data and shown beside the Fed-derived ones.
+
+These are not buy/sell labels. "Long-duration valuation implication" in particular describes the direction of one channel (discount rates), not an expected return or a view on any asset. They describe sensitivity under an explicit chain such as:
 
 ```text
 inflation cooling -> expected policy path falls -> Treasury yields fall
@@ -207,6 +209,8 @@ Series that are not revised (daily Treasury yields) still need the publication d
 
 **V2.3** — replace FRED with the original publishers (BLS, BEA, Treasury, Federal Reserve, New York Fed) only where FRED is insufficient.
 
+**V2.4** — market expectations and policy surprise (section 9). Starts only after open decisions 4 and 5 (section 12) settle a point-in-time source and the pre-FOMC snapshot rule. Until then the 2Y yield from V2.1 is the labelled proxy, and no surprise label is shown.
+
 ### Derived features
 
 Computed by code from vintage data available at `as_of`: year-over-year rates, 3- and 6-month annualized rates, payroll 3-month average, trend in unemployment and claims, yield-curve slope. Every threshold that maps a number to a label ("high", "cooling") is a named constant with a test.
@@ -237,14 +241,23 @@ For meeting-specific policy expectations, the preferred inputs are market prices
 
 The 2Y yield must remain labelled as a proxy. It reflects policy expectations together with other components and cannot be translated directly into a meeting probability.
 
+### Probability method
+
+Meeting probabilities are not quoted by the market; they are computed from futures prices under assumptions. The common FedWatch-style method infers the expected rate after a meeting from the futures contract for that month and assumes only two adjacent outcomes per meeting and no risk premium. Consequences for this design:
+
+- The result is a risk-neutral probability, not the market's real-world belief. A term premium or hedging demand shifts it.
+- The conversion is implemented once in code, with the method, contract choice, and day-count handling documented, and tested against worked examples. It is not delegated to a model.
+- The UI calls these "market-implied probabilities" and names the source and method.
+- If the source already publishes probabilities, store the source's method as given and do not mix methods within one history.
+
 ### Storage
 
-A future point-in-time expectations record should preserve the full pre-event distribution rather than only a single expected value:
+A future point-in-time expectations record should preserve the full pre-event distribution rather than only a single expected value. The values below are illustrative, not historical prices:
 
 ```json
 {
-  "meeting_date": "2024-09-18",
-  "observed_at": "2024-09-18T13:55:00-04:00",
+  "meeting_date": "YYYY-MM-DD",
+  "observed_at": "YYYY-MM-DDT13:55:00-04:00",
   "source": "fed_funds_futures",
   "outcomes": [
     {"move_bp": 0, "probability": 0.05},
@@ -267,7 +280,7 @@ Code may derive:
 - categorical surprise label from named, tested thresholds
 - change in the expected path before versus after the event, if point-in-time data supports it
 
-For example:
+For example (illustrative values):
 
 ```text
 pre-meeting distribution:
@@ -372,6 +385,11 @@ The Fed is still restrictive but becoming less restrictive.
 Markets had already priced a 25 bp cut, so the decision itself was not a major surprise.
 The larger risk is the gap between the market-implied year-end path and the Fed's published path.
 ```
+
+How these requirements are enforced follows AGENTS.md:
+
+- The six-step order, the transmission example, and the counter-case are **prompt guidance**, measured in evals and by the judge. They are not runtime validator rules; an answer that skips the counter-case is a prose-quality issue, not a contract failure.
+- Steps 3 and 4 restate code-owned facts. The assistant quotes the code-computed expectations and surprise label from its context and does not compute or infer a surprise itself. When no expectations source exists, it says the surprise is unknown rather than reasoning from the 2Y proxy or the document's tone.
 
 It does not produce buy or sell instructions from the regime, and the macro context does not change any code-owned decision fact. The output schema (`summary`, `why`, `historical_context`, `risks`, `citations`) does not change.
 
