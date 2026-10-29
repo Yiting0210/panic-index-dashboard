@@ -207,11 +207,16 @@ A query for meeting M as of a date returns the latest snapshot of M with `availa
 
 ### Combining documents
 
-For each enum field, the snapshot value follows a fixed rule over the documents in its source set. A starting rule, to be confirmed in tests:
+For each enum field, the snapshot keeps every document's value and combines them by a fixed rule:
 
-- if all documents that address the field agree, use that value;
-- if they disagree, use the value from the most recent document and record the disagreement;
-- documents with `unclear` do not count.
+- documents with `unclear` do not count;
+- if all documents that address the field agree, `value` is that value and `disagreement = false`;
+- if they disagree, `value` is empty and `disagreement = true`. No document overrides another.
+- `component_values` always lists each document's value with its `doc_id`, so the page can show "statement: stable; press conference: weakening".
+
+There is deliberately no "most recent document wins" rule. The statement and the press conference share `available_date` D and the system has no intraday times, so "most recent" is undefined between them; ordering by `ingested_at` or fetch order would break the point-in-time semantics. Nor is a later document a correction of an earlier one: a press conference or minutes often add nuance rather than revise the statement. A source precedence (minutes > press conference > statement) was considered and rejected for the same reason.
+
+Disagreement is shown as a result. In the history grid and the previous-vs-current comparison, a disagreeing field appears as "mixed" with its component values, and a direction change is reported only between two non-empty values.
 
 ### Support level
 
@@ -219,9 +224,9 @@ Each dimension in a snapshot gets a `support_level` computed by code, not report
 
 | Level | Rule |
 |---|---|
-| `high` | at least two documents in the source set address the dimension and agree |
-| `medium` | one document addresses it, or the documents differ by one adjacent enum step |
-| `low` | no document addresses it, or documents disagree by more than one step or in direction |
+| `high` | at least two documents in the source set address the dimension and agree on level and direction |
+| `medium` | one document addresses it, or levels differ by one adjacent enum step with the same direction |
+| `low` | no document addresses it, or levels differ by more than one step, or directions differ |
 
 The exact rules are named constants with tests. Numeric confidence waits for the gold set.
 
@@ -274,7 +279,8 @@ extraction_id, dimension, doc_id, quote, speaker, source_type
 
 ```text
 meeting_date, snapshot_type, available_date, source_set (doc_ids),
-<the enum fields above, combined>, support_level per dimension,
+per enum field: value, disagreement, component_values (doc_id -> value),
+support_level per dimension,
 policy facts from V1a (target range, decision, change_bp, balance-sheet action),
 analyzer_version, created_at
 ```
@@ -304,11 +310,24 @@ The page should not stop at labels such as `inflation = elevated, falling`. Inve
 | Policy direction | tightening / steady / easing | V1a decision and target range |
 | Inflation risk | rising / stable / falling | V1c inflation direction |
 | Growth risk | improving / stable / deteriorating | V1c growth direction |
-| Labor risk | tightening / balanced / weakening | V1c labor level and direction |
+| Labor condition | tight / balanced / weak | V1c labor level |
+| Labor momentum | strengthening / stable / weakening | V1c labor direction |
+| Employment-risk implication | low / moderate / elevated / high | lookup over (labor level, labor direction) |
 | Rate-pressure implication | upward / mixed / downward | the rows above |
 | Long-duration valuation implication | restrictive / mixed / supportive | the rows above |
 
-The mapping from inputs to descriptors is a lookup table of named constants in code, with a test per row, so the same inputs always give the same descriptor. The mapping is deterministic, but in V1 most of its inputs are V1b model readings, so every descriptor except policy direction inherits that status and is labelled in the UI as derived from model interpretation. Once V2 exists, the same descriptors can be computed from observed data and shown beside the Fed-derived ones.
+The mapping from inputs to descriptors is a lookup table of named constants in code, with a test per row, so the same inputs always give the same descriptor. The mapping is deterministic, but in V1 most of its inputs are V1b model readings, so every descriptor except policy direction inherits that status and is labelled in the UI as derived from model interpretation. Each descriptor keeps the level / direction split: a field either describes a state or a change, never both. Where an input is empty because the snapshot shows disagreement, or is `unclear`, the descriptor is `unclear` rather than a guess.
+
+Example rows of the employment-risk lookup (downside risk to employment):
+
+| labor_level | labor_direction | Employment-risk implication |
+|---|---|---|
+| tight | stable | low |
+| balanced | stable | moderate |
+| balanced | weakening | elevated |
+| weak | weakening | high |
+
+Once V2 exists, the same descriptors can be computed from observed data and shown beside the Fed-derived ones.
 
 These are not buy/sell labels. "Long-duration valuation implication" in particular describes the direction of one channel (discount rates), not an expected return or a view on any asset. They describe sensitivity under an explicit chain such as:
 
@@ -341,10 +360,12 @@ All three steps after the raw data are deterministic code. The LLM explains the 
 Economic data is revised; CPI, payrolls, and especially GDP change after first release. The FRED API returns the latest revised values by default, which would leak later information into historical `as_of` queries. V2 must use ALFRED vintages (the `realtime_start` / `realtime_end` parameters) and store:
 
 ```text
-series_id, observation_date, vintage_date (release date), value, source, frequency, retrieved_at
+series_id, observation_date, realtime_start, realtime_end, value, source, frequency, retrieved_at
 ```
 
-An `as_of` query reads, for each observation, the latest vintage with `vintage_date <= as_of`.
+`realtime_start` and `realtime_end` are kept as ALFRED reports them. Their meaning is "this value was the current value in the ALFRED dataset from `realtime_start` until `realtime_end`". It is not defined here as the agency's official release time: for most series it coincides with the release date, but that is not guaranteed for every series, and ALFRED vintage history for some series starts later than the observations themselves. The application interprets a value as "available to this point-in-time dataset as of X", nothing stronger.
+
+An `as_of` query reads, for each observation, the value with `realtime_start <= as_of < realtime_end` (an open `realtime_end` means still current). If a series has no vintage covering `as_of`, the query returns no value for that date rather than falling back to the latest revised data.
 
 Series that are not revised (daily Treasury yields) still need the publication date. H.4.1 is released weekly on Thursday for the week ending Wednesday and must be aligned to the release date, not the reference week.
 
@@ -354,7 +375,12 @@ Computed from vintage data available at `as_of`. Raw index levels (for example a
 
 ### Dimension states
 
-Features map to the same level and direction enums as V1b where the concept is the same (inflation, growth, labor), so "Fed says" and "data says" can be shown side by side. Every threshold is a named constant with a test. V2 adds a **liquidity / financial conditions** dimension that V1 deliberately does not have, with values `tightening / neutral / easing` (and `strong_` variants if the thresholds support them).
+Features map to the same level and direction enums as V1b where the concept is the same (inflation, growth, labor), so "Fed says" and "data says" can be shown side by side. Every threshold is a named constant with a test. V2 adds a **liquidity / financial conditions** dimension that V1 deliberately does not have, with the same level / direction split as every other dimension:
+
+- `financial_conditions_level`: `tight / neutral / loose / unclear`
+- `financial_conditions_direction`: `tightening / stable / easing / unclear`
+
+This allows the most common state in practice, "still tight, but easing", which is the same data model as "inflation elevated, but falling".
 
 The page then shows, per dimension:
 
@@ -491,8 +517,22 @@ The first classifier stays simple and deterministic: growth direction by inflati
 
 | | Inflation falling | Inflation rising |
 |---|---|---|
-| Growth rising | Disinflationary expansion | Reflation |
-| Growth falling | Disinflationary slowdown | Stagflation risk |
+| Growth strengthening | Disinflationary expansion | Reflation |
+| Growth weakening | Disinflationary slowdown | Stagflation risk |
+
+The quadrant is assigned only when both directions are decisive. Any other combination is a valid output, not an error:
+
+```text
+if growth_direction in {strengthening, weakening}
+   and inflation_direction in {rising, falling}:
+    regime = quadrant above
+elif either direction is unclear, or the snapshot shows disagreement:
+    regime = unclassified
+else:  # at least one direction is stable
+    regime = transitional
+```
+
+`stable` is never mapped to rising or falling to force a quadrant. A run of `transitional` or `unclassified` dates is a true description of an ambiguous environment, and the page shows the underlying directions alongside it.
 
 `Disinflationary expansion` is the more neutral system label for the environment commonly described in market commentary as a **Goldilocks / soft-landing** setup. The system should avoid using "soft landing" as the primary regime name because that phrase makes a stronger claim about future outcomes than the observed growth/inflation directions alone justify.
 
@@ -571,7 +611,7 @@ It does not produce buy or sell instructions from the regime, and the macro cont
 6. Whether to ingest the Fed SEP / dot plot as a structured Fed-projected rate path for the Fed vs Market Gap.
 7. Which named thresholds map an actual-versus-expected rate difference to `dovish`, `roughly expected`, or `hawkish` surprise without over-interpreting small differences.
 8. README Roadmap item 2: whether macro state or market expectations ever become an input to position sizing.
-9. The V1c combining rule and support-level thresholds (section 7), confirmed against the gold set.
+9. The V1c support-level thresholds (section 7), confirmed against the gold set.
 10. Whether a press conference's `available_date` stays D (content broadcast live) or becomes the transcript posting date, which would need the fetcher to record that date (section 4).
 11. Whether an overall Fed stance is worth defining, and if so its rule over `rate_policy_stance`, `communication_tone`, and the inflation and labor fields (section 8).
 
