@@ -1,8 +1,8 @@
 {
   "embedding_model": "BAAI/bge-small-en-v1.5",
   "dimension": 384,
-  "chunks": 5088,
-  "documents": 138,
+  "chunks": 5089,
+  "documents": 139,
   "first_published": "2021-01-27",
-  "last_published": "2026-10-07"
+  "last_published": "2026-10-28"
 }
