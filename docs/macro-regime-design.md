@@ -4,13 +4,14 @@ Status: proposal. Nothing here is implemented. It expands README Roadmap item 1 
 
 ## 1. Goal
 
-The Research Assistant can retrieve FOMC passages, but it cannot answer the question an investor asks most often: what macro environment is the market in, how is it changing, and what does that mean for risk assets?
+The Research Assistant can retrieve FOMC passages, but it cannot answer the question an investor asks most often: what macro environment is the market in, how is it changing, what was already priced in, and what does that mean for risk assets?
 
-The system should separate three things that are often conflated:
+The system should separate four things that are often conflated:
 
 - **what the Fed says** (FOMC statements, minutes, press conferences)
 - **what the economic data shows** (CPI, PCE, payrolls, GDP, ...)
-- **what markets are pricing** (Treasury yields, and later rate expectations)
+- **what markets are pricing** (Fed funds / SOFR expectations, Treasury yields, and later other market-implied paths)
+- **what changed relative to expectations** (policy surprise: what happened versus what was priced immediately before the event)
 
 Each layer has a different owner and a different failure mode, so each is stored and labelled separately.
 
@@ -20,18 +21,29 @@ Each layer has a different owner and a different failure mode, so each is stored
 | Fed state (V1a) | policy facts parsed from documents | deterministic code |
 | Fed assessment (V1b) | interpretation of the Fed's view | LLM, frozen and versioned |
 | Macro data (V2) | observed economic and market series, by vintage | deterministic code |
-| Macro regime (V2) | a classification combining the above | deterministic code |
+| Market expectations (V2.x) | pre-event rate-path probabilities / implied rates | deterministic code from market data |
+| Macro regime (V2) | a classification of growth and inflation conditions | deterministic code |
+| Investor interpretation | explanation of transmission channels and asset sensitivity | deterministic mapping plus Research Assistant explanation |
 
-RAG stays the evidence layer ("why did we reach that conclusion?"). Structured layers answer "what happened?".
+RAG stays the evidence layer ("why did we reach that conclusion?"). Structured layers answer "what happened?", "how is it changing?", and, once market-pricing data is available, "was it already priced?".
+
+A central design principle is to distinguish three different questions:
+
+1. **Level:** what is the current state? For example, inflation is still elevated or policy is still restrictive.
+2. **Direction:** how is that state changing? For example, inflation is cooling or policy is becoming less restrictive.
+3. **Surprise:** how did the outcome differ from what markets had priced immediately beforehand?
+
+Level and direction can be built from Fed documents and observed macro data. Surprise requires a separate point-in-time market-expectations source and must not be inferred from the tone of a document.
 
 ## 2. Constraints from AGENTS.md
 
 These apply to every stage below.
 
-- **Point in time.** Every record is indexed by the date it became public. An `as_of` query sees only records public on or before `as_of`. Each stage adds look-ahead tests to `tests/test_point_in_time.py`.
-- **Code owns facts.** Anything rendered as a structured fact (a table cell, an arrow, a regime name) is computed by code, or is an LLM output that is extracted once, frozen, versioned, and labelled as a model interpretation. The Research Assistant receives these as read-only context and may explain them, not recompute them.
-- **Background layer until decided otherwise.** Nothing here changes the regime, the strategy path, or `plan_position`. Making macro state an input to sizing is a separate decision (README Roadmap item 2), would be a strategy-math change, and needs its own backtest and a statement of how historical results change.
-- **No uncalibrated confidence.** Do not show model self-reported confidence (`0.87`) or regime confidence percentages. Where support needs to be shown, use countable quantities, for example "2 of 3 documents for this meeting support this reading".
+- **Point in time.** Every record is indexed by the date it became public or, for market data, the timestamp/date at which it was observable. An `as_of` query sees only information available on or before `as_of`. Each stage adds look-ahead tests to `tests/test_point_in_time.py`.
+- **Code owns facts.** Anything rendered as a structured fact (a table cell, an arrow, a regime name, a market-implied probability, or a surprise label) is computed by code, or is an LLM output that is extracted once, frozen, versioned, and labelled as a model interpretation. The Research Assistant receives these as read-only context and may explain them, not recompute them.
+- **Background layer until decided otherwise.** Nothing here changes the regime, the strategy path, or `plan_position`. Making macro state or market expectations an input to sizing is a separate decision (README Roadmap item 2), would be a strategy-math change, and needs its own backtest and a statement of how historical results change.
+- **No uncalibrated confidence.** Do not show model self-reported confidence (`0.87`) or regime confidence percentages. Where support needs to be shown, use countable quantities, for example "2 of 3 documents for this meeting support this reading". Market-implied probabilities are allowed because they are derived from prices rather than model confidence.
+- **No invented market expectations.** If a historical point-in-time expectations source is unavailable, the system may show a proxy such as the 2Y Treasury yield, but it must not convert that proxy into a fabricated probability of a hike or cut.
 
 ## 3. Current corpus
 
@@ -54,6 +66,8 @@ One meeting produces documents on different dates:
 | Minutes | about D + 21 days |
 
 So the Fed's view "of the September meeting" is not one record. Between D and the minutes release, only the statement and press conference are visible. Any per-meeting summary must be computed from the documents with `published_at <= as_of`, never from the full set. This applies to the history view too: a row for a meeting shown as of a date between D and D + 21 must not include the minutes.
+
+Market expectations have an even stricter timing requirement. A policy surprise must compare the outcome with a snapshot from **before the decision was public**, not with end-of-day pricing after the announcement. If intraday historical snapshots are unavailable, the system must explicitly use the closest valid pre-event observation and label that limitation.
 
 ## 5. V1a: deterministic Fed state
 
@@ -112,6 +126,8 @@ The draft also listed **liquidity**. FOMC documents say little about liquidity b
 
 `level` and `direction` are separate because "high and falling" and "high and rising" have different policy implications. Both take values from fixed enums defined in code. `evidence` quotes must be found verbatim in the cited document (a machine-checkable contract, consistent with the validator rules).
 
+**Surprise is intentionally not a V1b field.** The LLM must not infer whether the Fed was "more hawkish than expected" from the document alone. Surprise belongs to the market-expectations layer because it is a comparison against pre-event prices.
+
 ### Storage rules
 
 - Extract **per document**, not per meeting, so the point-in-time rule in section 4 holds. A per-meeting view as of a date is assembled by code from the documents visible on that date.
@@ -129,9 +145,39 @@ A dedicated page, titled **Fed Assessment**, not "Macro Economy", because it sho
 - **Current state (V1a):** target range, last decision, dissents, balance-sheet stance, document availability for the latest meeting.
 - **What changed (V1a):** the statement diff against the previous meeting.
 - **Fed's view (V1b):** one row per dimension with level, direction, and a short summary, expandable to the cited quotes. Marked as model interpretation.
+- **Investor interpretation:** a concise, explicitly derived explanation of how the current Fed reading would normally transmit to yields, discount rates, and rate-sensitive equity styles. This is explanatory context, not a trade signal.
 - **History:** a meeting-by-meeting grid of direction arrows per dimension, built under the section 4 rule.
 
 The grid is meant for questions such as "has the Fed become progressively more concerned about employment over the last four meetings?", which are easier to answer from structured history than by repeated retrieval.
+
+### Investor interpretation
+
+The page should not stop at labels such as `inflation = elevated, cooling`. Investors need the transmission channel. The structured display can expose a small number of deterministic descriptors, for example:
+
+| Field | Example values |
+|---|---|
+| Policy direction | tightening / steady / easing |
+| Inflation risk | rising / stable / falling |
+| Growth risk | improving / stable / deteriorating |
+| Labor risk | tightening / balanced / weakening |
+| Rate-pressure implication | upward / mixed / downward |
+| Long-duration valuation implication | restrictive / mixed / supportive |
+
+These are not buy/sell labels. They describe sensitivity under an explicit chain such as:
+
+```text
+inflation cooling -> expected policy path falls -> Treasury yields fall
+-> discount rates fall -> support for long-duration equity valuations
+```
+
+The explanation must also surface the main failure case:
+
+```text
+if rates are falling because growth or employment is deteriorating sharply,
+lower discount rates may be offset by weaker earnings expectations.
+```
+
+This prevents the system from collapsing into the false rule "rate cuts are always bullish for stocks".
 
 ## 8. V2: observed data
 
@@ -165,18 +211,111 @@ Series that are not revised (daily Treasury yields) still need the publication d
 
 Computed by code from vintage data available at `as_of`: year-over-year rates, 3- and 6-month annualized rates, payroll 3-month average, trend in unemployment and claims, yield-curve slope. Every threshold that maps a number to a label ("high", "cooling") is a named constant with a test.
 
-### Market pricing
+## 9. Market expectations and policy surprise
 
-"What markets are pricing" needs a rate-expectations source. Fed funds futures and OIS are not available on FRED for free. Until a point-in-time source is chosen, use the 2Y Treasury yield as a stated proxy, and say so in the UI.
+This is a separate layer from both Fed communication and observed macro data.
 
-## 9. Macro regime
+### Why it exists
+
+Markets react to the difference between an outcome and what was already priced, not simply to whether the Fed hiked, cut, or held.
+
+A 25 bp cut can be:
+
+- **roughly expected** if the market had already assigned most probability to a 25 bp cut;
+- a **dovish surprise** if the market mostly expected a hold;
+- a **hawkish disappointment** if the market had heavily priced a 50 bp cut.
+
+Therefore the system must not equate `decision = cut` with `market reaction = bullish`.
+
+### Preferred sources
+
+For meeting-specific policy expectations, the preferred inputs are market prices tied directly to the expected policy path:
+
+1. **Fed funds futures / CME FedWatch-style probabilities** for discrete target-rate outcomes by FOMC meeting.
+2. **SOFR futures or OIS** for a richer expected path across meetings, if a reliable point-in-time historical source is available.
+3. **2Y Treasury yield** only as a broad proxy for the expected policy path when the direct sources above are unavailable.
+
+The 2Y yield must remain labelled as a proxy. It reflects policy expectations together with other components and cannot be translated directly into a meeting probability.
+
+### Storage
+
+A future point-in-time expectations record should preserve the full pre-event distribution rather than only a single expected value:
+
+```json
+{
+  "meeting_date": "2024-09-18",
+  "observed_at": "2024-09-18T13:55:00-04:00",
+  "source": "fed_funds_futures",
+  "outcomes": [
+    {"move_bp": 0, "probability": 0.05},
+    {"move_bp": -25, "probability": 0.30},
+    {"move_bp": -50, "probability": 0.65}
+  ]
+}
+```
+
+If only daily snapshots are available, store the closest pre-meeting observation and label the timing limitation.
+
+### Derived fields
+
+Code may derive:
+
+- modal expected move
+- probability-weighted expected move
+- actual move
+- difference between actual and probability-weighted expected move
+- categorical surprise label from named, tested thresholds
+- change in the expected path before versus after the event, if point-in-time data supports it
+
+For example:
+
+```text
+pre-meeting distribution:
+  hold      10%
+  cut 25bp  80%
+  cut 50bp  10%
+
+actual: cut 25bp
+assessment: broadly expected
+```
+
+The probability distribution should remain visible because a single expected-basis-point number can hide an important split in market beliefs.
+
+### Fed vs market gap
+
+The page should distinguish **Fed expectations** from **market expectations**.
+
+- The Fed's own projected policy path comes from the Summary of Economic Projections / dot plot when available.
+- The market-implied path comes from futures / OIS or, temporarily, the stated 2Y proxy.
+
+A useful derived view is the **Fed vs Market Gap**:
+
+```text
+Fed projected year-end policy rate
+vs
+market-implied year-end policy rate
+```
+
+This is not itself a trading signal. It identifies where market pricing is more dovish or more hawkish than the Fed's published path and therefore where repricing risk may be larger.
+
+### Tests
+
+- No post-announcement price may enter a pre-announcement expectation record.
+- Historical `as_of` queries must return only expectations observed by that time.
+- Probability distributions sum to approximately 1 within a defined tolerance.
+- Surprise labels are computed from named constants, not free-form LLM judgment.
+- If only a Treasury proxy exists, no meeting probability or discrete expected move is fabricated.
+
+## 10. Macro regime
 
 The first classifier stays simple and deterministic: growth direction by inflation direction.
 
 | | Inflation falling | Inflation rising |
 |---|---|---|
-| Growth rising | Soft landing / Goldilocks | Reflation |
-| Growth falling | Disinflationary slowdown | Stagflation |
+| Growth rising | Disinflationary expansion | Reflation |
+| Growth falling | Disinflationary slowdown | Stagflation risk |
+
+`Disinflationary expansion` is the more neutral system label for the environment commonly described in market commentary as a **Goldilocks / soft-landing** setup. The system should avoid using "soft landing" as the primary regime name because that phrase makes a stronger claim about future outcomes than the observed growth/inflation directions alone justify.
 
 Labor, liquidity, and policy modify the description but not the quadrant.
 
@@ -187,30 +326,72 @@ The regime has two sources that can disagree, and the page shows both:
 
 A divergence, for example the Fed describing inflation as easing while 3-month core inflation re-accelerates, is a result to show, not an error to reconcile.
 
+Once market-expectations data exists, it is shown alongside the regime rather than folded into the quadrant. This keeps three distinct concepts separate:
+
+```text
+Fed view       = what policymakers say
+Data regime    = what observed data shows
+Market pricing = what investors already expect
+```
+
 Sample size limits what can be claimed. Market data starts in 2021-05 and covers roughly one tightening and one easing cycle. The regime is descriptive. Do not report forward returns by regime without the sample size beside every figure, and do not use it for sizing without the decision in README Roadmap item 2.
 
-## 10. Research Assistant
+## 11. Research Assistant
 
-The assistant receives `fed_state`, the Fed assessment, and (in V2) the macro regime as read-only context, and keeps retrieval for evidence. It explains transmission channels, for example:
+The assistant receives `fed_state`, the Fed assessment, observed macro state, and, when available, market expectations as read-only context. Retrieval remains the evidence layer.
+
+Its job is to explain, not to silently generate a new policy score or trading rule.
+
+For investor-facing questions it should answer in this order when the inputs are available:
+
+1. **Level:** what is the current Fed / macro state?
+2. **Direction:** what has changed versus the previous meeting or release?
+3. **Expectation:** what had markets priced before the event?
+4. **Surprise:** was the outcome more hawkish, more dovish, or broadly in line with pricing?
+5. **Transmission:** through which channels could this affect yields, discount rates, earnings expectations, and rate-sensitive assets?
+6. **Risks / counter-case:** what could make the simple transmission story fail?
+
+Example transmission:
 
 ```text
 inflation falling -> expected policy rates fall -> yields fall -> discount rates fall
 -> support for long-duration equity valuations
 ```
 
+Required counter-case:
+
+```text
+if expected rates fall because growth is deteriorating sharply,
+weaker earnings expectations can offset or dominate the valuation benefit.
+```
+
+The assistant should also make expectation gaps explicit. For example:
+
+```text
+The Fed is still restrictive but becoming less restrictive.
+Markets had already priced a 25 bp cut, so the decision itself was not a major surprise.
+The larger risk is the gap between the market-implied year-end path and the Fed's published path.
+```
+
 It does not produce buy or sell instructions from the regime, and the macro context does not change any code-owned decision fact. The output schema (`summary`, `why`, `historical_context`, `risks`, `citations`) does not change.
 
-## 11. Open decisions
+## 12. Open decisions
 
 1. Does V1b ship at all, or is V1a plus the statement diff enough for the page? Decide after V1a is in use.
 2. Which model and prompt for V1b, and who labels the gold set.
 3. Whether to store V1a records in `data/fomc/` beside the corpus (committed, like the index) or regenerate them on load.
-4. A point-in-time source for rate expectations.
-5. README Roadmap item 2: whether macro state ever becomes an input to position sizing.
+4. Which point-in-time source can provide historical Fed funds futures / SOFR / OIS expectations with sufficient pre-event timing fidelity.
+5. If only daily expectations snapshots are available, what exact observation rule defines the pre-FOMC snapshot.
+6. Whether to ingest the Fed SEP / dot plot as a structured Fed-projected rate path for the Fed vs Market Gap.
+7. Which named thresholds map an actual-versus-expected rate difference to `dovish`, `roughly expected`, or `hawkish` surprise without over-interpreting small differences.
+8. README Roadmap item 2: whether macro state or market expectations ever become an input to position sizing.
 
-## 12. Non-goals
+## 13. Non-goals
 
 - Replacing RAG with structured extraction.
 - Buy/sell signals or position changes from the macro layer.
+- Inferring market expectations from LLM tone analysis.
+- Converting the 2Y Treasury proxy into fabricated meeting probabilities.
+- Treating rate cuts as automatically bullish or hikes as automatically bearish for equities.
 - Nowcasting or forecasting economic data.
 - Changing the Panic Index, thresholds, or strategy math.
