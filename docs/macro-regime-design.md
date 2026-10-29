@@ -189,6 +189,8 @@ Evidence is stored as rows, not as a string inside the assessment (schema in sec
 
 Hand-label 15 to 20 meetings (every enum field, per document) as a gold set under `evals/datasets/`, and report per-field agreement in `evals/`. Choose the labelled meetings before looking at model output, and keep a held-out part, since the retrieval set had no held-out split.
 
+Implementation note for `rate_policy_stance`: the prompt must say that if the document does not explicitly characterize policy relative to neutral or as restrictive / accommodative, the answer is `unclear`. The model must not infer a stance from the rate level (for example "the target range is 5-1/4 to 5-1/2 percent, so policy is restrictive"); that is economic inference, not extraction. The verbatim-quote check alone does not catch this, because a sentence stating the target range is a valid quote. The gold set therefore includes documents with no stance language (most minutes and some statements) labelled `unclear`, so the eval measures this failure.
+
 ## 7. V1c: versioned Fed snapshots
 
 A snapshot is the Fed's view of one meeting as of the moment a new document for that meeting became available. Snapshots are assembled by code from V1a and V1b records; no model reads several documents together to produce one.
@@ -295,7 +297,7 @@ Top to bottom:
 
 - **Current policy state (V1a):** target range, last decision and change, dissents, balance-sheet action and caps, which documents are available for the latest meeting.
 - **Changes since previous FOMC:** the V1a statement diff, then the V1c previous-vs-current comparison per dimension with evidence on both sides. This section comes before any market interpretation.
-- **Fed's view (V1c):** one row per dimension (inflation, growth, labor, rate-policy stance, communication tone) with level, direction, support level, and summary, expandable to the cited quotes. Marked as model interpretation.
+- **Fed's view (V1c):** one row per dimension (inflation, growth, labor, rate-policy stance, communication tone) with level, direction, support level, and summary, expandable to the cited quotes. Marked as model interpretation. The UI labels `support_level` as "Evidence support" (for example "Evidence support: medium, 1 of 2 documents agree"), never "Confidence", because it measures agreement between documents, not how sure the model is.
 - **Investor interpretation:** a concise, explicitly derived explanation of how the current Fed reading would normally transmit to yields, discount rates, and rate-sensitive equity styles. This is explanatory context, not a trade signal.
 - **History:** a meeting-by-meeting grid of direction arrows per dimension, built from the snapshots available at the page's `as_of`, with the snapshot type shown for each cell. A **within-meeting** view shows statement -> press conference -> minutes for one meeting.
 
