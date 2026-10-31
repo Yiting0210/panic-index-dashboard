@@ -154,7 +154,7 @@ Do not change thresholds, position-sizing rules, or backtest semantics unless th
 
 ## Data and secrets
 
-- `data/market_data.csv` is append-only. The daily GitHub Actions job appends to it, and stored values are never overwritten. Do not edit it by hand.
+- `data/market_data_clean.csv` is append-only. The daily GitHub Actions job appends to it, and stored values are never overwritten. Do not edit it by hand.
 - Never commit `.env` or any API key.
 
 ## Pull requests

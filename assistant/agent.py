@@ -1,4 +1,4 @@
-"""Research agent: Claude tool use over the Panic Index MCP server.
+"""Research agent: Claude or DeepSeek tool use over the Panic Index MCP server.
 
 The agent connects to the MCP server in-process with ``mcp.Client``, so it
 sees exactly the tool names, descriptions, and JSON schemas any other MCP

@@ -229,7 +229,7 @@ tools/  <- one tool layer: every function takes as_of and returns a pydantic mod
    |
    +--> mcp_server.py                    MCP server (stdio or Streamable HTTP)
            ^
-           +-- assistant/                Claude tool-use loop over an in-process MCP client,
+           +-- assistant/                Claude / DeepSeek tool-use loop over an in-process MCP client,
                   ^                      response cache, usage ledger, budget, fallback
                   +-- pages/3_🤖_Research_Assistant.py
 
