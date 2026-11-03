@@ -38,8 +38,8 @@ graph LR
   P1 --> utils
   P2 --> utils
   P3 --> utils
-  P3 --> assistant
-  P3 --> mcp
+  P3 -.-> assistant
+  P3 -.-> mcp
 
   tools --> utils
   tools -.-> rag
@@ -52,12 +52,14 @@ graph LR
   scripts -.-> rag
 
   evals --> assistant
-  evals --> rag
+  evals -.-> rag
 ```
 
 Notes on the graph:
 
 - `assistant/agent.py` imports `mcp_server.server` inside `ResearchAgent.__init__` when no server is passed; the page passes one explicitly (`shared_resources()`).
+- Page 3 imports `assistant` and `mcp_server` only inside functions (`shared_resources`, `build_agent`, the result panels).
+- `evals/retrieval_eval.py` imports `rag.get_index` inside a function; `evals/judge.py` imports `assistant` at module level.
 - `tools/core.search_fed_docs` imports `rag.get_index` inside the function.
 - `scripts/daily_update.py` imports `rag.update_default_index` only when new FOMC documents were fetched; `scripts/build_fomc_index.py` imports `rag` at module level.
 - `ingest/` has no internal dependencies outside itself; `rag/` likewise.
@@ -99,7 +101,7 @@ Shared by the dashboard and (through `tools/`) by the MCP server and assistant.
 | `metrics.py` (~145) | Canonical return, drawdown, Sharpe, Calmar; KPI rendering. | `build_performance_metrics`, `max_drawdown`, `sharpe_ratio`, `RISK_FREE_RATE` | streamlit |
 | `analysis.py` (~200) | Diagnostics, exposure trade-off attribution, verdicts, comparison tables, evidence summaries. | `build_strategy_diagnostics`, `build_exposure_tradeoff_attribution`, `build_backtest_verdict`, `build_strategy_comparison_table`, `build_correlation_evidence_summary` | `metrics` |
 | `narrative.py` (~210) | Deterministic rule-based research summary (no LLM). | `build_threshold_research_summary` | `metrics` |
-| `peak_detection.py` (~45) | Hindsight `scipy.find_peaks` labels; causal real-time reversal detector. | `detect_peaks_scipy`, `detect_peaks_realtime` | scipy |
+| `peak_detection.py` (~45) | Hindsight `scipy.find_peaks` labels; causal real-time reversal detector (causal in its rule; its input Panic Index is normalized over the frame it is given). | `detect_peaks_scipy`, `detect_peaks_realtime` | scipy |
 | `signals.py` (~20) | Panic signal prep and threshold masks. | `prepare_panic_signal`, `build_threshold_masks` | — |
 | `charts.py` (~275) | Plotly builders and Streamlit render helpers. | `render_scatter_plot`, `render_price_signal_map`, … | plotly, streamlit |
 | `sidebar.py` (~175) | Sidebar navigation and controls; persists strategy settings in session state. | `add_sidebar_nav`, `render_controls`, `strategy_settings`, `render_sidebar_header` | `strategy`, streamlit |

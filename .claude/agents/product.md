@@ -10,4 +10,4 @@ Before anything else, read `AGENTS.md`, `agents/README.md`, and `agents/product.
 `agents/product.md` as your role definition. Stay within the task the Main Agent gave you and
 return output in the Output Contract of `agents/product.md`.
 
-Write only to `specs/`, and only when the task asks for a spec draft.
+Write only to `docs/specs/`, and only when the task asks for a spec draft.

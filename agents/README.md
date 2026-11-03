@@ -26,8 +26,8 @@ only points to its role file here; `agents/<role>.md` is the single source of th
 
 | Specialist | Tools | Writes to |
 |---|---|---|
-| product | Read, Grep, Glob, Write, Edit | `specs/` |
-| architect | Read, Grep, Glob, Bash (read-only), Write, Edit | `design/`, `docs/adr/` (Proposed only) |
+| product | Read, Grep, Glob, Write, Edit | `docs/specs/` |
+| architect | Read, Grep, Glob, Bash (read-only), Write, Edit | `docs/design/`, `docs/adr/` (Proposed only) |
 | planner | Read, Grep, Glob | nothing |
 | developer | Read, Grep, Glob, Bash, Write, Edit | code and tests in scope |
 | tester | Read, Grep, Glob, Bash, Write, Edit | `tests/` |
@@ -52,7 +52,7 @@ When sources conflict, use this order unless the user explicitly overrides it:
 
 1. Explicit current user instruction
 2. `AGENTS.md`
-3. Approved spec (`specs/`, `Status: approved`)
+3. Approved spec (`docs/specs/`, `Status: approved`)
 4. Accepted ADR (`docs/adr/`, `Status: Accepted`)
 5. Documented project decision (`.private/decisions.md`)
 6. Current code behavior
@@ -69,8 +69,8 @@ Any conflict between levels is reported to the Main Agent, and by the Main Agent
 | `AGENTS.md` | Repository rules for every coding agent | yes |
 | `docs/architecture/` | Current system: `system-overview.md` (end-to-end behavior), `module-map.md` (ownership, dependencies, entry points), `baseline-review.md` (baseline risks) | yes |
 | `docs/adr/` | Architecture Decision Records | yes |
-| `specs/` | Feature specs (Product) | yes |
-| `design/` | Feature designs (Architect) | yes |
+| `docs/specs/` | Feature specs (Product) | yes |
+| `docs/design/` | Feature designs (Architect) | yes |
 | `tests/BASELINE.md` | Test and eval coverage baseline | yes |
 | `.claude/agents/` | Specialist subagent registrations for Claude Code | yes |
 | `.private/` | Shared project context: state, decisions, open issues, history, handoffs | no (local only) |

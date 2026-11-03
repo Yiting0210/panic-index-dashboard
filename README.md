@@ -539,7 +539,15 @@ panic-index-dashboard/
 |   |-- signals.py                  # Panic signal preparation and threshold masks
 |   |-- peak_detection.py           # scipy hindsight labels and causal RealTime detector
 |   |-- sidebar.py                  # Streamlit sidebar controls and navigation
-|-- tests/                          # Analytics, point-in-time, RAG, MCP, and agent tests
+|-- tests/                          # Analytics, point-in-time, RAG, MCP, and agent tests; BASELINE.md coverage map
+|-- docs/
+|   |-- architecture/               # System overview, module map, baseline review
+|   |-- adr/                        # Architecture Decision Records
+|   |-- specs/                      # Product specs
+|   |-- design/                     # Feature designs and proposals
+|-- agents/                         # Development agents (Main Agent + specialists), not runtime agents
+|-- .claude/agents/                 # Claude Code registrations of the specialist agents
+|-- AGENTS.md                       # Rules for coding agents working in this repository
 |-- assets/                         # README screenshots
 |-- data/                           # Static market data; data/fomc/ holds the corpus and index
 |-- .mcp.json                       # MCP server config picked up by Claude Code
@@ -642,5 +650,5 @@ These findings are descriptive historical evidence and should not be interpreted
 
 ## Roadmap
 
-1. **FOMC macro-state schema.** A deterministic, point-in-time record of the latest policy state as of a date, built from the documents published by then: for example the target range and the last change, the decision direction, the latest meeting date, and, where available from a point-in-time source, the next scheduled meeting, plus which document types exist for the latest meeting. Each field cites the document it came from. It would be computed by code from the corpus and indexed by `published_at` like the documents themselves, with look-ahead tests.
+1. **FOMC macro-state schema.** A deterministic, point-in-time record of the latest policy state as of a date, built from the documents published by then: for example the target range and the last change, the decision direction, the latest meeting date, and, where available from a point-in-time source, the next scheduled meeting, plus which document types exist for the latest meeting. Each field cites the document it came from. It would be computed by code from the corpus and indexed by `published_at` like the documents themselves, with look-ahead tests. The proposal is expanded in [docs/design/macro-regime-design.md](docs/design/macro-regime-design.md).
 2. **Decide how it enters a portfolio overlay.** Only after the schema exists and is tested: whether the macro state stays read-only context for the explanation, or becomes an explicit, backtested input to position sizing (for example a cap on adds in a tightening phase). Any input to sizing would be a strategy-math change with its own tests and a statement of how historical results change. Until then FOMC stays the retrieval background layer described above.

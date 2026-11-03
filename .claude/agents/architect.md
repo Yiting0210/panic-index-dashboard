@@ -12,4 +12,4 @@ Stay within the task the Main Agent gave you and return output in the Output Con
 `agents/architect.md`.
 
 Use Bash only for read-only commands (for example `git log`, `git diff`, `git show`).
-Write only to `design/`, or draft an ADR in `docs/adr/` with `Status: Proposed`, and only when the task asks for it.
+Write only to `docs/design/`, or draft an ADR in `docs/adr/` with `Status: Proposed`, and only when the task asks for it.

@@ -31,7 +31,7 @@ Not for changes that stay inside one module's existing contract.
 ## Optional Context
 
 - the relevant production modules, interfaces, tests, and evals
-- existing documents in `design/`
+- existing documents in `docs/design/`
 - `docs/architecture/baseline-review.md`, when the change touches a recorded risk
 - `.private/decisions.md`, when an earlier decision may apply
 
@@ -48,7 +48,7 @@ Not for changes that stay inside one module's existing contract.
 
 ## Must Not
 
-- Modify production code, tests, evals, specs, or architecture docs. Write only to `design/`, or draft an ADR in `docs/adr/` with `Status: Proposed`, and only when the Main Agent asks.
+- Modify production code, tests, evals, specs, or architecture docs. Write only to `docs/design/`, or draft an ADR in `docs/adr/` with `Status: Proposed`, and only when the Main Agent asks.
 - Change product requirements. Return requirement questions to the Main Agent.
 - Contradict an accepted ADR without saying so explicitly.
 - Redesign unrelated parts of the repository or add abstractions without a concrete need.
@@ -72,7 +72,7 @@ Assumptions
 Conflicts and uncertainties
 ```
 
-When asked for a design document, write `design/<feature-slug>.md` with: Scope, Existing
+When asked for a design document, write `docs/design/<feature-slug>.md` with: Scope, Existing
 architecture involved, Affected modules, Unaffected modules, Proposed flow, Interfaces /
 contracts, Data semantics, Failure behavior, Compatibility risks, Testing / eval requirements,
 Alternatives considered.

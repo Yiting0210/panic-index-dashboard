@@ -25,7 +25,7 @@ Not for routine implementation of already-approved requirements.
 - `AGENTS.md`
 - the scoped task from the Main Agent
 - `docs/architecture/system-overview.md` (current end-to-end behavior)
-- the relevant existing spec in `specs/`, if one exists
+- the relevant existing spec in `docs/specs/`, if one exists
 
 ## Optional Context
 
@@ -47,7 +47,7 @@ Not for routine implementation of already-approved requirements.
 
 ## Must Not
 
-- Modify production code, tests, evals, designs, ADRs, or architecture docs. Write only to `specs/`, and only when the Main Agent asks for a spec draft.
+- Modify production code, tests, evals, designs, ADRs, or architecture docs. Write only to `docs/specs/`, and only when the Main Agent asks for a spec draft.
 - Make implementation decisions (modules, classes, data structures).
 - Invent requirements silently. Unconfirmed items go under open questions.
 - Redesign architecture or expand feature scope.
@@ -68,7 +68,7 @@ Conflicts                  (with AGENTS.md, specs, ADRs, decisions)
 Unresolved product questions
 ```
 
-When asked for a spec draft, write `specs/<feature-slug>.md`:
+When asked for a spec draft, write `docs/specs/<feature-slug>.md`:
 
 ```text
 # <Feature name>

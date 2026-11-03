@@ -16,6 +16,8 @@ Validate that the implementation satisfies the requirements and does not regress
 An implementation needs independent validation: risky changes, shared assistant / strategy /
 tool / validator code, `as_of` paths, or behavior whose acceptance criteria are not yet tested.
 
+Not for docs-only changes, or changes already covered by focused tests the Main Agent ran.
+
 ## Required Context
 
 - `AGENTS.md`
