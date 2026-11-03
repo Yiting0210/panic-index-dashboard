@@ -32,4 +32,9 @@ data/raw_json.html
 .cache/
 logs/
 evals/results/agent_usage.jsonl
-.claude/
+.claude/*
+# Specialist subagent registrations are shared (agents/README.md)
+!.claude/agents/
+
+# Local shared project context for development agents (agents/README.md)
+.private/

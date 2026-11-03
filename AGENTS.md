@@ -15,6 +15,13 @@ A point-in-time AI market research system:
 
 Keep it technically defensible, reproducible, and free of look-ahead leakage.
 
+## Development workflow
+
+Start project work from the Main Project Agent (`agents/main.md`). It owns project context and
+decisions, and calls the specialists in `agents/` only when they add value. Shared rules, the
+source-of-truth order, and context loading are in `agents/README.md`. Architecture decisions are
+recorded in `docs/adr/`; local project state lives in `.private/` (not committed).
+
 ## Core principles
 
 ### 1. Code owns critical decision facts
