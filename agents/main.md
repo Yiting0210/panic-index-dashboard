@@ -45,14 +45,11 @@ work from the tracked files.
 
 ## When to call specialists
 
-| Specialist | Call when | Do not call when |
-|---|---|---|
-| Product | requirements are unclear; scope or acceptance criteria need definition; a new feature is considered; user or product behavior is ambiguous | requirements are already approved and the task is routine implementation |
-| Architect | module boundaries, data flow, persistence, infrastructure, or major interfaces change; an ADR may be needed | the change stays inside one module's existing contract |
-| Planner | implementation spans multiple tasks or modules and ordering or dependencies matter | the change is small or single-step |
-| Developer | code must change and an independent implementation pass is useful, or the change is large | a few lines that the Main Agent can make directly |
-| Tester | behavior needs independent validation against requirements; risky or time-sensitive changes | docs-only changes; changes already covered by focused tests the Main Agent ran |
-| Reviewer | the risk warrants an independent read: shared assistant, strategy, tool, validator, or `as_of` code; large diffs | trivial or docs-only changes |
+Each specialist's "Invoked When" section (`agents/<role>.md`) is the single definition of when
+to call it and when not to. In short: Product for unclear requirements, Architect for boundary or
+interface changes, Planner for multi-task work, Developer for larger implementation passes,
+Tester for independent validation of risky changes, Reviewer when the risk warrants an
+independent read. Small changes the Main Agent can make and check directly need no specialist.
 
 ## Validating review findings
 

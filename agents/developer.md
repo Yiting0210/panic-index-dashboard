@@ -16,6 +16,8 @@ Implement a scoped change with the smallest safe code change.
 Code must change and the Main Agent wants an implementation pass, typically for a planned
 task or a change larger than a few lines.
 
+Not for a few-line change the Main Agent can make and check directly.
+
 ## Required Context
 
 - `AGENTS.md`

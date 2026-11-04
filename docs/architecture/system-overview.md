@@ -91,7 +91,10 @@ Cache invalidation is file-mtime based, so running processes pick up the daily u
 
 Composite Panic Index (`utils/data_loader.compute_panic_index`):
 `panic_index = 0.5 · (VIX − min)/(max − min)·100 + 0.5 · (100 − fear_greed_index)`,
-with min/max taken over the rows passed in.
+with min/max taken over the rows passed in. On the tool path those rows are the window up to
+`as_of`, so nothing after `as_of` is used, but the index value of an earlier day inside the window
+depends on VIX later in the same window. Backtests, forward-return scans, and peak scans inherit
+this (README *Limitations*; `docs/architecture/baseline-review.md` M1).
 
 ---
 
@@ -123,11 +126,16 @@ ResearchAgent.run(question, as_of, market, strategy, current_position_pct=own_po
    │
    ├─ 3. _validate: still violating → GuardrailViolation
    │
-   └─ 4. on API error / refusal / max_tokens / budget / guardrail / no key:
+   └─ 4. on API error / refusal / max_tokens / budget / guardrail / no key,
+         and on any RuntimeError or ValueError from the loop (no final answer after
+         max_steps, unparsable final JSON — no repair turn —, final answer without `summary`):
            answer = tools.rule_based_summary(market, as_of, thresholds); citations cleared
+           (only the thresholds are passed; position sizing uses defaults)
    ▼
 Page renders:
    Decision / Strategy Facts  ← DecisionFacts (code), plus position_plans() table at 0/20/50/80/100%
+                                (recomputed by the page on each render, outside the agent)
+   Scenarios table            ← code-rendered rows for the model's own plan_position calls
    AI Analysis                ← summary, why, historical_context, risks, citations (model)
      or Rule-based summary    ← fallback
    Advanced / Debug           ← tool calls, clamps, violations, repairs, tokens, cost, cache hits
@@ -137,9 +145,10 @@ Key properties:
 
 - **Output schema** is `FINAL_ANSWER_SCHEMA` / `ANSWER_FIELDS = ("summary", "why", "historical_context", "risks", "citations")` (`assistant/agent.py`). There is no action or position field.
 - **Providers**: `ResearchAgent` (Anthropic Messages API) and `DeepSeekAgent(ResearchAgent)` (OpenAI-compatible client at `DEEPSEEK_BASE_URL`, JSON mode) share the loop, clamp, cache, ledger, and fallback.
-- **Placeholders** (`assistant/render.py`): `{btN.<field>}` for what-if backtests and `{ppN.<field>}` for model-invoked `plan_position` calls; code fills values with explicit units. Unknown ids/fields are reported as placeholder errors.
+- **Placeholders** (`assistant/render.py`): `{btN.<field>}` for what-if backtests, `{ppN.<field>}` for model-invoked `plan_position` calls, and eight standard-signal placeholders (`SIGNAL_PLACEHOLDERS`: `{current_exposure}`, `{previous_exposure}`, `{applied_change}`, `{add_step}`, `{reduce_step}`, `{cap}`, `{floor}`, `{initial_exposure}`); code fills values with explicit units. Unknown ids/fields are reported as placeholder errors. Rendered spans are exempt from the validator's raw-figure rule. The system prompt does not advertise the standard-signal placeholders.
 - **Validator** (`assistant/validator.py`): placeholder errors; raw percentage in a clause containing a position word, or "N of M units"; citations must be in this run's `search_fed_docs` results and have `published_at <= as_of`.
-- **Cost/observability**: `assistant/cache.py` (content-addressed `.cache/llm/`, modes `readwrite|replay|record|off`); `assistant/ledger.py` (`logs/llm_usage.jsonl`, pricing table, daily budget, `billed_to`).
+- **Cost/observability**: `assistant/cache.py` (content-addressed `.cache/llm/`, modes `readwrite|replay|record|off`); `assistant/ledger.py` (`logs/llm_usage.jsonl`, pricing table, daily budget, `billed_to`). The page creates one `ResponseCache` per server process (`st.cache_resource`), shared by all sessions; a live eval without `--fresh` uses the same `.cache/llm/`, so the two can replay each other's responses.
+- **Configuration**: `PANIC_LLM_MODEL` and `PANIC_LLM_EFFORT` set the default model and effort (`assistant/agent.py`). `DeepSeekAgent` falls back to `DEEPSEEK_API_KEY` from the environment when no client is passed; the page always passes a client built from the typed key. `FASTEMBED_CACHE_PATH` (workflows) and `PANIC_INDEX_PYTHON` (`.mcp.json`) configure the embedding cache and the MCP server's Python.
 
 ---
 
@@ -173,8 +182,9 @@ last row's previous position, change, and action.
 | "I hold X% today — what does the rule do?" — *your position* | `tools.plan_position(current_position_pct=X)` → one `apply_rule_once` on the latest regime → `action`, `applied_change_pct`, `target_position_pct`, `next_rule` | No |
 
 `assistant.presentation.boundary_state` labels cap/floor behaviour
-("clipped at / reached / already at the cap|floor"). `DecisionFacts.as_dict()` is the
-single structure used by the page, the debug view, and eval scoring.
+("clipped at / reached / already at the cap|floor"). `DecisionFacts` is the single source of
+these facts: the page panels read its `signal` and `plan` fields, and `DecisionFacts.as_dict()`
+feeds the debug view and eval numeric scoring.
 
 ---
 
@@ -230,8 +240,11 @@ scripts/daily_update.py
           fill blanks, append new dates; non-trading days get F&G only
           skip incomplete trading days with a warning (retry next run)
           chain-link adjusted ETF prices to the last stored row
-          validate: duplicates, F&G 0–100, VIX 5–150, prices > 0,
-                    moves > 20% (VIX 4×), link factor > ±5% → DataQualityError aborts batch
+            (link_factors: factor beyond ±5% → DataQualityError)
+          validate, file-level (all rows): duplicate dates or ids, rows after the settled session
+          validate, values (changed dates only): F&G 0–100, known ratings, VIX 5–150,
+                    prices > 0, moves > 20% (VIX 4×)
+          any failure → DataQualityError aborts the batch
         write_raw only if changed
    2. fetch_fomc.update(2021, this_year, incremental=True)
    3. if new docs → rag.update_default_index() (embed only new docs)
@@ -279,9 +292,10 @@ cache dir under `.cache/llm-runs/`. Results land in `evals/results/*.json`.
 Replay mode needs `evals/recordings/`, which is not committed, so
 `test_agent_eval_replay.py` is skipped.
 
-CI's optional `live-agent-eval` job (manual dispatch) uses `ANTHROPIC_API_KEY` and
-`python -m evals.agent_eval --mode record`; AGENTS.md's documented live procedure uses
-DeepSeek via `evals.run`.
+CI's optional `live-agent-eval` job (manual dispatch) uses `ANTHROPIC_API_KEY` and runs
+`python -m evals.agent_eval --mode record` and
+`python -m evals.consistency_eval --mode record --provider anthropic`; AGENTS.md's documented
+live procedure uses DeepSeek via `evals.run`.
 
 ---
 
@@ -292,10 +306,10 @@ DeepSeek via `evals.run`.
 | 1 | Code owns decision facts (position, path exposure, action, applied change, target, cap/floor, next trigger). | `assistant/presentation.py` (`DecisionFacts`, `build_decision`); answer schema has no decision fields (`assistant/agent.py`). | `tests/test_position_plan.py`, `evals/consistency_eval.py` |
 | 2 | Simplify architecture, don't validate prose; validator stays shallow. | `assistant/validator.py` (one format rule + placeholders + citations). | `tests/test_guardrails.py`; prose measured by `evals/judge.py` |
 | 3 | The user's position is authoritative UI state, never extracted by the LLM. | Page `number_input` → `ResearchAgent.run(current_position_pct=…)` → `tools.plan_position`. | `tests/test_position_plan.py`, agent eval a13–a14 |
-| 4 | Point-in-time semantics on every `as_of` path. | `tools/market.MarketStore` (truncate → ffill → normalize); `rag.index.eligible_ids` (by `published_at`, inside search); `assistant.agent._clamp_as_of`; `validator.citation_violations`. | `tests/test_point_in_time.py`, `tests/test_rag.py`, retrieval eval leakage |
+| 4 | Point-in-time semantics on every `as_of` path (nothing after `as_of`; normalization still spans the window up to `as_of`, see §3). | `tools/market.MarketStore` (truncate → ffill → normalize); `rag.index.eligible_ids` (by `published_at`, inside search); `assistant.agent._clamp_as_of`; `validator.citation_violations`. | `tests/test_point_in_time.py`, `tests/test_rag.py`, retrieval eval leakage |
 | 4a | Dashboard keeps full-sample normalization + linear interpolation; don't copy into tools. | `utils.data_loader.load_data` vs `tools.market` | `test_full_sample_normalization_would_leak` |
 | 5 | Strategy path exposure ≠ user's position. | `assistant/signal.py` (standard backtest, fixed start) vs `tools.plan_position`; prompt text in `StrategySignal.prompt_block`. | `tests/test_position_plan.py`, `tests/test_guardrails.py` |
-| — | Placeholders only for model-invoked what-ifs (`{btN.*}`), not code-rendered facts. | `assistant/render.py` | `tests/test_guardrails.py` |
+| — | Placeholders only for model-invoked what-ifs (`{btN.*}`), not code-rendered facts. | Policy only: the system prompt asks for `{btN.*}`; `assistant/render.py` renders but does not restrict placeholder families (standard-signal placeholders still render). | `tests/test_guardrails.py` |
 | — | One repair turn, then deterministic fallback. | `ResearchAgent.max_repairs=1`, `_needs_repair`, `_validate`, fallback in `arun`. | `tests/test_agent.py` |
 | — | `market_data` CSV is append-only; never edited by hand. | `ingest/market_update.merge` + `validate`. | `tests/test_ingest.py` |
 | — | No secrets committed; page never reads env API keys. | page `build_agent`; `evals/run.load_dotenv` for live evals only. | `tests/test_research_page.py` |
