@@ -41,6 +41,7 @@ from .ledger import BudgetExceeded, UsageLedger
 from .presentation import DecisionFacts, build_decision
 from .render import render
 from .signal import StrategySignal
+from .trace import ModelCallTrace, context_sections
 from .validator import validate_answer
 
 DEFAULT_MODEL = os.getenv("PANIC_LLM_MODEL", "claude-opus-5-5")
@@ -242,6 +243,8 @@ class AgentResult:
     # Repair turns used, and the violations that triggered the first one.
     repairs: int = 0
     first_violations: list = field(default_factory=list)
+    # One ModelCallTrace per model call: tokens, cache hit, and context sections.
+    trace: list = field(default_factory=list)
 
     @property
     def used_fallback(self):
@@ -492,6 +495,17 @@ class ResearchAgent:
         result.output_tokens += record.output_tokens
         result.cache_read_tokens += record.cache_read_tokens
         result.cost_usd += record.cost_usd
+        decision_block = result.decision.prompt_block() if result.decision else ""
+        result.trace.append(ModelCallTrace(
+            step=result.model_responses,
+            request_hash=key,
+            cached=cached is not None,
+            latency_ms=round(latency_ms, 1),
+            input_tokens=record.input_tokens,
+            output_tokens=record.output_tokens,
+            cache_read_tokens=record.cache_read_tokens,
+            sections=context_sections(params, decision_block),
+        ))
         return response
 
     async def _loop(self, question, as_of, result):
