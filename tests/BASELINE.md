@@ -67,11 +67,11 @@ Strength: **direct** = a test asserts this behavior; **partial** = asserted for 
 
 | Gap | Evidence |
 |---|---|
-| `max_steps` exhaustion fallback (`RuntimeError: no final answer after N steps`) | FACT: raised at `assistant/agent.py:544` and `:734`; no test names it (`grep max_steps tests/` finds nothing). |
-| Anthropic final text that is not valid JSON | FACT: `_parse_final` calls `json.loads` (`assistant/agent.py:619`); the `JSONDecodeError` is a `ValueError` caught at `:390` and falls back with no repair turn. Only the DeepSeek retry is tested (`test_deepseek_unparseable_final_answer_gets_one_json_retry`). |
-| Missing `summary` / no text block in the final answer | FACT: `assistant/agent.py:588`, `:618`; untested. |
-| Fallback summary with non-default add/reduce/initial/cap | FACT: the fallback passes only thresholds to `rule_based_summary` (`assistant/agent.py:394-399`, `tools/core.py:408-413`); no test runs a fallback with custom position settings. |
-| `_clamp_as_of` with a missing or unparsable `as_of` | FACT: branch at `assistant/agent.py:327-330`; only the later-date case is tested. |
+| `max_steps` exhaustion fallback (`RuntimeError: no final answer after N steps`) | FACT: raised at `assistant/agent.py:558` and `:748`; no test names it (`grep max_steps tests/` finds nothing). |
+| Anthropic final text that is not valid JSON | FACT: `_parse_final` calls `json.loads` (`assistant/agent.py:633`); the `JSONDecodeError` is a `ValueError` caught at `:393` and falls back with no repair turn. Only the DeepSeek retry is tested (`test_deepseek_unparseable_final_answer_gets_one_json_retry`). |
+| Missing `summary` / no text block in the final answer | FACT: `assistant/agent.py:602`, `:632`; untested. |
+| Fallback summary with non-default add/reduce/initial/cap | FACT: the fallback passes only thresholds to `rule_based_summary` (`assistant/agent.py:397-402`, `tools/core.py:408-413`); no test runs a fallback with custom position settings. |
+| `_clamp_as_of` with a missing or unparsable `as_of` | FACT: branch at `assistant/agent.py:330-333`; only the later-date case is tested. |
 | Regime at exactly the threshold (index == 64 or == 15) | FACT: strict `>` / `<` in both `tools/core.py:_classify` and `utils/backtest.py:15-17`; no equality case in any test. |
 | `ingest.validate` file-level rules: duplicate dates, duplicate ids, row after the settled session, unknown ratings, VIX outside 5-150 | FACT: `ingest/market_update.py:294-340`; `test_ingest.py` covers the value checks via `merge` but has no test for these five messages. |
 | `_next_rule` under custom settings (non-default add/reduce/cap) | FACT: `test_next_rule_names_the_cap_and_floor` uses defaults only. |
@@ -89,7 +89,7 @@ Strength: **direct** = a test asserts this behavior; **partial** = asserted for 
 | Process-global singletons (`set_store`, `set_index`) leaking between tests | FACT: `test_injected_store_is_pinned_until_reset` covers the store; nothing covers `rag.set_index`. |
 | `tools/` import footprint | FACT: `test_import_footprint.py` checks `utils` only; architect report notes `tools/` pulls in streamlit, plotly, mcp. Apparently intentional (the test's docstring scopes it to dashboard pages). |
 | `scripts/daily_update.py` orchestration and `scripts/update_market_data.py` | FACT: no test imports either; `CSV_PATH` is duplicated (`scripts/update_market_data.py:22`, `utils/data_loader.py:5`). |
-| Broad `ValueError` catch hides programming errors | FACT: `assistant/agent.py:390`; no test checks that a non-guardrail `ValueError` (e.g. a bug) is distinguishable from an intended fallback. |
+| Broad `ValueError` catch hides programming errors | FACT: `assistant/agent.py:393`; no test checks that a non-guardrail `ValueError` (e.g. a bug) is distinguishable from an intended fallback. |
 
 ### Missing eval coverage
 
@@ -114,8 +114,8 @@ Strength: **direct** = a test asserts this behavior; **partial** = asserted for 
 ## High-risk weakly protected areas
 
 1. **Two rule implementations.** FACT: `utils/backtest.py:13-18` (inline, fractional) and `utils/strategy.py:apply_rule_once` (rounded) must agree for the Strategy Path and Your Position panels to be consistent. Agreement is tested only with default params. RECOMMENDATION: a parametrized agreement test over custom settings before any strategy-math change.
-2. **Fallback summary ignores session position settings.** FACT: `assistant/agent.py:394-399`. When the LLM path fails, the rule-based text is built with default add/reduce/initial/cap while the Decision Facts panel uses session settings. ASSUMPTION: the summary can then describe a different exposure than the panel. No test.
-3. **Broad `ValueError` catch.** FACT: `assistant/agent.py:390` turns `JSONDecodeError`, `DataQualityError`-like errors, and genuine bugs into a silent fallback; `max_steps` and unparsable Anthropic JSON are untested.
+2. **Fallback summary ignores session position settings.** FACT: `assistant/agent.py:397-402`. When the LLM path fails, the rule-based text is built with default add/reduce/initial/cap while the Decision Facts panel uses session settings. ASSUMPTION: the summary can then describe a different exposure than the panel. No test.
+3. **Broad `ValueError` catch.** FACT: `assistant/agent.py:393` turns `JSONDecodeError`, `DataQualityError`-like errors, and genuine bugs into a silent fallback; `max_steps` and unparsable Anthropic JSON are untested.
 4. **Signal placeholders bypass the raw-figure rule.** FACT: see eval gap above. The value is correct (code-rendered), but the framing (path vs user) relies on the prompt and the judge.
 5. **Research page decision rendering.** FACT: no test renders the Your Position panel or asserts the page passes the input position to the agent. A regression here puts a wrong authoritative fact on screen without failing CI.
 6. **Point-in-time for new date parameters.** FACT: `_clamp_as_of` rewrites only `as_of`; safety for other date inputs (`start_date`) depends on `_frame` truncation and is not perturbation-tested.

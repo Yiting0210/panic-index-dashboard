@@ -311,6 +311,7 @@ FOMC documents only enter the assistant through retrieval. The model calls `sear
 - Every Messages API call is logged to `logs/llm_usage.jsonl` with input, output, and cache tokens, latency, and USD cost.
 - Identical requests are served from a content-addressed response cache (`.cache/llm/`) at $0.
 - The stable prefix (tool definitions and system prompt) is prompt-cached across agent steps.
+- Every model call is traced (`assistant/trace.py`): the provider's input, output, and cache-read tokens, whether the response came from the cache, latency, and the request's size by section (system prompt, tool schemas, output schema, decision facts, question, tool results, earlier model turns, repair turns). Eval result files carry the trace per question, and live runs print the context budget per model call. Section sizes are estimates (characters / 4); the provider's token counts are the totals.
 - With no key, an API error, or a refusal, the page falls back to the deterministic rule-based Research Summary.
 
 ### Model providers and API keys

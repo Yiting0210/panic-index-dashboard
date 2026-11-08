@@ -238,10 +238,23 @@ def print_live_summary(command, summary):
         values = [f"{name}={summary[name]}" for name in fields if summary.get(name) is not None]
         if values:
             print(f"{label}: {', '.join(values)}")
+    print_context_budget(summary.get("context_budget"))
     print(f"cached_responses: {cached} / {total}")
     print(f"fresh_responses: {total - cached} / {total}")
     print(f"fresh run: {'yes' if cached == 0 else 'no'}")
     print(f"cache_dir: {summary['cache_dir']}")
+
+
+def print_context_budget(budget):
+    """One line per context section: mean estimated tokens per model call."""
+    if not budget or not budget.get("model_calls"):
+        return
+    print(f"context per model call: ~{budget['mean_estimated_request_tokens']} estimated tokens, "
+          f"{budget['mean_input_tokens']} provider input tokens "
+          f"({budget['model_calls']} calls)")
+    for name, section in budget["sections"].items():
+        if section["mean_estimated_tokens"]:
+            print(f"  {name}: ~{section['mean_estimated_tokens']} ({section['share']:.0%})")
 
 
 def run_live(args):

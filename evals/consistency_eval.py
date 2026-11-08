@@ -83,6 +83,7 @@ def run_offline(fixtures):
 
 
 async def run_agent(agent, fixtures, judge=None):
+    from assistant.trace import context_budget
     from evals.judge import judge_result, summarize_judgements
 
     rows = []
@@ -107,6 +108,7 @@ async def run_agent(agent, fixtures, judge=None):
             "answer": result.answer,
             "key_reasons": result.key_reasons,
             "judge": judge_result(result, judge) if judge is not None else None,
+            "trace": scored["trace"],
         })
     answered = [r for r in rows if r["fallback_reason"] is None]
     summary = {
@@ -128,6 +130,7 @@ async def run_agent(agent, fixtures, judge=None):
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
         "model_responses": sum(r["model_responses"] for r in rows),
         "cached_responses": sum(r["cached_responses"] for r in rows),
+        "context_budget": context_budget(t for r in rows for t in r["trace"]),
     }
     if judge is not None:
         summary.update(summarize_judgements([r["judge"] for r in rows]))

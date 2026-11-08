@@ -155,10 +155,13 @@ def score_result(question, result):
         "first_violations": result.first_violations,
         "placeholders": sum(r.count for r in result.rendered),
         "answer": result.answer,
+        "trace": [t.as_dict() for t in result.trace],
     }
 
 
 def summarize(rows, questions=None):
+    from assistant.trace import context_budget
+
     position_ids = {q["id"] for q in questions or []
                     if "user_positions" in q or "expect_decision" in q}
     position_rows = [r for r in rows if r["id"] in position_ids]
@@ -183,6 +186,7 @@ def summarize(rows, questions=None):
         "contract_fallbacks": sum(r["contract_fallback"] for r in rows),
         "decision_questions": len(position_rows),
         "decision_correct": sum(not r["decision_problems"] for r in position_rows),
+        "context_budget": context_budget(t for r in rows for t in r.get("trace", [])),
     }
 
 

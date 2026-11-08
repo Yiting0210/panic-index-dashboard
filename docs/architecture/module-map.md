@@ -143,18 +143,19 @@ Tested by `tests/test_mcp_server.py`.
 
 | Module | Responsibility | Key symbols | Depends on |
 |---|---|---|---|
-| `agent.py` (~750) | Tool-use loop over an in-process `mcp.Client`; system prompt; answer schema; as-of clamp; strategy-arg defaults; call-id labelling; repair turn; fallback; Anthropic and DeepSeek providers. | `ResearchAgent`, `DeepSeekAgent`, `AgentResult`, `ToolCall`, `SYSTEM_PROMPT`, `FINAL_ANSWER_SCHEMA`, `ANSWER_FIELDS`, `GuardrailViolation`, `_clamp_as_of`, `_apply_strategy`, `DEEPSEEK_BASE_URL` | `tools`, `tools.market`, `utils.strategy`, `mcp_server` (lazy), `.cache`, `.ledger`, `.presentation`, `.render`, `.signal`, `.validator`; anthropic, openai, mcp |
+| `agent.py` (~750) | Tool-use loop over an in-process `mcp.Client`; system prompt; answer schema; as-of clamp; strategy-arg defaults; call-id labelling; repair turn; fallback; Anthropic and DeepSeek providers. | `ResearchAgent`, `DeepSeekAgent`, `AgentResult`, `ToolCall`, `SYSTEM_PROMPT`, `FINAL_ANSWER_SCHEMA`, `ANSWER_FIELDS`, `GuardrailViolation`, `_clamp_as_of`, `_apply_strategy`, `DEEPSEEK_BASE_URL` | `tools`, `tools.market`, `utils.strategy`, `mcp_server` (lazy), `.cache`, `.ledger`, `.presentation`, `.render`, `.signal`, `.trace`, `.validator`; anthropic, openai, mcp |
 | `signal.py` (~165) | Standard backtest (fixed start 2021-05-17) → strategy path signal; comparison table plans. | `StrategySignal`, `build_strategy_signal`, `position_plans`, `STANDARD_BACKTEST_START`, `COMPARISON_POSITIONS` | `tools`, `utils.strategy` |
 | `presentation.py` (~105) | Code-owned decision facts for page and model; cap/floor labelling. | `DecisionFacts`, `build_decision`, `boundary_state` | `tools`, `tools.schemas`, `utils.strategy`, `.signal` |
 | `render.py` (~165) | Fills `{btN.*}` / `{ppN.*}` / signal placeholders with unit-formatted values; reports unknown placeholders. | `render`, `Rendered`, `CALL_FIELDS`, `PLAN_FIELDS`, `SIGNAL_PLACEHOLDERS` | — |
 | `validator.py` (~105) | Machine-checkable contract: placeholder errors, raw position figures (one format rule), citation provenance and date. | `validate_answer`, `raw_position_figures`, `citation_violations` | `.render` |
 | `cache.py` (~55) | Content-addressed response cache in `.cache/llm/`. | `ResponseCache`, `request_hash`, `CacheMiss`, `CACHE_DIR`, `MODES` | — |
 | `ledger.py` (~165) | Usage log `logs/llm_usage.jsonl`, pricing, daily budget, `billed_to`. | `UsageLedger`, `PRICING`, `cost_usd`, `BudgetExceeded` | — |
+| `trace.py` (~130) | Per-model-call trace (provider tokens, cache hit, latency) and the request's size by context section; context budget over many calls. Measurement only. | `ModelCallTrace`, `context_sections`, `context_budget`, `SECTIONS`, `CHARS_PER_TOKEN` | — |
 
 Invariants carried: AGENTS.md §1 (code owns decision facts), §2 and *Validator rules*
 (shallow validator), §3 (position from page input only), §5 (path vs user position),
 *Placeholder policy*, and "one repair turn then fallback". Tests:
-`test_agent.py`, `test_guardrails.py`, `test_position_plan.py`, `test_research_page.py`.
+`test_agent.py`, `test_guardrails.py`, `test_position_plan.py`, `test_research_page.py`, `test_trace.py`.
 
 ---
 
